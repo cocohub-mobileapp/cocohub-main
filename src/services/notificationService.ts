@@ -8,6 +8,7 @@ import { getItem, setItem, removeItem } from './localDB';
 
 export interface Medication {
   id: string;
+  petId?: string;
   name: string;
   dosage: string;
   frequency: number; // hours between doses
@@ -19,6 +20,7 @@ export interface Appointment {
   id: string;
   title: string;
   date: string;
+  petId?: string;
   location?: string;
 }
 
@@ -64,6 +66,8 @@ export type NotificationGroup =
   | 'medication'
   | 'appointment'
   | 'vaccination'
+  | 'birthday'
+  | 'pet_birthday'
   | 'alert'
   | 'scheduled'
   | 'sos';
@@ -85,6 +89,8 @@ export interface NotificationDeepLink {
   petId?: string;
   medicationId?: string;
   appointmentId?: string;
+  appointmentTitle?: string;
+  appointmentDate?: string;
   vaccinationId?: string;
   sosId?: string;
   [key: string]: any;
@@ -101,6 +107,8 @@ const CATEGORY_BY_GROUP: Record<NotificationGroup, NotificationCategory> = {
   medication: 'medication',
   appointment: 'appointments',
   vaccination: 'health',
+  birthday: 'general',
+  pet_birthday: 'general',
   alert: 'health',
   scheduled: 'general',
   sos: 'health',
@@ -184,6 +192,12 @@ const getNotificationUrl = (data: Record<string, unknown> = {}): string => {
   if (data.type === 'appointment' && typeof data.appointmentId === 'string') {
     return `cocohub://appointments?appointmentId=${encodeURIComponent(data.appointmentId)}`;
   }
+  if (
+    (data.type === 'birthday' || data.type === 'pet_birthday') &&
+    typeof data.petId === 'string'
+  ) {
+    return `cocohub://pets/${encodeURIComponent(data.petId)}`;
+  }
   if (data.type === 'vaccination' && typeof data.vaccinationId === 'string') {
     return `cocohub://vaccinations?vaccinationId=${encodeURIComponent(data.vaccinationId)}`;
   }
@@ -242,8 +256,8 @@ export const registerNotificationActions = async (): Promise<void> => {
 
   await Promise.all([
     Notifications.setNotificationCategoryAsync('medication', medicationActions),
-    ...['appointment', 'vaccination', 'alert', 'scheduled'].map((category) =>
-      Notifications.setNotificationCategoryAsync(category, defaultActions),
+    ...['appointment', 'vaccination', 'birthday', 'pet_birthday', 'alert', 'scheduled'].map(
+      (category) => Notifications.setNotificationCategoryAsync(category, defaultActions),
     ),
   ]);
 };
@@ -330,6 +344,13 @@ export const extractDeepLinkParams = (
     };
   }
 
+  if ((type === 'birthday' || type === 'pet_birthday') && data.petId) {
+    return {
+      route: 'PetDetail',
+      params: { petId: data.petId },
+    };
+  }
+
   // Fallback to petId if available
   if (data.petId) {
     return {
@@ -348,11 +369,145 @@ export const extractDeepLinkParams = (
   if (type === 'vaccination') {
     return { route: 'Vaccinations', params: {} };
   }
+  if (type === 'birthday' || type === 'pet_birthday') {
+    return data.petId
+      ? { route: 'PetDetail', params: { petId: data.petId } }
+      : null;
+  }
   if (type === 'sos') {
     return { route: 'Emergency', params: {} };
   }
 
   return null;
+};
+
+export type NotificationNavigationTarget =
+  | {
+      route: 'Main';
+      params: {
+        screen: 'PetList' | 'Care' | 'Schedule' | 'More';
+        params?: Record<string, unknown>;
+      };
+    }
+  | {
+      route: 'AppointmentDetail';
+      params: {
+        appointmentId: string;
+        petId: string;
+        appointmentTitle?: string;
+        appointmentDate?: string;
+      };
+    };
+
+const optionalString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.length > 0 ? value : undefined;
+
+const compactParams = (params: Record<string, unknown>): Record<string, unknown> => {
+  const compacted: Record<string, unknown> = {};
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined) compacted[key] = value;
+  });
+  return compacted;
+};
+
+/**
+ * Convert notification deep-link metadata into actual navigator targets.
+ *
+ * extractDeepLinkParams keeps the legacy domain route names used by existing
+ * tests and links; this helper maps them to the app's real Main tabs/stacks.
+ */
+export const resolveNotificationNavigationTarget = (
+  data: Record<string, unknown>,
+): NotificationNavigationTarget | null => {
+  const deepLink = extractDeepLinkParams(data);
+  if (!deepLink) return null;
+
+  if (deepLink.route === 'Appointments') {
+    const appointmentId = optionalString(deepLink.params.appointmentId);
+    const petId = optionalString(data.petId);
+    if (appointmentId && petId) {
+      const appointmentTitle = optionalString(data.appointmentTitle) ?? optionalString(data.title);
+      const appointmentDate = optionalString(data.appointmentDate) ?? optionalString(data.date);
+      return {
+        route: 'AppointmentDetail',
+        params: {
+          appointmentId,
+          petId,
+          ...(appointmentTitle ? { appointmentTitle } : {}),
+          ...(appointmentDate ? { appointmentDate } : {}),
+        },
+      };
+    }
+
+    return {
+      route: 'Main',
+      params: {
+        screen: 'Schedule',
+        params: compactParams({ ...deepLink.params, petId }),
+      },
+    };
+  }
+
+  if (deepLink.route === 'Medications') {
+    return {
+      route: 'Main',
+      params: {
+        screen: 'Care',
+        params: compactParams({
+          ...deepLink.params,
+          petId: optionalString(data.petId),
+          initialTab: 'Medications',
+        }),
+      },
+    };
+  }
+
+  if (deepLink.route === 'Vaccinations') {
+    return {
+      route: 'Main',
+      params: {
+        screen: 'Care',
+        params: {
+          ...deepLink.params,
+          initialTab: 'Vaccinations',
+        },
+      },
+    };
+  }
+
+  if (deepLink.route === 'Emergency') {
+    return {
+      route: 'Main',
+      params: {
+        screen: 'More',
+        params: {
+          screen: 'Emergency',
+          params: deepLink.params,
+        },
+      },
+    };
+  }
+
+  if (deepLink.route === 'PetDetail') {
+    return {
+      route: 'Main',
+      params: {
+        screen: 'PetList',
+        params: {
+          screen: 'PetDetail',
+          params: deepLink.params,
+        },
+      },
+    };
+  }
+
+  return {
+    route: 'Main',
+    params: {
+      screen: deepLink.route as 'PetList' | 'Care' | 'Schedule' | 'More',
+      params: deepLink.params,
+    },
+  };
 };
 
 let medicationServiceModule: typeof import('./medicationService') | null = null;
@@ -567,6 +722,7 @@ export const scheduleMedicationReminder = async (medication: Medication): Promis
             type: 'medication' as NotificationGroup,
             category: resolveNotificationCategory('medication'),
             medicationId: medication.id,
+            petId: medication.petId,
           },
           categoryIdentifier: resolveNotificationCategory('medication'),
         },
@@ -610,6 +766,9 @@ export const scheduleAppointmentNotification = async (
         type: 'appointment' as NotificationGroup,
         category: resolveNotificationCategory('appointment'),
         appointmentId: appointment.id,
+        petId: appointment.petId,
+        appointmentTitle: appointment.title,
+        appointmentDate: appointment.date,
       },
       categoryIdentifier: resolveNotificationCategory('appointment'),
     },

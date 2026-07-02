@@ -289,6 +289,7 @@ export async function scheduleRefillNotifications(med: Medication): Promise<stri
             type: 'medication',
             subType: 'refill',
             medicationId: med.id,
+            petId: med.petId,
             leadDays,
             estimatedRunOutDate: runOutIso,
           },

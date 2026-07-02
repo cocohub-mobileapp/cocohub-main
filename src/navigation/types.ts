@@ -1,5 +1,5 @@
 ﻿import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import type { CompositeScreenProps } from '@react-navigation/native';
+import type { CompositeScreenProps, NavigatorScreenParams } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { Pet } from '../models/Pet';
@@ -8,9 +8,15 @@ import type { Pet } from '../models/Pet';
 export type RootStackParamList = {
   Onboarding: undefined;
   Auth: undefined;
-  Main: undefined;
+  Main: NavigatorScreenParams<MainTabParamList> | undefined;
   Forum: undefined;
   LostFound: undefined;
+  AppointmentDetail: {
+    appointmentId: string;
+    petId: string;
+    appointmentTitle?: string;
+    appointmentDate?: string;
+  };
   // Modals
   QRScanner: { onScanSuccess?: (data: string) => void };
   ManualEntry: undefined;
@@ -21,11 +27,43 @@ export type RootStackParamList = {
 
 // ─── Main Tab ─────────────────────────────────────────────────────────────────
 export type MainTabParamList = {
-  PetList: undefined;        // 🐾 Pets
-  Care: undefined;           // 💊 Care (Meds + Vaccines + Alerts)
-  Schedule: undefined;       // 📅 Schedule (Appointments)
-  Search: undefined;         // 🔍 Search
-  More: undefined;           // ☰  More (Profile, Community, etc.)
+  PetList:
+    | NavigatorScreenParams<Pick<PetStackParamList, 'PetListScreen' | 'PetDetail'>>
+    | undefined; // 🐾 Pets
+  Care:
+    | {
+        initialTab?: 'Medications' | 'Vaccinations' | 'Alerts';
+        medicationId?: string;
+        vaccinationId?: string;
+        petId?: string;
+        dueDate?: string;
+      }
+    | undefined; // 💊 Care (Meds + Vaccines + Alerts)
+  Schedule:
+    | {
+        appointmentId?: string;
+        petId?: string;
+        initialVetName?: string;
+        initialDate?: string;
+        initialTime?: string;
+        openBooking?: boolean;
+      }
+    | undefined; // 📅 Schedule (Appointments)
+  Search: undefined; // 🔍 Search
+  More:
+    | {
+        screen?:
+          | 'MoreHub'
+          | 'Profile'
+          | 'Notifications'
+          | 'Community'
+          | 'Telemedicine'
+          | 'Emergency'
+          | 'Referrals'
+          | 'Settings';
+        params?: Record<string, unknown>;
+      }
+    | undefined; // ☰  More (Profile, Community, etc.)
 };
 
 // ─── Pet Stack (nested inside PetList tab) ────────────────────────────────────

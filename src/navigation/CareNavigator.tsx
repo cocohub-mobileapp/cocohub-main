@@ -5,7 +5,7 @@
  * to avoid native dependency conflicts.
  */
 
-import React, { Suspense, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { useTheme } from '../context/ThemeContext';
@@ -15,6 +15,13 @@ const VaccinationScreen = React.lazy(() => import('../screens/VaccinationScreen'
 const HealthAlertsScreen = React.lazy(() => import('../screens/HealthAlertsScreen'));
 
 type CareTab = 'Medications' | 'Vaccinations' | 'Alerts';
+type CareNavigatorProps = {
+  route?: {
+    params?: {
+      initialTab?: CareTab;
+    };
+  };
+};
 
 const TABS: { key: CareTab; label: string }[] = [
   { key: 'Medications', label: '💊 Meds' },
@@ -30,9 +37,19 @@ function Loader() {
   );
 }
 
-export default function CareNavigator() {
+const isCareTab = (value: unknown): value is CareTab =>
+  value === 'Medications' || value === 'Vaccinations' || value === 'Alerts';
+
+export default function CareNavigator({ route }: CareNavigatorProps) {
   const { colors } = useTheme();
-  const [active, setActive] = useState<CareTab>('Medications');
+  const requestedTab = route?.params?.initialTab;
+  const [active, setActive] = useState<CareTab>(() =>
+    isCareTab(requestedTab) ? requestedTab : 'Medications',
+  );
+
+  useEffect(() => {
+    if (isCareTab(requestedTab)) setActive(requestedTab);
+  }, [requestedTab]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>

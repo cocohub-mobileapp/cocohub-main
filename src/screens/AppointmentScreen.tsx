@@ -84,11 +84,12 @@ const AppointmentScreen: React.FC = () => {
   const route = useRoute<{
     key: string;
     name: string;
-    params?: MainTabParamList['Appointments'];
+    params?: MainTabParamList['Schedule'];
   }>();
   const routeParams = route.params;
 
   const prefillApplied = useRef(false);
+  const openedAppointmentId = useRef<string | null>(null);
 
   const [tab, setTab] = useState<Tab>('upcoming');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -184,6 +185,18 @@ const AppointmentScreen: React.FC = () => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const appointmentId = routeParams?.appointmentId;
+    if (!appointmentId || openedAppointmentId.current === appointmentId) return;
+
+    const appointment = appointments.find((item) => item.id === appointmentId);
+    if (!appointment) return;
+
+    openedAppointmentId.current = appointmentId;
+    setTab(new Date(appointment.date).getTime() < Date.now() ? 'past' : 'upcoming');
+    setDetailAppt(appointment);
+  }, [appointments, routeParams?.appointmentId]);
 
   useEffect(() => {
     AsyncStorage.getItem(ARCHIVED_IDS_KEY)

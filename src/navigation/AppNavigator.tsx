@@ -20,6 +20,7 @@ import PetHealthDashboardScreen from '../screens/PetHealthDashboardScreen';
 import PetListScreen from '../screens/PetListScreen';
 // ── Non-critical screens (lazy loaded) ───────────────────────────────────────
 const AdoptionScreen = React.lazy(() => import('../screens/AdoptionScreen'));
+const AppointmentDetailScreen = React.lazy(() => import('../screens/AppointmentDetailScreen'));
 const AppointmentScreen = React.lazy(() => import('../screens/AppointmentScreen'));
 const AuditHistoryScreen = React.lazy(() => import('../screens/AuditHistoryScreen'));
 const ClinicalNotesScreen = React.lazy(() => import('../screens/ClinicalNotesScreen'));
@@ -58,7 +59,7 @@ const VaccinationScreen = React.lazy(() => import('../screens/VaccinationScreen'
 const VetMapScreen = React.lazy(() => import('../screens/VetMapScreen'));
 import analyticsService from '../services/analyticsService';
 import { getSession } from '../services/authService';
-import { extractDeepLinkParams } from '../services/notificationService';
+import { resolveNotificationNavigationTarget } from '../services/notificationService';
 import onboardingService from '../services/onboardingService';
 import performance from '../utils/performance';
 import CareNavigator from './CareNavigator';
@@ -222,7 +223,7 @@ function PetNavigator() {
           <LazyScreen screenName="VetMap">
             <VetMapScreen
               onBookAppointment={(vetName, date, time) => {
-                navigation.getParent()?.navigate('Appointments', {
+                navigation.getParent()?.navigate('Schedule', {
                   initialVetName: vetName,
                   initialDate: date,
                   initialTime: time,
@@ -474,30 +475,11 @@ export const navigationRef = React.createRef<
 export const handleNotificationDeepLink = (data: Record<string, unknown>): void => {
   if (!navigationRef.current) return;
 
-  const deepLink = extractDeepLinkParams(data);
-  if (!deepLink) return;
+  const target = resolveNotificationNavigationTarget(data);
+  if (!target) return;
 
-  // Get the current state to know if we're in the Main tab
   const nav = navigationRef.current;
-
-  // Navigate to the appropriate tab/screen
-  const state = (nav as any)?.getRootState?.();
-  const isMainScreen = state?.routes?.[0]?.name === 'Main';
-
-  if (isMainScreen) {
-    // We're in Main, navigate within tabs
-    const mainState = state?.routes?.[0]?.state;
-    (nav as any)?.navigate?.('Main', {
-      screen: deepLink.route,
-      params: deepLink.params,
-    });
-  } else {
-    // App might be in cold start, navigate to Main first
-    (nav as any)?.navigate?.('Main', {
-      screen: deepLink.route,
-      params: deepLink.params,
-    });
-  }
+  (nav as any)?.navigate?.(target.route, target.params);
 };
 
 // ─── Root Navigator ───────────────────────────────────────────────────────────
@@ -626,6 +608,16 @@ export default function AppNavigator() {
             </RootStack.Screen>
 
             <RootStack.Screen name="Main" component={MainTabs} />
+            <RootStack.Screen
+              name="AppointmentDetail"
+              options={{ headerShown: true, title: 'Appointment Detail' }}
+            >
+              {({ route }) => (
+                <LazyScreen screenName="AppointmentDetail">
+                  <AppointmentDetailScreen route={route} />
+                </LazyScreen>
+              )}
+            </RootStack.Screen>
             <RootStack.Screen name="Forum" options={{ headerShown: true, title: 'Forum' }}>
               {() => (
                 <LazyScreen screenName="Forum">

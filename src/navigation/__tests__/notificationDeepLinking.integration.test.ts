@@ -10,7 +10,10 @@
 
 import type * as Notifications from 'expo-notifications';
 
-import { extractDeepLinkParams } from '../notificationService';
+import {
+  extractDeepLinkParams,
+  resolveNotificationNavigationTarget,
+} from '../../services/notificationService';
 
 describe('Notification Deep Linking - Navigation Integration', () => {
   describe('Cold-start scenarios', () => {
@@ -71,6 +74,90 @@ describe('Notification Deep Linking - Navigation Integration', () => {
       expect(deepLink).toBeDefined();
       expect(deepLink?.route).toBe('Emergency');
       expect(deepLink?.params.sosId).toBe('sos-911-emergency');
+    });
+
+    it('resolves cold-start notification taps to actual app navigators', () => {
+      expect(
+        resolveNotificationNavigationTarget({
+          type: 'medication',
+          medicationId: 'med-123',
+          petId: 'pet-001',
+        }),
+      ).toEqual({
+        route: 'Main',
+        params: {
+          screen: 'Care',
+          params: {
+            medicationId: 'med-123',
+            petId: 'pet-001',
+            initialTab: 'Medications',
+          },
+        },
+      });
+
+      expect(
+        resolveNotificationNavigationTarget({
+          type: 'appointment',
+          appointmentId: 'apt-456',
+          petId: 'pet-001',
+        }),
+      ).toEqual({
+        route: 'AppointmentDetail',
+        params: {
+          appointmentId: 'apt-456',
+          petId: 'pet-001',
+        },
+      });
+
+      expect(
+        resolveNotificationNavigationTarget({
+          type: 'vaccination',
+          vaccinationId: 'vac-789',
+          petId: 'pet-001',
+        }),
+      ).toEqual({
+        route: 'Main',
+        params: {
+          screen: 'Care',
+          params: {
+            vaccinationId: 'vac-789',
+            petId: 'pet-001',
+            initialTab: 'Vaccinations',
+          },
+        },
+      });
+
+      expect(
+        resolveNotificationNavigationTarget({
+          type: 'sos',
+          sosId: 'sos-911-emergency',
+        }),
+      ).toEqual({
+        route: 'Main',
+        params: {
+          screen: 'More',
+          params: {
+            screen: 'Emergency',
+            params: { sosId: 'sos-911-emergency' },
+          },
+        },
+      });
+
+      expect(
+        resolveNotificationNavigationTarget({
+          type: 'birthday',
+          petId: 'pet-birthday-001',
+        }),
+      ).toEqual({
+        route: 'Main',
+        params: {
+          screen: 'PetList',
+          params: {
+            screen: 'PetDetail',
+            params: { petId: 'pet-birthday-001' },
+          },
+        },
+      });
     });
   });
 
