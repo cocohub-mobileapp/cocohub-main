@@ -185,6 +185,14 @@ class OfflineQueue {
           );
           stillPending.splice(0, stillPending.length, ...updated);
         }
+
+        // Mirror the successful confirmation into syncService so it doesn't
+        // re-push the same record and won't report stale pending counts.
+        await syncService.removeItem(
+          mutation.type,
+          mutation.action,
+          String(mutation.data.id ?? ''),
+        );
       } catch (err) {
         const status = (err as { response?: { status?: number; data?: unknown } })?.response
           ?.status;

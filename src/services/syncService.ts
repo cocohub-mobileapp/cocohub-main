@@ -97,6 +97,21 @@ export class SyncService {
     await this.patchStatus({ pendingCount: queue.length });
   }
 
+  // ── Remove a single item after it has been synced by OfflineQueue ────────────
+  // Called by offlineQueue.processQueue() after a successful server confirmation
+  // so the syncService queue stays in sync and won't push the same record again.
+  async removeItem(type: SyncEntityType, action: SyncAction, entityId: string): Promise<void> {
+    const queue = await this.getQueue();
+    const filtered = queue.filter(
+      (item) =>
+        !(item.type === type && item.action === action && (item.data.id as string) === entityId),
+    );
+    if (filtered.length < queue.length) {
+      await setItem(SYNC_QUEUE_KEY, JSON.stringify(filtered));
+      await this.patchStatus({ pendingCount: filtered.length });
+    }
+  }
+
   // ── Pull from server ─────────────────────────────────────────────────────────
 
   async pull(
