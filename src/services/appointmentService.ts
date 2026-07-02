@@ -8,6 +8,7 @@ import {
   upsertAppointment,
   deleteAppointmentById,
 } from './localDB';
+import { getScheduleForRange } from './medicationService';
 import { AppointmentStatus } from '../models/Appointment';
 import type { Appointment } from '../models/Appointment';
 import type { Medication } from '../models/Medication';
@@ -21,8 +22,11 @@ export { AppointmentStatus } from '../models/Appointment';
 
 const BASE_URL = '/appointments';
 
-/** Buffer window (ms) around each appointment that counts as a conflict */
-export const CONFLICT_BUFFER_MS = 60 * 60 * 1000; // 1 hour
+/** Minimum gap (ms) required between appointments before flagging a conflict. Default: 30 min. */
+export const CONFLICT_BUFFER_MS = 30 * 60 * 1000; // 30 minutes
+
+/** Safety margin for the DB window query — covers the longest reasonable appointment. */
+const MAX_APPT_DURATION_MS = 4 * 60 * 60_000; // 4 hours
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,29 +67,54 @@ export async function detectConflicts(
   proposedTime: Date,
   medications: Medication[] = [],
   excludeId?: string,
+  bufferMs: number = CONFLICT_BUFFER_MS,
+  proposedDurationMinutes = 30,
+  _skipSuggest = false,
 ): Promise<ConflictDetectionResult> {
   const conflicts: AppointmentConflict[] = [];
+  const proposedStart = proposedTime.getTime();
+  const proposedEnd = proposedStart + proposedDurationMinutes * 60_000;
 
-  const windowStart = new Date(proposedTime.getTime() - CONFLICT_BUFFER_MS).toISOString();
-  const windowEnd = new Date(proposedTime.getTime() + CONFLICT_BUFFER_MS).toISOString();
+  // Widen the query window to catch appointments whose duration extends into the proposed slot.
+  const windowStart = new Date(proposedStart - bufferMs - MAX_APPT_DURATION_MS).toISOString();
+  const windowEnd = new Date(proposedEnd + bufferMs).toISOString();
 
   const nearby = await getAppointmentsInWindow<Appointment>(petId, windowStart, windowEnd);
-  for (const appt of nearby) {
+
+  // Fetch recurring appointments whose base date may lie outside the window but have
+  // future occurrences that conflict with the proposed time.
+  const allPetAppts = await getAllAppointmentsByPetId<Appointment>(petId);
+  const recurringOnly = allPetAppts.filter(
+    (a) =>
+      a.recurrenceRule &&
+      a.recurrenceRule !== 'none' &&
+      !nearby.some((n) => n.id === a.id),
+  );
+
+  for (const appt of [...nearby, ...recurringOnly]) {
     if (excludeId && appt.id === excludeId) continue;
-    const apptTime = new Date(appt.date);
-    const diffMs = Math.abs(apptTime.getTime() - proposedTime.getTime());
-    if (diffMs <= CONFLICT_BUFFER_MS) {
-      conflicts.push({
-        type: 'appointment',
-        description: `"${appt.title ?? 'Appointment'}" is scheduled ${_formatTimeDiff(diffMs)} from the proposed time.`,
-        conflictingAppointment: appt,
-      });
+
+    const durationMs = (appt.durationMinutes ?? 30) * 60_000;
+    const occurrences = _getOccurrences(appt, proposedTime);
+
+    for (const occStart of occurrences) {
+      const occEnd = occStart + durationMs;
+      // Positive gap means clear space between intervals; negative means overlap.
+      const gap = Math.max(occStart, proposedStart) - Math.min(occEnd, proposedEnd);
+      if (gap < bufferMs) {
+        const diffMs = Math.abs(occStart - proposedStart);
+        conflicts.push({
+          type: 'appointment',
+          description: `"${appt.title ?? 'Appointment'}" is scheduled ${_formatTimeDiff(diffMs)} from the proposed time.`,
+          conflictingAppointment: appt,
+        });
+        break; // report each appointment only once
+      }
     }
   }
 
-  const { getScheduleForRange } = await import('./medicationService');
-  const windowStartDate = new Date(proposedTime.getTime() - CONFLICT_BUFFER_MS);
-  const windowEndDate = new Date(proposedTime.getTime() + CONFLICT_BUFFER_MS);
+  const windowStartDate = new Date(proposedStart - bufferMs);
+  const windowEndDate = new Date(proposedEnd + bufferMs);
 
   for (const med of medications) {
     if (!isVetSupervised(med)) continue;
@@ -104,9 +133,12 @@ export async function detectConflicts(
   }
 
   const hasConflicts = conflicts.length > 0;
-  const suggestedTime = hasConflicts
-    ? await findNextAvailableSlot(petId, proposedTime, medications)
-    : undefined;
+  // Skip suggestedTime when called recursively from findNextAvailableSlot to prevent
+  // each candidate check from spawning its own slot-search tree.
+  const suggestedTime =
+    hasConflicts && !_skipSuggest
+      ? await findNextAvailableSlot(petId, proposedTime, medications, bufferMs)
+      : undefined;
 
   return { hasConflicts, conflicts, suggestedTime };
 }
@@ -126,14 +158,15 @@ export async function findNextAvailableSlot(
   petId: string,
   from: Date,
   medications: Medication[] = [],
+  bufferMs: number = CONFLICT_BUFFER_MS,
 ): Promise<Date | undefined> {
   const MAX_ITERATIONS = 14 * 24;
-  let candidate = new Date(from.getTime() + CONFLICT_BUFFER_MS);
+  let candidate = new Date(from.getTime() + bufferMs);
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
-    const result = await detectConflicts(petId, candidate, medications);
+    const result = await detectConflicts(petId, candidate, medications, undefined, bufferMs, 30, true);
     if (!result.hasConflicts) return candidate;
-    candidate = new Date(candidate.getTime() + CONFLICT_BUFFER_MS);
+    candidate = new Date(candidate.getTime() + bufferMs);
   }
   return undefined;
 }
@@ -359,6 +392,46 @@ export async function cancelAllAppointmentReminders(appointmentId: string): Prom
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Returns all start-time timestamps (ms) for an appointment that fall within
+ * ±1 year of the reference time. For one-off appointments returns [baseTime].
+ */
+function _getOccurrences(appt: Appointment, referenceTime: Date): number[] {
+  const base = new Date(appt.date).getTime();
+  const rule = appt.recurrenceRule;
+  if (!rule || rule === 'none') return [base];
+
+  const ref = referenceTime.getTime();
+  const lookAheadMs = 365 * 24 * 60 * 60_000;
+  const occurrences: number[] = [];
+
+  if (rule === 'weekly') {
+    const step = 7 * 24 * 60 * 60_000;
+    // Fast-forward base to the first occurrence within the search window.
+    let occ = base;
+    if (base < ref - lookAheadMs) {
+      occ += Math.ceil((ref - lookAheadMs - base) / step) * step;
+    }
+    while (occ <= ref + lookAheadMs) {
+      occurrences.push(occ);
+      occ += step;
+    }
+  } else if (rule === 'monthly') {
+    let current = new Date(base);
+    // Fast-forward past the lookback horizon.
+    while (current.getTime() < ref - lookAheadMs) {
+      current.setMonth(current.getMonth() + 1);
+    }
+    while (current.getTime() <= ref + lookAheadMs) {
+      occurrences.push(current.getTime());
+      current = new Date(current);
+      current.setMonth(current.getMonth() + 1);
+    }
+  }
+
+  return occurrences.length > 0 ? occurrences : [base];
+}
 
 function _formatTimeDiff(ms: number): string {
   const mins = Math.round(ms / 60_000);

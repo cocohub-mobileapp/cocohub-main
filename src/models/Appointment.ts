@@ -96,6 +96,9 @@ export interface Appointment {
    */
   durationMinutes?: number;
 
+  /** Recurrence rule for this appointment. Omit or use 'none' for one-off appointments. */
+  recurrenceRule?: 'none' | 'weekly' | 'monthly';
+
   /** Category/type of the appointment */
   type: AppointmentType;
 
