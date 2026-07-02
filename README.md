@@ -158,6 +158,9 @@ npm run migrate
 npm run seed:dev
 ```
 
+For detailed backend setup, environment, migration, seeding, verification, and
+troubleshooting steps, see [Backend API Local Setup](docs/BACKEND-SETUP.md).
+
 **Test credentials after seeding:**
 ```
 Email:    owner1@example.com
