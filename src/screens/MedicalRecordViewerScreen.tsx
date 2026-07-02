@@ -12,14 +12,15 @@ import {
   View,
 } from 'react-native';
 
+import { EmptyState } from '../components/EmptyState';
 import MedicalRecordAttachments from '../components/MedicalRecordAttachments';
+import { requireBiometric, verifyPin } from '../services/authService';
 import {
   getMedicalRecords,
   searchMedicalRecords,
   type MedicalRecord,
   type RecordFilters,
 } from '../services/medicalRecordService';
-import { requireBiometric, verifyPin } from '../services/authService';
 import sessionMonitoringService from '../services/sessionMonitoringService';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -237,10 +238,10 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
     }
   };
 
-  const clearSearch = () => {
+  const clearSearch = useCallback(() => {
     setSearchQuery('');
     setIsSearchMode(false);
-  };
+  }, []);
 
   // ─── Filter actions ───────────────────────────────────────────────────────
 
@@ -308,6 +309,53 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
     return null;
   }, [loadingMore, hasMore, records.length, isSearchMode]);
 
+  const renderEmptyState = useCallback(() => {
+    if (isSearchMode) {
+      return (
+        <EmptyState
+          icon="search-outline"
+          title="No matching records"
+          description={`No records match "${searchQuery}". Clear the search or try a different keyword.`}
+          buttonText="Clear search"
+          onPress={clearSearch}
+        />
+      );
+    }
+
+    if (selectedType || startDate || endDate) {
+      return (
+        <EmptyState
+          icon="filter-outline"
+          title="No records match these filters"
+          description="Try a different record type or date range to find this pet's medical history."
+          buttonText="Adjust filters"
+          onPress={() => setFiltersVisible(true)}
+        />
+      );
+    }
+
+    const petLabel = petName ?? 'This pet';
+
+    return (
+      <EmptyState
+        icon="document-text-outline"
+        title="No medical records yet"
+        description={`${petLabel} doesn't have any medical records yet. Refresh to check for newly synced vaccinations, treatments, or diagnoses.`}
+        buttonText="Refresh records"
+        onPress={() => void loadFirstPage()}
+      />
+    );
+  }, [
+    clearSearch,
+    endDate,
+    isSearchMode,
+    loadFirstPage,
+    petName,
+    searchQuery,
+    selectedType,
+    startDate,
+  ]);
+
   // ─── Render ───────────────────────────────────────────────────────────────
 
   // ── Auth gate: show authentication screen until verified ──
@@ -357,7 +405,7 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
             }}
             keyboardType="number-pad"
             secureTextEntry
-            maxLength= {10}
+            maxLength={10}
             accessibilityLabel="PIN input"
             onSubmitEditing={handlePinSubmit}
           />
@@ -467,11 +515,7 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
           removeClippedSubviews
           // Layout
           contentContainerStyle={records.length === 0 ? styles.emptyContainer : styles.list}
-          ListEmptyComponent={
-            <Text style={styles.emptyText}>
-              {isSearchMode ? `No results for "${searchQuery}".` : 'No records found.'}
-            </Text>
-          }
+          ListEmptyComponent={renderEmptyState}
         />
       )}
 
