@@ -27,12 +27,14 @@ import type {
   TrustlineAsset,
   TrustlineTransaction,
   CocohubAssetDefinition,
+  CocohubTrustlineStatus,
 } from '../models/Trustline';
 import {
   loadTrustlineState,
   addTrustline,
   removeTrustline,
   loadTrustlineHistory,
+  getCocohubTrustlineStatuses,
   publicKeyFromSecret,
   isValidSecretKey,
   isValidPublicKey,
@@ -185,6 +187,48 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
     );
   };
 
+  const handleAddCocohubAsset = (asset: CocohubAssetDefinition) => {
+    if (!secretKey) {
+      setSelectedAsset(asset);
+      setAddMode('cocohub');
+      setKeyModalVisible(true);
+      return;
+    }
+
+    Alert.alert(
+      'XLM Reserve Required',
+      `Adding ${asset.assetCode} will lock ${XLM_RESERVE_PER_TRUSTLINE} XLM as a reserve. Continue?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Add Trustline',
+          onPress: async () => {
+            setActionLoading(true);
+            try {
+              const txHash = await addTrustline({
+                accountSecretKey: secretKey,
+                assetCode: asset.assetCode,
+                issuerPublicKey: asset.issuerPublicKey,
+              });
+              Alert.alert(
+                'Success',
+                `${asset.assetCode} trustline added!\nTX: ${txHash.slice(0, 16)}…`,
+              );
+              await loadAccount(publicKey);
+            } catch (err) {
+              Alert.alert(
+                'Failed',
+                err instanceof TrustlineError ? err.message : 'Add trustline failed.',
+              );
+            } finally {
+              setActionLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   // ── Remove trustline ────────────────────────────────────────────────────────
 
   const handleRemove = (tl: TrustlineAsset) => {
@@ -260,6 +304,69 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
     </View>
   );
 
+  const renderCocohubStatus = (item: CocohubTrustlineStatus) => {
+    const isActive = item.status === 'active' && item.trustline;
+    const balance = parseFloat(item.balance).toFixed(2);
+    const limit = isActive ? parseFloat(item.trustline.limit).toLocaleString() : 'Not set';
+
+    return (
+      <View
+        key={`${item.asset.assetCode}-${item.asset.issuerPublicKey}`}
+        style={[styles.tlCard, !isActive && styles.tlCardInactive]}
+      >
+        <View style={styles.tlRow}>
+          <View style={styles.tlLeft}>
+            <View style={styles.tlTitleRow}>
+              <Text style={styles.tlCode}>
+                {item.asset.iconEmoji} {item.asset.assetCode}
+              </Text>
+              <Text
+                style={[
+                  styles.statusBadge,
+                  isActive ? styles.statusBadgeActive : styles.statusBadgeInactive,
+                ]}
+              >
+                {isActive ? 'Active' : 'Not enabled'}
+              </Text>
+            </View>
+            <Text style={styles.tlLabel}>{item.asset.name}</Text>
+            <Text style={styles.tlIssuer} numberOfLines={1}>
+              {item.asset.issuerPublicKey.slice(0, 8)}…{item.asset.issuerPublicKey.slice(-6)}
+            </Text>
+          </View>
+          <View style={styles.tlRight}>
+            <Text style={styles.tlBalance}>{balance}</Text>
+            <Text style={styles.tlLimit}>Limit: {limit}</Text>
+          </View>
+        </View>
+        {isActive ? (
+          <TouchableOpacity
+            style={[
+              styles.removeBtn,
+              parseFloat(item.trustline.balance) > 0 && styles.removeBtnDisabled,
+            ]}
+            onPress={() => handleRemove(item.trustline)}
+            disabled={actionLoading}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove trustline for ${item.asset.assetCode}`}
+          >
+            <Text style={styles.removeBtnText}>Remove Trustline</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.addInlineBtn, actionLoading && styles.btnDisabled]}
+            onPress={() => handleAddCocohubAsset(item.asset)}
+            disabled={actionLoading}
+            accessibilityRole="button"
+            accessibilityLabel={`Add trustline for ${item.asset.assetCode}`}
+          >
+            <Text style={styles.addInlineBtnText}>Add Trustline</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
   const renderHistoryItem = ({ item }: { item: TrustlineTransaction }) => (
     <View style={[styles.histCard, !item.successful && styles.histCardFailed]}>
       <View style={styles.histRow}>
@@ -274,6 +381,16 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
       <Text style={styles.histDate}>{new Date(item.createdAt).toLocaleString()}</Text>
     </View>
   );
+
+  const cocohubStatuses = state ? getCocohubTrustlineStatuses(state.trustlines) : [];
+  const cocohubAssetKeys = new Set(
+    COCOHUB_ASSETS.map((asset) => `${asset.assetCode}-${asset.issuerPublicKey}`),
+  );
+  const otherTrustlines = state
+    ? state.trustlines.filter(
+        (tl) => !cocohubAssetKeys.has(`${tl.assetCode}-${tl.issuerPublicKey}`),
+      )
+    : [];
 
   // ── History view ────────────────────────────────────────────────────────────
 
@@ -333,9 +450,7 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
               style={[styles.modeBtn, addMode === 'cocohub' && styles.modeBtnActive]}
               onPress={() => setAddMode('cocohub')}
             >
-              <Text
-                style={[styles.modeBtnText, addMode === 'cocohub' && styles.modeBtnTextActive]}
-              >
+              <Text style={[styles.modeBtnText, addMode === 'cocohub' && styles.modeBtnTextActive]}>
                 Cocohub Assets
               </Text>
             </TouchableOpacity>
@@ -492,26 +607,26 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
 
           {/* Trustlines list */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Active Trustlines</Text>
+            <Text style={styles.sectionTitle}>Cocohub Tokens</Text>
             <TouchableOpacity onPress={() => setView('history')}>
               <Text style={styles.historyLink}>History →</Text>
             </TouchableOpacity>
           </View>
 
-          {state.trustlines.length === 0 ? (
-            <View style={styles.emptyTl}>
-              <Text style={styles.emptyTlText}>No trustlines yet.</Text>
-              <TouchableOpacity style={styles.addBtn} onPress={() => setView('add')}>
-                <Text style={styles.addBtnText}>Add Your First Trustline</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <FlatList
-              data={state.trustlines}
-              keyExtractor={(t) => `${t.assetCode}-${t.issuerPublicKey}`}
-              renderItem={renderTrustline}
-              scrollEnabled={false}
-            />
+          {cocohubStatuses.map(renderCocohubStatus)}
+
+          {otherTrustlines.length > 0 && (
+            <>
+              <View style={[styles.sectionHeader, styles.sectionHeaderSecondary]}>
+                <Text style={styles.sectionTitle}>Other Trustlines</Text>
+              </View>
+              <FlatList
+                data={otherTrustlines}
+                keyExtractor={(t) => `${t.assetCode}-${t.issuerPublicKey}`}
+                renderItem={renderTrustline}
+                scrollEnabled={false}
+              />
+            </>
           )}
 
           <TouchableOpacity
@@ -660,6 +775,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
+  sectionHeaderSecondary: { marginTop: 8 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: '#374151' },
   historyLink: { fontSize: 13, color: '#10B981', fontWeight: '600' },
 
@@ -687,14 +803,26 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 1,
   },
+  tlCardInactive: { borderWidth: 1, borderColor: '#E5E7EB' },
   tlRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
   tlLeft: { flex: 1 },
   tlRight: { alignItems: 'flex-end' },
+  tlTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   tlCode: { fontSize: 16, fontWeight: '700', color: '#111827' },
   tlLabel: { fontSize: 12, color: '#10B981', fontWeight: '600', marginTop: 2 },
   tlIssuer: { fontSize: 11, color: '#9CA3AF', marginTop: 2, fontFamily: 'monospace' },
   tlBalance: { fontSize: 18, fontWeight: '800', color: '#111827' },
   tlLimit: { fontSize: 11, color: '#9CA3AF', marginTop: 2 },
+  statusBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    fontSize: 10,
+    fontWeight: '700',
+    overflow: 'hidden',
+  },
+  statusBadgeActive: { backgroundColor: '#D1FAE5', color: '#065F46' },
+  statusBadgeInactive: { backgroundColor: '#F3F4F6', color: '#6B7280' },
   removeBtn: {
     backgroundColor: '#FEE2E2',
     borderRadius: 8,
@@ -703,6 +831,13 @@ const styles = StyleSheet.create({
   },
   removeBtnDisabled: { backgroundColor: '#F3F4F6' },
   removeBtnText: { color: '#DC2626', fontWeight: '600', fontSize: 13 },
+  addInlineBtn: {
+    backgroundColor: '#D1FAE5',
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  addInlineBtnText: { color: '#065F46', fontWeight: '700', fontSize: 13 },
 
   // History card
   histCard: {

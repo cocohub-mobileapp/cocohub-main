@@ -65,3 +65,10 @@ export interface CocohubAssetDefinition {
   description: string;
   iconEmoji: string;
 }
+
+export interface CocohubTrustlineStatus {
+  asset: CocohubAssetDefinition;
+  status: 'active' | 'not_enabled';
+  balance: string;
+  trustline?: TrustlineAsset;
+}
