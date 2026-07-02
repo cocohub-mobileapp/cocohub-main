@@ -51,6 +51,7 @@ interface Props {
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CHART_PADDING = { top: 20, right: 16, bottom: 40, left: 48 };
+const ACCESSIBLE_POINT_HIT_SIZE = 44;
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -254,7 +255,7 @@ const WeightChart: React.FC<Props> = ({
         />
       ) : (
         <>
-          <View style={styles.chartContainer} importantForAccessibility="no-hide-descendants">
+          <View style={styles.chartContainer}>
             <Svg width={chartWidth} height={height} accessible={false}>
               <Defs>
                 <LinearGradient id="rangeGradient" x1="0" y1="0" x2="0" y2="1">
@@ -359,6 +360,32 @@ const WeightChart: React.FC<Props> = ({
                 );
               })}
             </Svg>
+
+            <View style={styles.accessiblePointOverlay} pointerEvents="box-none" accessible={false}>
+              {filteredData.map((point, idx) => {
+                const x = CHART_PADDING.left + xScale(idx);
+                const y = CHART_PADDING.top + yScale(point.weightKg);
+                const isSelected = selectedPoint === idx;
+
+                return (
+                  <TouchableOpacity
+                    key={`${point.date}-${idx}`}
+                    onPress={() => setSelectedPoint(isSelected ? null : idx)}
+                    style={[
+                      styles.accessiblePointMarker,
+                      {
+                        left: x - ACCESSIBLE_POINT_HIT_SIZE / 2,
+                        top: y - ACCESSIBLE_POINT_HIT_SIZE / 2,
+                      },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={buildDataPointAccessibilityLabel(point)}
+                    accessibilityHint="Shows this weight data point details"
+                    accessibilityState={{ selected: isSelected }}
+                  />
+                );
+              })}
+            </View>
 
             {selectedPoint !== null && filteredData[selectedPoint] && (
               <View style={[styles.tooltip, { backgroundColor: colors.cardElevated }]}>
@@ -482,6 +509,18 @@ const styles = StyleSheet.create({
   },
   chartContainer: {
     position: 'relative',
+  },
+  accessiblePointOverlay: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+  accessiblePointMarker: {
+    position: 'absolute',
+    width: ACCESSIBLE_POINT_HIT_SIZE,
+    height: ACCESSIBLE_POINT_HIT_SIZE,
   },
   accessiblePointsList: {
     marginTop: 12,
