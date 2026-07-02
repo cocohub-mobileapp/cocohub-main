@@ -119,9 +119,11 @@ export default function Home() {
             <p className={styles.waitlistSub}>Be first in line for early access, exclusive features, and a free premium trial when the app launches on the App Store and Google Play.</p>
             <form
               className={styles.waitlistForm}
-              action="https://formspree.io/f/cocohub-waitlist"
+              action="https://formspree.io/f/xpqgodnz"
               method="POST"
             >
+              <input type="hidden" name="_subject" value="New Cocohub waitlist signup!" />
+              <input type="hidden" name="_next" value="https://cocohub.app/?joined=1" />
               <input
                 type="email"
                 name="email"
