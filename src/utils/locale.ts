@@ -6,6 +6,7 @@ import i18n, { changeLanguage, isRTL, type LanguageCode } from '../i18n';
 const LOCALE_MAP: Record<string, string> = {
   en: 'en-US',
   es: 'es-ES',
+  fr: 'fr-FR',
   ar: 'ar-SA',
 };
 

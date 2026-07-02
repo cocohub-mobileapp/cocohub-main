@@ -66,6 +66,7 @@ export default {
     selectLanguage: 'اختر اللغة',
     en: 'الإنجليزية',
     es: 'الإسبانية',
+    fr: 'الفرنسية',
     ar: 'العربية',
   },
   petShare: {

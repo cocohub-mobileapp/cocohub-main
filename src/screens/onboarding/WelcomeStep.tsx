@@ -7,6 +7,7 @@ import onboardingService from '../../services/onboardingService';
 const LANGUAGE_FLAGS: Record<LanguageCode, string> = {
   en: '🇺🇸',
   es: '🇪🇸',
+  fr: '🇫🇷',
   ar: '🇸🇦',
 };
 
