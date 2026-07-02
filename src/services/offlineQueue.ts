@@ -478,6 +478,11 @@ class OfflineQueue {
     };
     this.statusListeners.forEach((l) => l(status));
   }
+function clearSyncQueue() {
+  queue.length = 0;   // empties the queue
+  console.log('Sync queue cleared.');
+}
+
 }
 
 export const offlineQueue = new OfflineQueue();
