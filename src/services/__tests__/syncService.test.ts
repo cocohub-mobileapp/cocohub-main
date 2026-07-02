@@ -72,4 +72,36 @@ describe('SyncService', () => {
       expect(status.pendingCount).toBe(1);
     });
   });
+
+  describe('removeItem', () => {
+    it('clears the matching item and decrements pendingCount after server confirmation', async () => {
+      const existing = [
+        { id: 'q1', type: 'pet', action: 'update', data: { id: 'pet-1' }, timestamp: 1, retries: 0 },
+        { id: 'q2', type: 'pet', action: 'update', data: { id: 'pet-2' }, timestamp: 2, retries: 0 },
+      ];
+      (getItem as jest.Mock).mockResolvedValue(JSON.stringify(existing));
+
+      await syncService.removeItem('pet', 'update', 'pet-1');
+
+      const savedQueue = JSON.parse((setItem as jest.Mock).mock.calls[0][1]);
+      expect(savedQueue).toHaveLength(1);
+      expect(savedQueue[0].data.id).toBe('pet-2');
+
+      const statusCall = (setItem as jest.Mock).mock.calls.find(
+        (c: string[]) => c[0] === '@sync_status',
+      );
+      expect(JSON.parse(statusCall[1]).pendingCount).toBe(1);
+    });
+
+    it('does nothing when the item is not in the queue', async () => {
+      const existing = [
+        { id: 'q1', type: 'pet', action: 'update', data: { id: 'pet-9' }, timestamp: 1, retries: 0 },
+      ];
+      (getItem as jest.Mock).mockResolvedValue(JSON.stringify(existing));
+
+      await syncService.removeItem('pet', 'update', 'unknown-id');
+
+      expect(setItem).not.toHaveBeenCalled();
+    });
+  });
 });
