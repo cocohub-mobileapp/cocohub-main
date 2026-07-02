@@ -176,6 +176,13 @@ class OfflineQueue {
         const endpoint = `/${mutation.type}s/${String(mutation.data.id ?? '')}`;
         const response = await apiClient.put(endpoint, mutation.data, { headers });
 
+        // Successfully synced — also remove from syncService's queue to prevent re-sync
+        await syncService.removeFromQueue(
+          String(mutation.data.id ?? ''),
+          mutation.type,
+          mutation.action,
+        );
+
         // Capture updated ETag for future mutations on this entity
         const newEtag = (response.headers as Record<string, string>)?.['etag'];
         if (newEtag) {
