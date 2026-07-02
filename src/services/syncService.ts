@@ -150,6 +150,7 @@ export class SyncService {
     for (const item of queue) {
       try {
         await this.syncItem(item);
+        // Item removed only after server confirms (syncItem awaited successfully)
       } catch {
         item.retries += 1;
         if (item.retries < MAX_RETRIES) failed.push(item);
@@ -163,6 +164,32 @@ export class SyncService {
       lastSync: Date.now(),
       pendingCount: failed.length,
       failedCount: failed.filter((i) => i.retries >= MAX_RETRIES).length,
+    });
+  }
+
+  /** Remove mirrored queue entries after offlineQueue confirms the same entity synced. */
+  async removeByEntity(
+    type: SyncEntityType,
+    action: SyncAction,
+    entityId: string | undefined,
+  ): Promise<void> {
+    const queue = await this.getQueue();
+    const filtered = queue.filter(
+      (i) => !(i.type === type && i.action === action && i.data.id === entityId),
+    );
+    if (filtered.length === queue.length) return;
+    await setItem(SYNC_QUEUE_KEY, JSON.stringify(filtered));
+    await this.patchStatus({ pendingCount: filtered.length });
+  }
+
+  /** Clear queue after all items confirmed on server — used by offlineQueue coordinator. */
+  async clearQueueAfterSuccessfulSync(): Promise<void> {
+    await setItem(SYNC_QUEUE_KEY, JSON.stringify([]));
+    await this.patchStatus({
+      isSyncing: false,
+      lastSync: Date.now(),
+      pendingCount: 0,
+      failedCount: 0,
     });
   }
 

@@ -1,4 +1,4 @@
-﻿import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ExpoSQLite from 'expo-sqlite';
 import { AppState, type AppStateStatus } from 'react-native';
 
@@ -323,6 +323,7 @@ export class SyncEngine {
     if (!first || first.status === 'failed') throw new Error('Server rejected sync record');
     if (first.status === 'conflict' && first.serverRecord) {
       this.emit({ type: 'conflict', total: 1, completed: 0, failed: 0, record });
+      throw new Error('Sync conflict — record kept in queue');
     }
   }
 

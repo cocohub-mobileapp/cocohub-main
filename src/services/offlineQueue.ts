@@ -1,4 +1,4 @@
-﻿import apiClient from './apiClient';
+import apiClient from './apiClient';
 import { executeSql, getItem, setItem } from './localDB';
 import { sendAlertNotification } from './notificationService';
 import syncService, { type SyncAction, type SyncEntityType, type SyncStatus } from './syncService';
@@ -163,8 +163,18 @@ class OfflineQueue {
     const online = await networkMonitor.isOnline();
     if (!online) return;
 
+    // Flush syncService queue first — clears only after server-confirmed syncItem()
+    await syncService.push();
+
     const pending = await this.getPersistentQueue();
-    if (pending.length === 0) return;
+    if (pending.length === 0) {
+      const syncStatus = await syncService.getStatus();
+      if (syncStatus.pendingCount === 0) {
+        await this.clearPersistentQueue();
+      }
+      await this.emitStatus();
+      return;
+    }
 
     const stillPending: QueuedMutation[] = [];
 
@@ -176,10 +186,11 @@ class OfflineQueue {
         const endpoint = `/${mutation.type}s/${String(mutation.data.id ?? '')}`;
         const response = await apiClient.put(endpoint, mutation.data, { headers });
 
-        // Capture updated ETag for future mutations on this entity
+        const entityId = mutation.data.id as string | undefined;
+        await syncService.removeByEntity(mutation.type, mutation.action, entityId);
+
         const newEtag = (response.headers as Record<string, string>)?.['etag'];
         if (newEtag) {
-          // Update stored ETag for subsequent mutations on the same entity
           const updated = stillPending.map((m) =>
             m.data.id === mutation.data.id ? { ...m, etag: newEtag } : m,
           );
@@ -210,6 +221,12 @@ class OfflineQueue {
     }
 
     await setItem(QUEUE_KEY, JSON.stringify(stillPending));
+
+    const syncStatus = await syncService.getStatus();
+    if (stillPending.length === 0 && syncStatus.pendingCount === 0) {
+      await this.clearPersistentQueue();
+      await syncService.clearQueueAfterSuccessfulSync();
+    }
 
     const conflicts = await this.getPendingConflicts();
     if (conflicts.length > 0) {
