@@ -164,6 +164,10 @@ Email:    owner1@example.com
 Password: Password123!
 ```
 
+For a detailed backend setup walkthrough with Docker, environment variables,
+migrations, seeding, API verification, and troubleshooting, see
+[`docs/BACKEND-SETUP.md`](docs/BACKEND-SETUP.md).
+
 ---
 
 ## � Marketing Website
