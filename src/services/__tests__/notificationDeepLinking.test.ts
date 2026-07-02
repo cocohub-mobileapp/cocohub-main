@@ -8,6 +8,17 @@
  * - All notification types (medication, appointment, vaccination, SOS)
  */
 
+jest.mock('../apiClient', () => ({
+  __esModule: true,
+  default: {
+    delete: jest.fn(),
+    get: jest.fn(),
+    patch: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+  },
+}));
+
 import { extractDeepLinkParams } from '../notificationService';
 
 describe('Notification Deep Linking', () => {
@@ -171,6 +182,67 @@ describe('Notification Deep Linking', () => {
         expect(result).toEqual({
           route: 'PetDetail',
           params: { petId: 'pet-123' },
+        });
+      });
+    });
+
+    describe('Health alert notifications', () => {
+      it('routes pet-specific health alerts to the pet health dashboard', () => {
+        const data = {
+          type: 'health_alert',
+          category: 'health',
+          alertId: 'alert-123',
+          petId: 'pet-123',
+          riskLevel: 'high',
+        };
+
+        const result = extractDeepLinkParams(data);
+
+        expect(result).toEqual({
+          route: 'PetHealthDashboard',
+          params: {
+            alertId: 'alert-123',
+            petId: 'pet-123',
+            riskLevel: 'high',
+          },
+        });
+      });
+
+      it('routes health alerts without pet context to the alerts list', () => {
+        const data = {
+          type: 'health_alert',
+          category: 'health',
+          alertId: 'alert-456',
+        };
+
+        const result = extractDeepLinkParams(data);
+
+        expect(result).toEqual({
+          route: 'HealthAlerts',
+          params: { alertId: 'alert-456' },
+        });
+      });
+    });
+
+    describe('Community notifications', () => {
+      it('routes community replies with post and reply context', () => {
+        const data = {
+          type: 'community_reply',
+          category: 'community',
+          postId: 'post-123',
+          commentId: 'comment-456',
+          replyId: 'reply-789',
+        };
+
+        const result = extractDeepLinkParams(data);
+
+        expect(result).toEqual({
+          route: 'Community',
+          params: {
+            postId: 'post-123',
+            commentId: 'comment-456',
+            replyId: 'reply-789',
+          },
         });
       });
     });

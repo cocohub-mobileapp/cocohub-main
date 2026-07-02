@@ -62,6 +62,7 @@ import { extractDeepLinkParams } from '../services/notificationService';
 import onboardingService from '../services/onboardingService';
 import performance from '../utils/performance';
 import CareNavigator from './CareNavigator';
+import { resolveNotificationNavigationTarget } from './notificationRouteMapper';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -475,29 +476,11 @@ export const handleNotificationDeepLink = (data: Record<string, unknown>): void 
   if (!navigationRef.current) return;
 
   const deepLink = extractDeepLinkParams(data);
-  if (!deepLink) return;
+  const target = resolveNotificationNavigationTarget(deepLink);
+  if (!target) return;
 
-  // Get the current state to know if we're in the Main tab
   const nav = navigationRef.current;
-
-  // Navigate to the appropriate tab/screen
-  const state = (nav as any)?.getRootState?.();
-  const isMainScreen = state?.routes?.[0]?.name === 'Main';
-
-  if (isMainScreen) {
-    // We're in Main, navigate within tabs
-    const mainState = state?.routes?.[0]?.state;
-    (nav as any)?.navigate?.('Main', {
-      screen: deepLink.route,
-      params: deepLink.params,
-    });
-  } else {
-    // App might be in cold start, navigate to Main first
-    (nav as any)?.navigate?.('Main', {
-      screen: deepLink.route,
-      params: deepLink.params,
-    });
-  }
+  (nav as any)?.navigate?.('Main', target);
 };
 
 // ─── Root Navigator ───────────────────────────────────────────────────────────

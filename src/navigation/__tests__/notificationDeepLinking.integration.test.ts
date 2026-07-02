@@ -10,7 +10,18 @@
 
 import type * as Notifications from 'expo-notifications';
 
-import { extractDeepLinkParams } from '../notificationService';
+jest.mock('../../services/apiClient', () => ({
+  __esModule: true,
+  default: {
+    delete: jest.fn(),
+    get: jest.fn(),
+    patch: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+  },
+}));
+
+import { extractDeepLinkParams } from '../../services/notificationService';
 
 describe('Notification Deep Linking - Navigation Integration', () => {
   describe('Cold-start scenarios', () => {
