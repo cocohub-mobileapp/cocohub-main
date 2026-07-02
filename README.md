@@ -270,6 +270,8 @@ Cocohub uses a **dual-layer verification** approach:
 
 Future: Soroban smart contract for on-chain pet record registry with vet access control.
 
+For local blockchain development, see the [Stellar testnet setup guide](docs/STELLAR-SETUP.md).
+
 ---
 
 ## 📦 App Store Submission
