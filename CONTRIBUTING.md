@@ -157,6 +157,8 @@ Or let the pre-commit hook handle it automatically (via Husky).
 - **Stellar** — all blockchain operations go through `src/services/blockchainService.ts`
 - **Tests** — new features must include at least one unit test
 
+For local Stellar account setup, Friendbot funding, Freighter setup, and testnet verification, see [docs/STELLAR-SETUP.md](docs/STELLAR-SETUP.md).
+
 ---
 
 ## Submitting a PR
