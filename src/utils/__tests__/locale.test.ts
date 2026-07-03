@@ -31,6 +31,7 @@ jest.mock('../../i18n', () => {
     SUPPORTED_LANGUAGES: [
       { code: 'en', label: 'English', rtl: false },
       { code: 'es', label: 'Español', rtl: false },
+      { code: 'fr', label: 'Français', rtl: false },
       { code: 'ar', label: 'العربية', rtl: true },
     ],
     RTL_LANGUAGES: new Set(['ar']),
@@ -49,6 +50,11 @@ describe('locale utils', () => {
   describe('getLocaleTag', () => {
     it('returns en-US for English', () => {
       expect(getLocaleTag()).toBe('en-US');
+    });
+
+    it('returns fr-FR for French', async () => {
+      await switchLanguage('fr');
+      expect(getLocaleTag()).toBe('fr-FR');
     });
   });
 
@@ -79,16 +85,18 @@ describe('locale utils', () => {
 });
 
 describe('i18n module', () => {
-  it('exports SUPPORTED_LANGUAGES with ar entry', () => {
+  it('exports the supported language entries', () => {
     const codes = SUPPORTED_LANGUAGES.map((l) => l.code);
     expect(codes).toContain('ar');
     expect(codes).toContain('en');
     expect(codes).toContain('es');
+    expect(codes).toContain('fr');
   });
 
   it('marks Arabic as RTL', () => {
     expect(isRTL('ar')).toBe(true);
     expect(isRTL('en')).toBe(false);
     expect(isRTL('es')).toBe(false);
+    expect(isRTL('fr')).toBe(false);
   });
 });

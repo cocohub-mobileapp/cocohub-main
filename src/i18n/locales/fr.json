@@ -1,0 +1,125 @@
+{
+  "common": {
+    "loading": "Chargement...",
+    "retry": "Réessayer",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "confirm": "Confirmer",
+    "back": "Retour",
+    "next": "Suivant",
+    "done": "Terminé",
+    "error": "Erreur",
+    "success": "Succès",
+    "unknown_error": "Une erreur inattendue s'est produite.",
+    "network_error": "Erreur réseau. Vérifiez votre connexion.",
+    "timeout_error": "La requête a expiré. Veuillez réessayer."
+  },
+  "auth": {
+    "login_title": "Bon retour",
+    "login_subtitle": "Connectez-vous à votre compte",
+    "register_title": "Créer un compte",
+    "email_label": "Adresse e-mail",
+    "email_placeholder": "vous@exemple.com",
+    "password_label": "Mot de passe",
+    "password_placeholder": "Au moins 8 caractères",
+    "name_label": "Nom complet",
+    "name_placeholder": "Votre nom",
+    "login_button": "Se connecter",
+    "register_button": "Créer un compte",
+    "logout_button": "Se déconnecter",
+    "no_account": "Vous n'avez pas de compte ?",
+    "have_account": "Vous avez déjà un compte ?",
+    "forgot_password": "Mot de passe oublié ?",
+    "validation": {
+      "email_required": "L'adresse e-mail est obligatoire.",
+      "email_invalid": "Veuillez saisir une adresse e-mail valide.",
+      "password_required": "Le mot de passe est obligatoire.",
+      "password_weak": "Le mot de passe doit contenir au moins 8 caractères, 1 majuscule et 1 chiffre.",
+      "name_required": "Le nom est obligatoire."
+    }
+  },
+  "home": {
+    "title": "Mes animaux",
+    "add_pet": "Ajouter un animal",
+    "no_pets": "Aucun animal pour le moment. Ajoutez votre premier animal !",
+    "greeting": "Bonjour, {{name}}"
+  },
+  "pet": {
+    "profile_title": "Profil de l'animal",
+    "name_label": "Nom",
+    "species_label": "Espèce",
+    "breed_label": "Race",
+    "dob_label": "Date de naissance",
+    "weight_label": "Poids",
+    "edit_button": "Modifier le profil",
+    "delete_button": "Retirer l'animal",
+    "delete_confirm": "Voulez-vous vraiment retirer {{name}} ?",
+    "validation": {
+      "name_required": "Le nom de l'animal est obligatoire.",
+      "dob_invalid": "Veuillez saisir une date de naissance valide."
+    }
+  },
+  "medical": {
+    "title": "Dossiers médicaux",
+    "add_record": "Ajouter un dossier",
+    "no_records": "Aucun dossier médical trouvé.",
+    "record_date": "Date",
+    "record_type": "Type",
+    "record_notes": "Notes",
+    "vaccination": "Vaccination",
+    "checkup": "Visite de contrôle",
+    "surgery": "Chirurgie",
+    "other": "Autre"
+  },
+  "appointments": {
+    "title": "Rendez-vous",
+    "add_appointment": "Planifier un rendez-vous",
+    "no_appointments": "Aucun rendez-vous à venir.",
+    "date_label": "Date",
+    "time_label": "Heure",
+    "vet_label": "Vétérinaire",
+    "notes_label": "Notes",
+    "upcoming": "À venir",
+    "past": "Passés",
+    "cancel_confirm": "Annuler ce rendez-vous ?"
+  },
+  "medication": {
+    "title": "Médicaments",
+    "add_medication": "Ajouter un médicament",
+    "no_medications": "Aucun médicament enregistré.",
+    "name_label": "Nom du médicament",
+    "dosage_label": "Posologie",
+    "frequency_label": "Fréquence",
+    "start_date_label": "Date de début",
+    "end_date_label": "Date de fin",
+    "reminder": "Rappel activé"
+  },
+  "qr": {
+    "title": "Scanner QR",
+    "scan_prompt": "Dirigez la caméra vers un code QR",
+    "scan_success": "Code QR scanné avec succès",
+    "scan_error": "Impossible de lire le code QR. Réessayez.",
+    "permission_denied": "L'autorisation d'utiliser la caméra est nécessaire pour scanner les codes QR."
+  },
+  "emergency": {
+    "title": "Urgence",
+    "call_vet": "Appeler un vétérinaire d'urgence",
+    "nearest_clinic": "Trouver la clinique la plus proche",
+    "first_aid": "Guide de premiers secours",
+    "alert_sent": "Alerte d'urgence envoyée"
+  },
+  "error_boundary": {
+    "title": "Une erreur s'est produite",
+    "subtitle": "Une erreur inattendue s'est produite sur l'écran {{screen}}. Notre équipe a été notifiée.",
+    "report_retry": "Signaler et réessayer"
+  },
+  "accessibility": {
+    "close_button": "Fermer",
+    "menu_button": "Ouvrir le menu",
+    "back_button": "Revenir en arrière",
+    "loading_indicator": "Chargement",
+    "error_screen": "Écran d'erreur",
+    "pet_image": "Photo de {{name}}"
+  }
+}
