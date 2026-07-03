@@ -8,6 +8,7 @@
 
 import * as StellarSdk from '@stellar/stellar-sdk';
 
+import apiClient from './apiClient';
 import type {
   TrustlineAsset,
   TrustlineState,
@@ -77,6 +78,19 @@ export class TrustlineError extends Error {
     super(message);
     this.name = 'TrustlineError';
   }
+}
+
+export interface EarnedTokenBalance {
+  assetCode: 'PETC' | 'VETH' | 'PAWP';
+  balance: string;
+  source: string;
+}
+
+interface EarnedTokenBalanceResponse {
+  success: boolean;
+  data: {
+    balances: EarnedTokenBalance[];
+  };
 }
 
 // ─── Horizon server (lazy singleton) ─────────────────────────────────────────
@@ -275,6 +289,19 @@ export async function loadTrustlineHistory(
     return results;
   } catch {
     throw new TrustlineError('Failed to load transaction history', 'HISTORY_FAILED');
+  }
+}
+
+/** Load Cocohub-earned token balances from the backend rewards ledger. */
+export async function loadEarnedTokenBalances(): Promise<EarnedTokenBalance[]> {
+  try {
+    const response = await apiClient.get<EarnedTokenBalanceResponse>('/trustlines/earned-balances');
+    return response.data.data.balances;
+  } catch (err) {
+    throw new TrustlineError(
+      err instanceof Error ? err.message : 'Failed to load earned token balances',
+      'EARNED_BALANCES_FAILED',
+    );
   }
 }
 

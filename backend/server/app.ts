@@ -40,6 +40,7 @@ import supportRouter from './routes/support';
 import syncRouter from './routes/sync';
 import telemedicineRouter from './routes/telemedicine';
 import travelCertificatesRouter from './routes/travelCertificates';
+import trustlinesRouter from './routes/trustlines';
 import usersRouter from './routes/users';
 import vaccinationsRouter from './routes/vaccinations';
 import vetsRouter from './routes/vets';
@@ -187,6 +188,7 @@ export function createApp(): Express {
   api.use('/sync', dataRateLimiter, syncRouter);
   api.use('/activity', dataRateLimiter, activityRouter);
   api.use('/travel-certificates', travelCertificatesRouter);
+  api.use('/trustlines', dataRateLimiter, trustlinesRouter);
   api.use('/reconciliation', reconciliationRouter);
   api.use('/referrals', dataRateLimiter, referralsRouter);
   api.use('/vets', dataRateLimiter, vetsRouter);
