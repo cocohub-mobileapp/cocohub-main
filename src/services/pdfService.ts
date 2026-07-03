@@ -11,6 +11,9 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import QRCode from 'qrcode';
 
+import config from '../config';
+import { getToken } from './authService';
+import apiClient from './apiClient';
 import type { VaccinationReminder } from './vaccinationService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -35,6 +38,81 @@ export interface GeneratedCertificate {
   generatedAt: string;
 }
 
+export interface DashboardReportMetricSnapshot {
+  recordedAt: string;
+  weightKg?: number;
+  temperatureC?: number;
+  activityLevel?: string;
+  notes?: string;
+}
+
+export interface DashboardReportWeightPoint {
+  date: string;
+  weightKg: number;
+  note?: string;
+}
+
+export interface DashboardReportAppointment {
+  id: string;
+  petId: string;
+  vetId: string;
+  date: string;
+  time: string;
+  durationMinutes?: number;
+  type: string;
+  status: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DashboardReportMedicalRecord {
+  id: string;
+  petId: string;
+  vetId?: string;
+  type: string;
+  diagnosis?: string;
+  treatment?: string;
+  notes?: string;
+  visitDate: string;
+  nextVisitDate?: string;
+  createdAt: string;
+  updatedAt: string;
+  blockchainTxHash?: string;
+}
+
+export interface DashboardHealthReportSnapshot {
+  healthScore?: number | null;
+  latestMetric?: DashboardReportMetricSnapshot | null;
+  weightHistory?: DashboardReportWeightPoint[];
+  upcomingAppointments?: DashboardReportAppointment[];
+  recentRecords?: DashboardReportMedicalRecord[];
+}
+
+export interface GeneratedDashboardHealthReport {
+  filePath: string;
+  filename: string;
+  jobId: string;
+  recordCount?: number;
+}
+
+type ReportJobStatus = 'queued' | 'processing' | 'complete' | 'failed';
+
+interface ReportJobResponse {
+  jobId: string;
+}
+
+interface ReportStatusResponse {
+  jobId: string;
+  status: ReportJobStatus;
+  filename?: string;
+  recordCount?: number;
+  error?: string;
+}
+
+const REPORT_POLL_INTERVAL_MS = 1500;
+const REPORT_POLL_ATTEMPTS = 40;
+
 // ─── QR code helper ───────────────────────────────────────────────────────────
 
 async function generateQRDataUrl(content: string): Promise<string> {
@@ -52,6 +130,54 @@ async function sha256(text: string): Promise<string> {
     hash = hash >>> 0; // convert to unsigned 32-bit
   }
   return hash.toString(16).padStart(8, '0');
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function joinUrl(baseUrl: string, path: string): string {
+  return `${baseUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
+}
+
+function safeFilename(value: string): string {
+  return value.replace(/[^a-z0-9._-]/gi, '-');
+}
+
+async function waitForReport(jobId: string): Promise<ReportStatusResponse> {
+  for (let attempt = 0; attempt < REPORT_POLL_ATTEMPTS; attempt += 1) {
+    const response = await apiClient.get<ReportStatusResponse>(`/reports/${jobId}/status`);
+    const status = response.data;
+
+    if (status.status === 'complete') return status;
+    if (status.status === 'failed') {
+      throw new Error(status.error || 'Failed to generate health report.');
+    }
+
+    await delay(REPORT_POLL_INTERVAL_MS);
+  }
+
+  throw new Error('Health report generation timed out.');
+}
+
+async function downloadReport(jobId: string, filename: string): Promise<string> {
+  const dir = FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? '';
+  if (!dir) throw new Error('File storage is not available on this device.');
+
+  const token = await getToken();
+  const filePath = `${dir}${safeFilename(filename)}`;
+  const headers: Record<string, string> = {
+    Accept: 'application/pdf',
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const result = await FileSystem.downloadAsync(
+    joinUrl(config.api.baseUrl, `/reports/${jobId}/download`),
+    filePath,
+    { headers },
+  );
+
+  return result.uri;
 }
 
 // ─── PDF content builder ──────────────────────────────────────────────────────
@@ -166,6 +292,46 @@ export async function shareCertificate(filePath: string): Promise<void> {
   await Sharing.shareAsync(filePath, {
     mimeType: 'text/plain',
     dialogTitle: 'Share Vaccination Certificate',
+  });
+}
+
+/**
+ * Generate a vet-ready health dashboard PDF on the backend and store it locally.
+ */
+export async function generateDashboardHealthReport(
+  petId: string,
+  snapshot: DashboardHealthReportSnapshot,
+): Promise<GeneratedDashboardHealthReport> {
+  const start = await apiClient.post<ReportJobResponse>(`/reports/pets/${petId}/health`, {
+    dashboardSnapshot: snapshot,
+  });
+  const jobId = start.data?.jobId;
+  if (!jobId) throw new Error('Report service did not return a job id.');
+
+  const status = await waitForReport(jobId);
+  const filename = status.filename ?? `health-report-${petId}-${Date.now()}.pdf`;
+  const filePath = await downloadReport(jobId, filename);
+
+  return {
+    filePath,
+    filename,
+    jobId,
+    recordCount: status.recordCount,
+  };
+}
+
+/**
+ * Share a generated dashboard PDF via the native iOS/Android share sheet.
+ */
+export async function shareDashboardHealthReport(filePath: string): Promise<void> {
+  const isAvailable = await Sharing.isAvailableAsync();
+  if (!isAvailable) {
+    throw new Error('Sharing is not available on this device.');
+  }
+  await Sharing.shareAsync(filePath, {
+    mimeType: 'application/pdf',
+    UTI: 'com.adobe.pdf',
+    dialogTitle: 'Share Health Report',
   });
 }
 

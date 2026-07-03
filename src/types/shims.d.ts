@@ -14,6 +14,12 @@ declare module 'expo-file-system' {
     contents: string,
     options?: { encoding?: EncodingType },
   ): Promise<void>;
+
+  export function downloadAsync(
+    uri: string,
+    fileUri: string,
+    options?: { headers?: Record<string, string> },
+  ): Promise<{ uri: string; status: number; headers: Record<string, string> }>;
 }
 
 interface RTCPeerConnection {

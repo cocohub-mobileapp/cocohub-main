@@ -1,5 +1,6 @@
 ﻿import React, { useCallback, useEffect, useState } from 'react';
 import {
+  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -7,7 +8,6 @@ import {
   TouchableOpacity,
   View,
   Share,
-  Platform,
 } from 'react-native';
 
 import HealthScoreChart, {
@@ -27,6 +27,11 @@ import healthScoringServiceV2 from '../services/healthScoringServiceV2';
 import type { MedicalRecord } from '../services/medicalRecordService';
 import { getMedicalRecords } from '../services/medicalRecordService';
 import { getMedications, isMedicationActive } from '../services/medicationService';
+import {
+  generateDashboardHealthReport,
+  shareDashboardHealthReport,
+  type DashboardHealthReportSnapshot,
+} from '../services/pdfService';
 import { useSecureScreen } from '../utils/secureScreen';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -163,6 +168,7 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [exportingReport, setExportingReport] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -261,6 +267,38 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
     }
   }, [petName]);
 
+  const handleExportReport = useCallback(async () => {
+    const snapshot: DashboardHealthReportSnapshot = {
+      healthScore: data.healthScore,
+      latestMetric: data.latestMetric,
+      weightHistory: data.weightHistory,
+      upcomingAppointments: data.upcomingAppointments,
+      recentRecords: data.recentRecords.map((record) => ({
+        id: record.id,
+        petId: record.petId,
+        type: record.type,
+        notes: record.notes,
+        visitDate: record.date || record.createdAt,
+        nextVisitDate: record.nextVisitDate,
+        createdAt: record.createdAt,
+        updatedAt: record.createdAt,
+      })),
+    };
+
+    setExportingReport(true);
+    try {
+      const report = await generateDashboardHealthReport(petId, snapshot);
+      await shareDashboardHealthReport(report.filePath);
+    } catch (err) {
+      Alert.alert(
+        'Export Failed',
+        err instanceof Error ? err.message : 'Unable to export health report.',
+      );
+    } finally {
+      setExportingReport(false);
+    }
+  }, [data, petId]);
+
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -269,7 +307,7 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
             <Text style={[styles.backText, { color: colors.primary }]}>‹ Back</Text>
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{petName} · Dashboard</Text>
-          <View style={styles.metricsBtn} />
+          <View style={styles.headerActions} />
         </View>
         <View style={{ padding: 16 }}>
           {Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} height={80} />)}
@@ -296,9 +334,26 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
           <Text style={[styles.backText, { color: colors.primary }]}>‹ Back</Text>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{petName} · Dashboard</Text>
-        <TouchableOpacity onPress={onOpenMetrics} style={[styles.metricsBtn, { backgroundColor: colors.primaryMuted }]} accessibilityRole="button" accessibilityLabel="Open health metrics">
-          <Text style={[styles.metricsBtnText, { color: colors.primary }]}>Metrics</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={handleExportReport}
+            disabled={exportingReport}
+            style={[
+              styles.headerActionBtn,
+              { backgroundColor: colors.primaryMuted },
+              exportingReport && styles.headerActionDisabled,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Export health report PDF"
+          >
+            <Text style={[styles.metricsBtnText, { color: colors.primary }]}>
+              {exportingReport ? 'PDF...' : 'PDF'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onOpenMetrics} style={[styles.headerActionBtn, { backgroundColor: colors.primaryMuted }]} accessibilityRole="button" accessibilityLabel="Open health metrics">
+            <Text style={[styles.metricsBtnText, { color: colors.primary }]}>Metrics</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -503,6 +558,9 @@ const styles = StyleSheet.create({
   backBtn: { padding: 4 },
   backText: { fontSize: 17 },
   headerTitle: { flex: 1, fontSize: 16, fontWeight: '700', textAlign: 'center', marginHorizontal: 8 },
+  headerActions: { minWidth: 112, flexDirection: 'row', justifyContent: 'flex-end' },
+  headerActionBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, marginLeft: 6 },
+  headerActionDisabled: { opacity: 0.6 },
   metricsBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   metricsBtnText: { fontWeight: '700', fontSize: 13 },
   scroll: { flex: 1 },
