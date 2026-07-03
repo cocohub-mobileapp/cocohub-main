@@ -27,7 +27,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Setup JDK
         uses: actions/setup-java@v4
@@ -48,7 +48,7 @@ jobs:
       - name: Build Android debug APK
         run: npx detox build --configuration android.emu.debug
 
-      - name: Run Detox E2E tests (Android)
+      - name: Run Detox E2E tests (Android, including medication flow)
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 33
@@ -84,7 +84,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Install CocoaPods
         run: cd ios && pod install && cd ..
@@ -92,7 +92,7 @@ jobs:
       - name: Build iOS debug app
         run: npx detox build --configuration ios.sim.debug
 
-      - name: Run Detox E2E tests (iOS)
+      - name: Run Detox E2E tests (iOS, including medication flow)
         run: |
           npm run seed:test
           npx detox test --configuration ios.sim.debug --record-logs all

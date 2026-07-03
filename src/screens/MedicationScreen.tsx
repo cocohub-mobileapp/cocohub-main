@@ -71,6 +71,15 @@ const EMPTY_FORM: Omit<Medication, 'id'> = {
   notes: '',
 };
 
+function toTestId(value: string): string {
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '') || 'medication'
+  );
+}
+
 function todayDates(): Date[] {
   return [new Date()];
 }
@@ -103,6 +112,10 @@ const MedicationScreen: React.FC = () => {
   const [vetId, setVetId] = useState('');
   const [overrideJustification, setOverrideJustification] = useState('');
   const [contraindicatedAcknowledged, setContraindicatedAcknowledged] = useState(false);
+  const [lastReminderStatus, setLastReminderStatus] = useState<{
+    medicationName: string;
+    count: number;
+  } | null>(null);
   // Refill modal state
   const [refillModalVisible, setRefillModalVisible] = useState(false);
   const [refillTargetMed, setRefillTargetMed] = useState<Medication | null>(null);
@@ -263,7 +276,8 @@ const MedicationScreen: React.FC = () => {
     };
     await saveMedication(med);
     await scheduleRefillReminder(med);
-    await scheduleMedicationReminder(med);
+    const medicationReminderIds = await scheduleMedicationReminder(med);
+    setLastReminderStatus({ medicationName: med.name, count: medicationReminderIds.length });
     // Sync refill reminder notifications whenever supply/frequency changes
     await syncRefillReminders(med);
     setInteractionResult(null);
@@ -373,7 +387,7 @@ const MedicationScreen: React.FC = () => {
       };
 
       return (
-        <View style={styles.card}>
+        <View style={styles.card} testID={`medication-card-${toTestId(item.name)}`}>
           <View style={styles.cardHeader}>
             <Text style={styles.medName}>{item.name}</Text>
             <View style={styles.cardActions}>
@@ -442,12 +456,14 @@ const MedicationScreen: React.FC = () => {
           ) : null}
           <View style={styles.doseActions}>
             <TouchableOpacity
+              testID={`log-dose-button-${toTestId(item.name)}`}
               style={styles.logBtn}
               onPress={() => void handleLogDose(item.id, false)}
             >
               <Text style={styles.logBtnText}>✓ Log Dose</Text>
             </TouchableOpacity>
             <TouchableOpacity
+              testID={`skip-dose-button-${toTestId(item.name)}`}
               style={[styles.logBtn, styles.skipBtn]}
               onPress={() => void handleLogDose(item.id, true)}
             >
@@ -466,7 +482,7 @@ const MedicationScreen: React.FC = () => {
     [openEdit, handleDelete, handleLogDose, openRefillModal],
   );
   const renderSchedule = (dates: Date[]) => (
-    <ScrollView style={styles.scheduleContainer}>
+    <ScrollView style={styles.scheduleContainer} testID="medication-schedule-list">
       {dates.map((date) => {
         const label =
           dates.length === 1
@@ -487,6 +503,7 @@ const MedicationScreen: React.FC = () => {
                 return (
                   <View
                     key={`${med.id}-${time.toISOString()}`}
+                    testID={`medication-schedule-dose-${toTestId(med.name)}`}
                     style={[styles.slotRow, taken && styles.slotTaken]}
                   >
                     <Text style={styles.slotTime}>{formatLocalTime(time)}</Text>
@@ -504,6 +521,37 @@ const MedicationScreen: React.FC = () => {
     </ScrollView>
   );
 
+  const renderDoseHistory = () => {
+    if (doseLogs.length === 0) return null;
+
+    const medicationById = new Map(medications.map((med) => [med.id, med]));
+    const recentLogs = [...doseLogs]
+      .sort((left, right) => new Date(right.takenAt).getTime() - new Date(left.takenAt).getTime())
+      .slice(0, 5);
+
+    return (
+      <View style={styles.historySection} testID="medication-history-list">
+        <Text style={styles.historyTitle}>Recent dose history</Text>
+        {recentLogs.map((log) => {
+          const medicationName = medicationById.get(log.medicationId)?.name ?? 'Medication';
+          return (
+            <View
+              key={log.id}
+              style={styles.historyRow}
+              testID={`dose-history-entry-${toTestId(medicationName)}`}
+            >
+              <Text style={styles.historyMedication}>{medicationName}</Text>
+              <Text style={styles.historyMeta}>
+                {log.skipped ? 'Skipped' : 'Taken'} {formatLocalDate(log.takenAt)}{' '}
+                {formatLocalTime(log.takenAt)}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
   const renderFormInput = (
     key: string,
     placeholder: string,
@@ -517,6 +565,7 @@ const MedicationScreen: React.FC = () => {
   ) => (
     <TextInput
       key={key}
+      testID={`medication-input-${key}`}
       ref={(ref) => {
         registerFormFieldRef(key, ref);
         if (options?.isFirstInteractive) {
@@ -536,7 +585,7 @@ const MedicationScreen: React.FC = () => {
   const renderModal = () => (
     <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={closeModal}>
       <View style={styles.modalOverlay}>
-        <ScrollView style={styles.modalContent}>
+        <ScrollView style={styles.modalContent} testID="medication-form-modal">
           <Text style={styles.modalTitle}>{editingMed ? 'Edit Medication' : 'Add Medication'}</Text>
           <MultiStepFormHeader
             stepHeadingRef={formHeadingRef}
@@ -685,11 +734,16 @@ const MedicationScreen: React.FC = () => {
             </>
           )}
           <View style={styles.modalActions}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={closeModal}>
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={closeModal}
+              testID="medication-form-cancel-button"
+            >
               <Text style={styles.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
             {!isFormFirstStep && (
               <TouchableOpacity
+                testID="medication-form-back-button"
                 style={styles.cancelBtn}
                 onPress={goFormBack}
                 accessibilityRole="button"
@@ -700,6 +754,7 @@ const MedicationScreen: React.FC = () => {
             )}
             {!isFormLastStep ? (
               <TouchableOpacity
+                testID="medication-form-next-button"
                 style={styles.saveBtn}
                 onPress={() => {
                   if (validateMedicationStep()) goFormNext();
@@ -710,7 +765,11 @@ const MedicationScreen: React.FC = () => {
                 <Text style={styles.saveBtnText}>Next</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={styles.saveBtn} onPress={() => void handleSave()}>
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={() => void handleSave()}
+                testID="medication-form-save-button"
+              >
                 <Text style={styles.saveBtnText}>Save</Text>
               </TouchableOpacity>
             )}
@@ -849,10 +908,10 @@ const MedicationScreen: React.FC = () => {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="medication-screen">
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Medications</Text>
-        <TouchableOpacity style={styles.addBtn} onPress={openAdd}>
+        <TouchableOpacity style={styles.addBtn} onPress={openAdd} testID="add-medication-button">
           <Text style={styles.addBtnText}>+ Add</Text>
         </TouchableOpacity>
       </View>
@@ -860,6 +919,7 @@ const MedicationScreen: React.FC = () => {
         {(['list', 'daily', 'weekly'] as Tab[]).map((t) => (
           <TouchableOpacity
             key={t}
+            testID={`medication-${t}-tab`}
             style={[styles.tab, tab === t && styles.activeTab]}
             onPress={() => setTab(t)}
           >
@@ -876,25 +936,36 @@ const MedicationScreen: React.FC = () => {
           ))}
         </View>
       ) : tab === 'list' ? (
-        <FlatList
-          data={medications}
-          keyExtractor={(item) => item.id}
-          renderItem={renderMedItem}
-          contentContainerStyle={styles.listContent}
-          ListEmptyComponent={
-            <EmptyState
-              icon="medkit"
-              title="No Medications"
-              description="Keep track of your pet's prescriptions, dosages, and refill schedules."
-              buttonText="Add medication"
-              onPress={openAdd}
-            />
-          }
-          removeClippedSubviews
-          maxToRenderPerBatch={10}
-          windowSize={5}
-          initialNumToRender={10}
-        />
+        <>
+          {lastReminderStatus ? (
+            <Text style={styles.reminderStatus} testID="medication-reminder-status">
+              {lastReminderStatus.count > 0
+                ? `Reminder scheduled for ${lastReminderStatus.medicationName}`
+                : `No future reminder needed for ${lastReminderStatus.medicationName}`}
+            </Text>
+          ) : null}
+          <FlatList
+            testID="medication-list"
+            data={medications}
+            keyExtractor={(item) => item.id}
+            renderItem={renderMedItem}
+            contentContainerStyle={styles.listContent}
+            ListEmptyComponent={
+              <EmptyState
+                icon="medkit"
+                title="No Medications"
+                description="Keep track of your pet's prescriptions, dosages, and refill schedules."
+                buttonText="Add medication"
+                onPress={openAdd}
+              />
+            }
+            ListFooterComponent={renderDoseHistory}
+            removeClippedSubviews
+            maxToRenderPerBatch={10}
+            windowSize={5}
+            initialNumToRender={10}
+          />
+        </>
       ) : null}
       {tab === 'daily' && renderSchedule(todayDates())}
       {tab === 'weekly' && renderSchedule(weekDates())}
@@ -934,6 +1005,16 @@ const styles = StyleSheet.create({
   tabText: { color: '#666', fontSize: 14 },
   activeTabText: { color: '#4CAF50', fontWeight: '600' },
   listContent: { padding: 12 },
+  reminderStatus: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: 8,
+    color: '#1B5E20',
+    fontSize: 13,
+    fontWeight: '600',
+    marginHorizontal: 12,
+    marginTop: 10,
+    padding: 10,
+  },
   card: {
     backgroundColor: '#fff',
     borderRadius: 10,
@@ -944,6 +1025,21 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  historySection: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    marginBottom: 18,
+    marginTop: 6,
+    padding: 14,
+  },
+  historyTitle: { color: '#1a1a1a', fontSize: 16, fontWeight: '700', marginBottom: 8 },
+  historyRow: {
+    borderTopColor: '#e0e0e0',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 8,
+  },
+  historyMedication: { color: '#1a1a1a', fontSize: 14, fontWeight: '700' },
+  historyMeta: { color: '#666', fontSize: 13, marginTop: 2 },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -35,20 +35,31 @@ export default function CareNavigator() {
   const [active, setActive] = useState<CareTab>('Medications');
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View testID="care-screen" style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Top tab bar */}
-      <View style={[styles.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.tabBar,
+          { backgroundColor: colors.surface, borderBottomColor: colors.border },
+        ]}
+      >
         {TABS.map((tab) => {
           const isActive = active === tab.key;
           return (
             <TouchableOpacity
               key={tab.key}
-              style={[styles.tab, isActive && { borderBottomColor: colors.primary, borderBottomWidth: 3 }]}
+              testID={`care-tab-${tab.key.toLowerCase()}`}
+              style={[
+                styles.tab,
+                isActive && { borderBottomColor: colors.primary, borderBottomWidth: 3 },
+              ]}
               onPress={() => setActive(tab.key)}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
             >
-              <Text style={[styles.tabLabel, { color: isActive ? colors.primary : colors.placeholder }]}>
+              <Text
+                style={[styles.tabLabel, { color: isActive ? colors.primary : colors.placeholder }]}
+              >
                 {tab.label}
               </Text>
             </TouchableOpacity>
