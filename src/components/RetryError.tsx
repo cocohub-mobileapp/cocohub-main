@@ -1,6 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import { useAppTheme } from '../theme';
+
 interface RetryErrorProps {
   error: Error;
   onRetry: () => void;
@@ -14,29 +16,34 @@ export const RetryError: React.FC<RetryErrorProps> = ({
   retryCount = 0,
   maxRetries = 3,
 }) => {
+  const colors = useAppTheme();
   const canRetry = retryCount < maxRetries;
 
   return (
     <View style={styles.container}>
       <Text style={styles.errorIcon}>⚠️</Text>
-      <Text style={styles.errorTitle}>Something went wrong</Text>
-      <Text style={styles.errorMessage}>{error.message}</Text>
+      <Text style={[styles.errorTitle, { color: colors.error }]}>Something went wrong</Text>
+      <Text style={[styles.errorMessage, { color: colors.secondaryText }]}>{error.message}</Text>
       {retryCount > 0 && (
-        <Text style={styles.retryInfo}>
+        <Text style={[styles.retryInfo, { color: colors.placeholder }]}>
           Attempt {retryCount} of {maxRetries}
         </Text>
       )}
       {canRetry && (
         <TouchableOpacity
-          style={styles.retryButton}
+          style={[styles.retryButton, { backgroundColor: colors.primary }]}
           onPress={onRetry}
           accessibilityRole="button"
           accessibilityLabel="Retry request"
         >
-          <Text style={styles.retryButtonText}>Retry</Text>
+          <Text style={[styles.retryButtonText, { color: colors.white }]}>Retry</Text>
         </TouchableOpacity>
       )}
-      {!canRetry && <Text style={styles.maxRetriesText}>Maximum retry attempts reached</Text>}
+      {!canRetry && (
+        <Text style={[styles.maxRetriesText, { color: colors.error }]}>
+          Maximum retry attempts reached
+        </Text>
+      )}
     </View>
   );
 };
@@ -54,34 +61,28 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#d32f2f',
     marginBottom: 8,
   },
   errorMessage: {
     fontSize: 14,
-    color: '#666',
     textAlign: 'center',
     marginBottom: 16,
   },
   retryInfo: {
     fontSize: 12,
-    color: '#999',
     marginBottom: 12,
   },
   retryButton: {
-    backgroundColor: '#4CAF50',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
   },
   retryButtonText: {
-    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
   maxRetriesText: {
     fontSize: 12,
-    color: '#d32f2f',
     fontStyle: 'italic',
   },
 });

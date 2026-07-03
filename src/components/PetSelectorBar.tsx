@@ -17,24 +17,36 @@ import {
 
 import { usePetContext } from '../context/PetContext';
 import type { Pet } from '../services/petService';
+import { useAppTheme } from '../theme';
 
 interface Props {
   onAddPet?: () => void;
 }
 
 const PetSelectorBar: React.FC<Props> = ({ onAddPet }) => {
+  const colors = useAppTheme();
   const { pets, activePet, loading, setActivePet } = usePetContext();
 
   if (loading && pets.length === 0) {
     return (
-      <View style={styles.loadingRow}>
-        <ActivityIndicator size="small" color="#4CAF50" />
+      <View
+        style={[
+          styles.loadingRow,
+          { backgroundColor: colors.surface, borderBottomColor: colors.border },
+        ]}
+      >
+        <ActivityIndicator size="small" color={colors.primary} />
       </View>
     );
   }
 
   return (
-    <View style={styles.wrapper}>
+    <View
+      style={[
+        styles.wrapper,
+        { backgroundColor: colors.surface, borderBottomColor: colors.border },
+      ]}
+    >
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -46,7 +58,11 @@ const PetSelectorBar: React.FC<Props> = ({ onAddPet }) => {
           return (
             <TouchableOpacity
               key={pet.id}
-              style={[styles.chip, isActive && styles.chipActive]}
+              style={[
+                styles.chip,
+                { backgroundColor: colors.input, borderColor: colors.border },
+                isActive && { backgroundColor: colors.primaryMuted, borderColor: colors.primary },
+              ]}
               onPress={() => setActivePet(pet)}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
@@ -63,19 +79,30 @@ const PetSelectorBar: React.FC<Props> = ({ onAddPet }) => {
                         ? '🐰'
                         : '🐾'}
               </Text>
-              <Text style={[styles.chipText, isActive && styles.chipTextActive]}>{pet.name}</Text>
+              <Text
+                style={[
+                  styles.chipText,
+                  { color: colors.secondaryText },
+                  isActive && { color: colors.primary },
+                ]}
+              >
+                {pet.name}
+              </Text>
             </TouchableOpacity>
           );
         })}
 
         {onAddPet && (
           <TouchableOpacity
-            style={styles.addChip}
+            style={[
+              styles.addChip,
+              { backgroundColor: colors.surface, borderColor: colors.primary },
+            ]}
             onPress={onAddPet}
             accessibilityRole="button"
             accessibilityLabel="Add new pet"
           >
-            <Text style={styles.addChipText}>+ Add</Text>
+            <Text style={[styles.addChipText, { color: colors.primary }]}>+ Add</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -85,17 +112,13 @@ const PetSelectorBar: React.FC<Props> = ({ onAddPet }) => {
 
 const styles = StyleSheet.create({
   wrapper: {
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
   },
   loadingRow: {
     height: 52,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
   },
   scroll: {
     paddingHorizontal: 12,
@@ -112,25 +135,16 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: '#e0e0e0',
-    backgroundColor: '#f9f9f9',
-  },
-  chipActive: {
-    borderColor: '#4CAF50',
-    backgroundColor: '#e8f5e9',
   },
   chipEmoji: { fontSize: 16 },
-  chipText: { fontSize: 13, fontWeight: '500', color: '#555' },
-  chipTextActive: { color: '#2e7d32', fontWeight: '700' },
+  chipText: { fontSize: 13, fontWeight: '500' },
   addChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: '#4CAF50',
-    backgroundColor: '#fff',
   },
-  addChipText: { fontSize: 13, fontWeight: '600', color: '#4CAF50' },
+  addChipText: { fontSize: 13, fontWeight: '600' },
 });
 
 export default PetSelectorBar;

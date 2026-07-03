@@ -8,6 +8,7 @@
  *  - Empty / loading / error states
  *  - Deep-link navigation on item press
  */
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import React, { useCallback, useEffect, useReducer, useRef, useState, useMemo } from 'react';
 import {
@@ -21,7 +22,6 @@ import {
   Switch,
   Image,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import NotificationItem, { resolveNavPayload } from '../components/NotificationItem';
 import { SkeletonCard } from '../components/SkeletonCard';
@@ -41,7 +41,7 @@ import {
 } from '../services/notificationStore';
 import { getAllPets, type Pet } from '../services/petService';
 
-type ListItem = 
+type ListItem =
   | { type: 'header'; id: string; petId: string; unreadCount: number; isCollapsed: boolean }
   | { type: 'notification'; id: string; notification: AppNotification };
 
@@ -177,16 +177,20 @@ export default function NotificationCenterScreen() {
   });
 
   useEffect(() => {
-    AsyncStorage.getItem('notification_group_by_pet').then(val => {
-      if (val !== null && isMounted.current) setGroupByPet(val === 'true');
-    }).catch(() => {});
-    
-    getAllPets().then((petList) => {
-      if (!isMounted.current) return;
-      const map: Record<string, Pet> = {};
-      petList.forEach(p => map[p.id] = p);
-      setPets(map);
-    }).catch(() => {});
+    AsyncStorage.getItem('notification_group_by_pet')
+      .then((val) => {
+        if (val !== null && isMounted.current) setGroupByPet(val === 'true');
+      })
+      .catch(() => {});
+
+    getAllPets()
+      .then((petList) => {
+        if (!isMounted.current) return;
+        const map: Record<string, Pet> = {};
+        petList.forEach((p) => (map[p.id] = p));
+        setPets(map);
+      })
+      .catch(() => {});
 
     return () => {
       isMounted.current = false;
@@ -199,7 +203,7 @@ export default function NotificationCenterScreen() {
   }, []);
 
   const toggleSection = useCallback((sectionId: string) => {
-    setCollapsedSections(prev => {
+    setCollapsedSections((prev) => {
       const next = new Set(prev);
       if (next.has(sectionId)) next.delete(sectionId);
       else next.add(sectionId);
@@ -209,11 +213,11 @@ export default function NotificationCenterScreen() {
 
   const listData = useMemo<ListItem[]>(() => {
     if (!groupByPet) {
-      return state.notifications.map(n => ({ type: 'notification', id: n.id, notification: n }));
+      return state.notifications.map((n) => ({ type: 'notification', id: n.id, notification: n }));
     }
 
     const groups: Record<string, AppNotification[]> = { General: [] };
-    state.notifications.forEach(n => {
+    state.notifications.forEach((n) => {
       const petId = (n.metadata?.petId || n.navPayload?.params?.petId) as string | undefined;
       const key = petId || 'General';
       if (!groups[key]) groups[key] = [];
@@ -221,28 +225,36 @@ export default function NotificationCenterScreen() {
     });
 
     const flatList: ListItem[] = [];
-    
-    const petIds = Object.keys(groups).filter(k => k !== 'General');
-    petIds.forEach(petId => {
+
+    const petIds = Object.keys(groups).filter((k) => k !== 'General');
+    petIds.forEach((petId) => {
       const notifs = groups[petId];
       if (notifs.length === 0) return;
-      
-      const unreadCount = notifs.filter(n => !n.isRead).length;
+
+      const unreadCount = notifs.filter((n) => !n.isRead).length;
       const isCollapsed = collapsedSections.has(petId);
       flatList.push({ type: 'header', id: `header-${petId}`, petId, unreadCount, isCollapsed });
-      
+
       if (!isCollapsed) {
-        notifs.forEach(n => flatList.push({ type: 'notification', id: n.id, notification: n }));
+        notifs.forEach((n) => flatList.push({ type: 'notification', id: n.id, notification: n }));
       }
     });
 
     if (groups.General.length > 0) {
-      const unreadCount = groups.General.filter(n => !n.isRead).length;
+      const unreadCount = groups.General.filter((n) => !n.isRead).length;
       const isCollapsed = collapsedSections.has('General');
-      flatList.push({ type: 'header', id: 'header-General', petId: 'General', unreadCount, isCollapsed });
-      
+      flatList.push({
+        type: 'header',
+        id: 'header-General',
+        petId: 'General',
+        unreadCount,
+        isCollapsed,
+      });
+
       if (!isCollapsed) {
-        groups.General.forEach(n => flatList.push({ type: 'notification', id: n.id, notification: n }));
+        groups.General.forEach((n) =>
+          flatList.push({ type: 'notification', id: n.id, notification: n }),
+        );
       }
     }
 
@@ -372,27 +384,37 @@ export default function NotificationCenterScreen() {
         const isGeneral = item.petId === 'General';
         const pet = isGeneral ? null : pets[item.petId];
         const name = isGeneral ? 'General' : pet?.name || 'Unknown Pet';
-        
+
         return (
-          <TouchableOpacity 
-            style={styles.sectionHeader} 
+          <TouchableOpacity
+            style={[
+              styles.sectionHeader,
+              { backgroundColor: colors.subtle, borderBottomColor: colors.border },
+            ]}
             onPress={() => toggleSection(item.petId)}
             activeOpacity={0.7}
           >
             {isGeneral || !pet?.photoUrl ? (
-              <View style={styles.sectionIconFallback}>
-                <Text style={{fontSize: 12}}>{isGeneral ? '📌' : '🐾'}</Text>
+              <View style={[styles.sectionIconFallback, { backgroundColor: colors.muted }]}>
+                <Text style={{ fontSize: 12 }}>{isGeneral ? '📌' : '🐾'}</Text>
               </View>
             ) : (
-              <Image source={{ uri: pet.photoUrl }} style={styles.sectionAvatar} />
+              <Image
+                source={{ uri: pet.photoUrl }}
+                style={[styles.sectionAvatar, { backgroundColor: colors.muted }]}
+              />
             )}
-            <Text style={styles.sectionTitle}>{name}</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{name}</Text>
             {item.unreadCount > 0 && (
-              <View style={styles.sectionBadge}>
-                <Text style={styles.sectionBadgeText}>{item.unreadCount}</Text>
+              <View style={[styles.sectionBadge, { backgroundColor: colors.primary }]}>
+                <Text style={[styles.sectionBadgeText, { color: colors.white }]}>
+                  {item.unreadCount}
+                </Text>
               </View>
             )}
-            <Text style={styles.sectionToggle}>{item.isCollapsed ? '▲' : '▼'}</Text>
+            <Text style={[styles.sectionToggle, { color: colors.placeholder }]}>
+              {item.isCollapsed ? '▲' : '▼'}
+            </Text>
           </TouchableOpacity>
         );
       }
@@ -403,12 +425,12 @@ export default function NotificationCenterScreen() {
           notification={notif}
           onPress={handleItemPress}
           onLongPress={handleItemLongPress}
-          style={state.selected.has(notif.id) ? styles.selectedItem : undefined}
+          style={state.selected.has(notif.id) ? { backgroundColor: colors.infoMuted } : undefined}
           testID={`notification-item-${notif.id}`}
         />
       );
     },
-    [handleItemPress, handleItemLongPress, state.selected, pets, toggleSection],
+    [colors, handleItemPress, handleItemLongPress, state.selected, pets, toggleSection],
   );
 
   const keyExtractor = useCallback((item: ListItem) => item.id, []);
@@ -420,11 +442,19 @@ export default function NotificationCenterScreen() {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <View style={styles.container} testID="notification-center-screen">
+    <View
+      style={[styles.container, { backgroundColor: colors.background }]}
+      testID="notification-center-screen"
+    >
       {/* Header */}
-      <View style={styles.headerContainer}>
+      <View
+        style={[
+          styles.headerContainer,
+          { backgroundColor: colors.surface, borderBottomColor: colors.border },
+        ]}
+      >
         <View style={styles.header}>
-          <Text style={styles.headerTitle} accessibilityRole="header">
+          <Text style={[styles.headerTitle, { color: colors.text }]} accessibilityRole="header">
             Notifications
             {state.unreadCount > 0 ? ` (${state.unreadCount})` : ''}
           </Text>
@@ -435,7 +465,7 @@ export default function NotificationCenterScreen() {
                 accessibilityLabel="Mark all as read"
                 testID="mark-all-read-btn"
               >
-                <Text style={styles.actionText}>Mark all read</Text>
+                <Text style={[styles.actionText, { color: colors.primary }]}>Mark all read</Text>
               </TouchableOpacity>
             )}
             {state.notifications.length > 0 && !hasSelection && (
@@ -445,32 +475,41 @@ export default function NotificationCenterScreen() {
                 testID="delete-all-btn"
                 style={styles.actionSpacer}
               >
-                <Text style={[styles.actionText, styles.destructiveText]}>Clear all</Text>
+                <Text style={[styles.actionText, { color: colors.error }]}>Clear all</Text>
               </TouchableOpacity>
             )}
           </View>
         </View>
         <View style={styles.toggleRow}>
-          <Text style={styles.toggleLabel}>Group by Pet</Text>
-          <Switch 
-            value={groupByPet} 
+          <Text style={[styles.toggleLabel, { color: colors.secondaryText }]}>Group by Pet</Text>
+          <Switch
+            value={groupByPet}
             onValueChange={handleToggleGroup}
-            trackColor={{ false: '#D1D5DB', true: colors.primary }}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={colors.white}
           />
         </View>
       </View>
 
       {/* Bulk action bar */}
       {hasSelection && (
-        <View style={styles.bulkBar} testID="bulk-action-bar">
-          <Text style={styles.bulkCount}>{state.selected.size} selected</Text>
+        <View
+          style={[
+            styles.bulkBar,
+            { backgroundColor: colors.infoMuted, borderBottomColor: colors.border },
+          ]}
+          testID="bulk-action-bar"
+        >
+          <Text style={[styles.bulkCount, { color: colors.info }]}>
+            {state.selected.size} selected
+          </Text>
           <View style={styles.bulkActions}>
             <TouchableOpacity
               onPress={handleMarkSelectedRead}
               accessibilityLabel="Mark selected as read"
               testID="bulk-mark-read-btn"
             >
-              <Text style={styles.actionText}>Mark read</Text>
+              <Text style={[styles.actionText, { color: colors.primary }]}>Mark read</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleDeleteSelected}
@@ -478,7 +517,7 @@ export default function NotificationCenterScreen() {
               testID="bulk-delete-btn"
               style={styles.actionSpacer}
             >
-              <Text style={[styles.actionText, styles.destructiveText]}>Delete</Text>
+              <Text style={[styles.actionText, { color: colors.error }]}>Delete</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => dispatch({ type: 'CLEAR_SELECTION' })}
@@ -486,25 +525,40 @@ export default function NotificationCenterScreen() {
               testID="cancel-selection-btn"
               style={styles.actionSpacer}
             >
-              <Text style={styles.actionText}>Cancel</Text>
+              <Text style={[styles.actionText, { color: colors.primary }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
       )}
 
       {/* Filter tabs */}
-      <View style={styles.filterRow} accessibilityRole="tablist">
+      <View
+        style={[
+          styles.filterRow,
+          { backgroundColor: colors.surface, borderBottomColor: colors.border },
+        ]}
+        accessibilityRole="tablist"
+      >
         {FILTERS.map(({ key, label }) => (
           <TouchableOpacity
             key={key}
             onPress={() => handleFilterChange(key)}
-            style={[styles.filterTab, state.filter === key && styles.filterTabActive]}
+            style={[
+              styles.filterTab,
+              state.filter === key && { borderBottomWidth: 2, borderBottomColor: colors.primary },
+            ]}
             accessibilityRole="tab"
             accessibilityState={{ selected: state.filter === key }}
             accessibilityLabel={`Filter by ${label}`}
             testID={`filter-tab-${key}`}
           >
-            <Text style={[styles.filterLabel, state.filter === key && styles.filterLabelActive]}>
+            <Text
+              style={[
+                styles.filterLabel,
+                { color: colors.secondaryText },
+                state.filter === key && { color: colors.primary, fontWeight: '600' },
+              ]}
+            >
               {label}
             </Text>
           </TouchableOpacity>
@@ -520,9 +574,12 @@ export default function NotificationCenterScreen() {
         </View>
       ) : showFullErrorState ? (
         <View style={styles.centered} testID="error-state">
-          <Text style={styles.errorText}>{state.error}</Text>
-          <TouchableOpacity onPress={() => load()} style={styles.retryBtn}>
-            <Text style={styles.retryText}>Retry</Text>
+          <Text style={[styles.errorText, { color: colors.error }]}>{state.error}</Text>
+          <TouchableOpacity
+            onPress={() => load()}
+            style={[styles.retryBtn, { backgroundColor: colors.primary }]}
+          >
+            <Text style={[styles.retryText, { color: colors.white }]}>Retry</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -541,8 +598,8 @@ export default function NotificationCenterScreen() {
           ListEmptyComponent={
             <View style={styles.centered} testID="empty-state">
               <Text style={styles.emptyIcon}>🔔</Text>
-              <Text style={styles.emptyTitle}>No notifications</Text>
-              <Text style={styles.emptyBody}>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>No notifications</Text>
+              <Text style={[styles.emptyBody, { color: colors.secondaryText }]}>
                 {state.filter === 'all'
                   ? "You're all caught up!"
                   : `No ${state.filter} notifications.`}
@@ -567,12 +624,9 @@ export default function NotificationCenterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
   },
   headerContainer: {
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#D1D5DB',
   },
   header: {
     flexDirection: 'row',
@@ -590,7 +644,6 @@ const styles = StyleSheet.create({
   },
   toggleLabel: {
     fontSize: 14,
-    color: '#4B5563',
     fontWeight: '500',
   },
   sectionHeader: {
@@ -598,52 +651,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#F3F4F6',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#D1D5DB',
   },
   sectionAvatar: {
     width: 24,
     height: 24,
     borderRadius: 12,
     marginRight: 8,
-    backgroundColor: '#E5E7EB',
   },
   sectionIconFallback: {
     width: 24,
     height: 24,
     borderRadius: 12,
     marginRight: 8,
-    backgroundColor: '#E5E7EB',
     alignItems: 'center',
     justifyContent: 'center',
   },
   sectionTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
     flex: 1,
   },
   sectionBadge: {
-    backgroundColor: '#4CAF50',
     borderRadius: 12,
     paddingHorizontal: 6,
     paddingVertical: 2,
     marginRight: 8,
   },
   sectionBadgeText: {
-    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: 'bold',
   },
   sectionToggle: {
     fontSize: 12,
-    color: '#6B7280',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
   },
   headerActions: {
     flexDirection: 'row',
@@ -651,11 +695,7 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontSize: 14,
-    color: '#4CAF50',
     fontWeight: '500',
-  },
-  destructiveText: {
-    color: '#EF4444',
   },
   actionSpacer: {
     marginLeft: 16,
@@ -666,14 +706,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#EFF6FF',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#BFDBFE',
   },
   bulkCount: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1D4ED8',
   },
   bulkActions: {
     flexDirection: 'row',
@@ -681,9 +718,7 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#D1D5DB',
     paddingHorizontal: 8,
   },
   filterTab: {
@@ -691,17 +726,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginRight: 4,
   },
-  filterTabActive: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#4CAF50',
-  },
   filterLabel: {
     fontSize: 13,
-    color: '#6B7280',
-  },
-  filterLabelActive: {
-    color: '#4CAF50',
-    fontWeight: '600',
   },
   centered: {
     flex: 1,
@@ -723,31 +749,23 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
     marginBottom: 6,
   },
   emptyBody: {
     fontSize: 14,
-    color: '#6B7280',
     textAlign: 'center',
   },
   errorText: {
     fontSize: 14,
-    color: '#EF4444',
     textAlign: 'center',
     marginBottom: 12,
   },
   retryBtn: {
     paddingHorizontal: 20,
     paddingVertical: 8,
-    backgroundColor: '#4CAF50',
     borderRadius: 8,
   },
   retryText: {
-    color: '#FFFFFF',
     fontWeight: '600',
-  },
-  selectedItem: {
-    backgroundColor: '#DBEAFE',
   },
 });

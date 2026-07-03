@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { I18nextProvider } from 'react-i18next';
-import { View } from 'react-native';
 
 import LanguageSelector from './LanguageSelector';
+import { ThemeStoryFrame } from './storybookThemeDecorator';
 import i18n from '../i18n';
 
 const meta: Meta<typeof LanguageSelector> = {
@@ -10,11 +10,11 @@ const meta: Meta<typeof LanguageSelector> = {
   component: LanguageSelector,
   decorators: [
     (Story) => (
-      <View style={{ flex: 1, backgroundColor: '#ffffff', padding: 24 }}>
-        <I18nextProvider i18n={i18n}>
+      <I18nextProvider i18n={i18n}>
+        <ThemeStoryFrame mode="light" style={{ padding: 24 }}>
           <Story />
-        </I18nextProvider>
-      </View>
+        </ThemeStoryFrame>
+      </I18nextProvider>
     ),
   ],
   parameters: {
@@ -28,3 +28,11 @@ export default meta;
 type Story = StoryObj<typeof LanguageSelector>;
 
 export const Default: Story = {};
+
+export const Dark: Story = {
+  render: () => (
+    <ThemeStoryFrame mode="dark" style={{ padding: 24 }}>
+      <LanguageSelector />
+    </ThemeStoryFrame>
+  ),
+};

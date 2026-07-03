@@ -1,5 +1,4 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
 import ErrorFallback from './ErrorFallback';
 import crashReporting from '../services/crashReporting';
@@ -53,7 +52,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
   handleClearCache = async () => {
     try {
       await encryptedAsyncStorage.clear();
-    } catch (e) {
+    } catch {
       // ignore
     }
     // After clearing, offer retry by remounting
@@ -84,28 +83,5 @@ export class ErrorBoundary extends React.Component<Props, State> {
     return <React.Fragment key={String(this.state.resetKey)}>{this.props.children}</React.Fragment>;
   }
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    backgroundColor: '#fff',
-  },
-  title: { fontSize: 20, fontWeight: '700', marginBottom: 8, color: '#1a1a1a' },
-  message: { fontSize: 14, color: '#444', textAlign: 'center', marginBottom: 20 },
-  actions: { flexDirection: 'row', gap: 12 },
-  btn: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginHorizontal: 8,
-  },
-  btnText: { color: '#fff', fontWeight: '600' },
-  secondary: { backgroundColor: '#e0e0e0' },
-  secondaryText: { color: '#333' },
-});
 
 export default ErrorBoundary;

@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { Text, View } from 'react-native';
 
 import OfflineIndicator from './OfflineIndicator';
+import { ThemeStoryFrame } from './storybookThemeDecorator';
 
 /**
  * `OfflineIndicator` — An animated banner that slides in from the top of the
@@ -28,6 +29,13 @@ import OfflineIndicator from './OfflineIndicator';
 const meta: Meta<typeof OfflineIndicator> = {
   title: 'Components/OfflineIndicator',
   component: OfflineIndicator,
+  decorators: [
+    (Story) => (
+      <ThemeStoryFrame mode="light">
+        <Story />
+      </ThemeStoryFrame>
+    ),
+  ],
 };
 
 export default meta;
