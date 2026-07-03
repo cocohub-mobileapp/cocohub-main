@@ -13,7 +13,10 @@ import express from 'express';
 import { randomUUID } from 'crypto';
 
 import { authenticateJWT, type AuthenticatedRequest } from '../../middleware/auth';
-import { generateHealthReport } from '../../services/reportService';
+import {
+  generateHealthReport,
+  type DashboardReportSnapshot,
+} from '../../services/reportService';
 import { sendError } from '../response';
 import { store } from '../store';
 import { getRedisClient } from '../../config/redis';
@@ -33,6 +36,7 @@ interface JobRecord {
   userId: string;
   filename?: string;
   recordCount?: number;
+  dashboardSnapshot?: DashboardReportSnapshot;
   error?: string;
   createdAt: string;
 }
@@ -69,12 +73,15 @@ function processJobAsync(jobId: string): void {
 
       const records = [...store.medicalRecords.values()].filter((r) => r.petId === job.petId);
       const medications = [...store.medications.values()].filter((m) => m.petId === job.petId);
+      const appointments = [...store.appointments.values()].filter((a) => a.petId === job.petId);
 
       const result = await generateHealthReport({
         pet,
         owner,
         records,
         medications,
+        appointments,
+        dashboardSnapshot: job.dashboardSnapshot,
         generatedBy: job.userId,
       });
 
@@ -110,6 +117,7 @@ router.post('/pets/:petId/health', async (req: AuthenticatedRequest, res) => {
     status: 'queued',
     petId,
     userId: req.user?.id ?? 'unknown',
+    dashboardSnapshot: req.body?.dashboardSnapshot as DashboardReportSnapshot | undefined,
     createdAt: new Date().toISOString(),
   };
 
@@ -122,12 +130,15 @@ router.post('/pets/:petId/health', async (req: AuthenticatedRequest, res) => {
     const { dateFrom, dateTo } = req.query as { dateFrom?: string; dateTo?: string };
     const records = [...store.medicalRecords.values()].filter((r) => r.petId === petId);
     const medications = [...store.medications.values()].filter((m) => m.petId === petId);
+    const appointments = [...store.appointments.values()].filter((a) => a.petId === petId);
     try {
       const result = await generateHealthReport({
         pet,
         owner,
         records,
         medications,
+        appointments,
+        dashboardSnapshot: req.body?.dashboardSnapshot as DashboardReportSnapshot | undefined,
         generatedBy: req.user?.id ?? 'unknown',
         dateFrom,
         dateTo,

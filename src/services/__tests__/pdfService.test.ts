@@ -7,16 +7,45 @@ import * as Sharing from 'expo-sharing';
 import QRCode from 'qrcode';
 
 import {
+  generateDashboardHealthReport,
   generateVaccinationCertificate,
+  shareDashboardHealthReport,
   shareCertificate,
   type PetCertificateInfo,
 } from '../../services/pdfService';
 import type { VaccinationReminder } from '../../services/vaccinationService';
 
+jest.mock('../apiClient', () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+  },
+}));
+
+jest.mock('../authService', () => ({
+  getToken: jest.fn(),
+}));
+
+jest.mock('../../config', () => ({
+  __esModule: true,
+  default: {
+    api: {
+      baseUrl: 'https://api.test/api',
+    },
+  },
+}));
+
+import apiClient from '../apiClient';
+import { getToken } from '../authService';
+
 const mockWriteFile = FileSystem.writeAsStringAsync as jest.Mock;
+const mockDownload = FileSystem.downloadAsync as jest.Mock;
 const mockIsAvailable = Sharing.isAvailableAsync as jest.Mock;
 const mockShare = Sharing.shareAsync as jest.Mock;
 const mockQRCode = QRCode.toDataURL as jest.Mock;
+const mockApiClient = apiClient as jest.Mocked<typeof apiClient>;
+const mockGetToken = getToken as jest.Mock;
 
 const mockPet: PetCertificateInfo = {
   petId: 'pet-123',
@@ -81,9 +110,15 @@ const mockVaccinations: VaccinationReminder[] = [
 beforeEach(() => {
   jest.clearAllMocks();
   mockWriteFile.mockResolvedValue(undefined);
+  mockDownload.mockImplementation((_uri: string, fileUri: string) =>
+    Promise.resolve({ uri: fileUri, status: 200, headers: {} }),
+  );
   mockIsAvailable.mockResolvedValue(true);
   mockShare.mockResolvedValue(undefined);
   mockQRCode.mockResolvedValue('data:image/png;base64,mockqr');
+  mockApiClient.post.mockReset();
+  mockApiClient.get.mockReset();
+  mockGetToken.mockResolvedValue('jwt-token');
 });
 
 describe('pdfService — Vaccination Certificate PDF Generator (Issue #417)', () => {
@@ -160,6 +195,68 @@ describe('pdfService — Vaccination Certificate PDF Generator (Issue #417)', ()
       mockIsAvailable.mockResolvedValue(false);
       await expect(shareCertificate('/mock/cert.txt')).rejects.toThrow(
         'Sharing is not available on this device.',
+      );
+    });
+  });
+
+  describe('generateDashboardHealthReport', () => {
+    it('creates, waits for, and downloads a dashboard health report PDF', async () => {
+      mockApiClient.post.mockResolvedValue({ data: { jobId: 'job-123' } });
+      mockApiClient.get.mockResolvedValue({
+        data: {
+          jobId: 'job-123',
+          status: 'complete',
+          filename: 'health-report-pet-123.pdf',
+          recordCount: 2,
+        },
+      });
+
+      const report = await generateDashboardHealthReport('pet-123', {
+        healthScore: 88,
+        weightHistory: [{ date: '2026-01-01', weightKg: 12.4 }],
+        upcomingAppointments: [],
+        recentRecords: [],
+      });
+
+      expect(mockApiClient.post).toHaveBeenCalledWith('/reports/pets/pet-123/health', {
+        dashboardSnapshot: expect.objectContaining({ healthScore: 88 }),
+      });
+      expect(mockApiClient.get).toHaveBeenCalledWith('/reports/job-123/status');
+      expect(mockDownload).toHaveBeenCalledWith(
+        'https://api.test/api/reports/job-123/download',
+        '/mock/documents/health-report-pet-123.pdf',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Accept: 'application/pdf',
+            Authorization: 'Bearer jwt-token',
+          }),
+        }),
+      );
+      expect(report).toEqual({
+        filePath: '/mock/documents/health-report-pet-123.pdf',
+        filename: 'health-report-pet-123.pdf',
+        jobId: 'job-123',
+        recordCount: 2,
+      });
+    });
+
+    it('throws when the report job fails', async () => {
+      mockApiClient.post.mockResolvedValue({ data: { jobId: 'job-123' } });
+      mockApiClient.get.mockResolvedValue({
+        data: { jobId: 'job-123', status: 'failed', error: 'render failed' },
+      });
+
+      await expect(generateDashboardHealthReport('pet-123', {})).rejects.toThrow('render failed');
+    });
+  });
+
+  describe('shareDashboardHealthReport', () => {
+    it('shares the generated PDF with the native share sheet', async () => {
+      await shareDashboardHealthReport('/mock/documents/report.pdf');
+
+      expect(mockShare).toHaveBeenCalledWith(
+        '/mock/documents/report.pdf',
+        expect.objectContaining({ mimeType: 'application/pdf' }),
       );
     });
   });

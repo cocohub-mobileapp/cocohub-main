@@ -1,5 +1,6 @@
 ﻿import { UserRole } from '../../models/UserRole';
 import type {
+  StoredAppointment,
   StoredMedicalRecord,
   StoredMedication,
   StoredPet,
@@ -59,6 +60,19 @@ const makeMed = (id: string, active: boolean): StoredMedication => ({
   startDate: '2024-01-01',
   active,
 });
+
+const appointment: StoredAppointment = {
+  id: 'a-1',
+  petId: 'p-1',
+  vetId: 'v-1',
+  date: '2026-07-15',
+  time: '09:30',
+  type: 'ROUTINE_CHECKUP' as StoredAppointment['type'],
+  status: 'CONFIRMED' as StoredAppointment['status'],
+  notes: 'Follow-up wellness exam',
+  createdAt: '2026-07-01T00:00:00.000Z',
+  updatedAt: '2026-07-01T00:00:00.000Z',
+};
 
 describe('filterByDateRange', () => {
   const records = [
@@ -136,5 +150,30 @@ describe('generateHealthReport', () => {
   it('PDF starts with PDF magic bytes', async () => {
     const result = await generateHealthReport(baseOpts);
     expect(result.buffer.slice(0, 4).toString()).toBe('%PDF');
+  });
+
+  it('supports dashboard health score, weight history, and appointment snapshot data', async () => {
+    const result = await generateHealthReport({
+      ...baseOpts,
+      appointments: [appointment],
+      dashboardSnapshot: {
+        healthScore: 91,
+        latestMetric: {
+          recordedAt: '2026-07-01T12:00:00.000Z',
+          weightKg: 12.5,
+          temperatureC: 38.6,
+          activityLevel: 'high',
+        },
+        weightHistory: [
+          { date: '2026-06-01', weightKg: 12.1 },
+          { date: '2026-07-01', weightKg: 12.5 },
+        ],
+        upcomingAppointments: [appointment],
+      },
+    });
+
+    expect(Buffer.isBuffer(result.buffer)).toBe(true);
+    expect(result.buffer.slice(0, 4).toString()).toBe('%PDF');
+    expect(result.recordCount).toBe(1);
   });
 });
