@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -160,7 +160,7 @@ const ReferralScreen: React.FC = () => {
         </View>
         <Text style={styles.milestoneDesc}>
           {milestoneReached
-            ? 'You've unlocked the annual plan discount!'
+            ? "You've unlocked the annual plan discount!"
             : `${milestoneProgress} of ${MILESTONE_TARGET} referrals to unlock annual plan discount`}
         </Text>
         <View style={styles.progressTrack}>

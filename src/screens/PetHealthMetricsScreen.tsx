@@ -122,7 +122,13 @@ function DeviceStatusBadge({
         <View style={badgeStyles.dot} />
         <View>
           <Text style={badgeStyles.providerName}>
-            {status.providerKey === 'mockfit' ? 'MockFit' : (status.providerKey ?? 'Device')}
+            {status.providerKey === 'mockfit'
+              ? 'MockFit'
+              : status.providerKey === 'fitbark'
+              ? 'FitBark'
+              : status.providerKey === 'whistle'
+              ? 'Whistle'
+              : (status.providerKey ?? 'Device')}
           </Text>
           <Text style={badgeStyles.syncTime}>Synced {formatSyncTime(status.lastSync)}</Text>
         </View>
@@ -313,23 +319,24 @@ const PetHealthMetricsScreen: React.FC<Props> = ({
   const handleSync = useCallback(async () => {
     setSyncing(true);
     try {
-      await wearableService.syncWearable(petId);
+      await wearableService.syncWearable(petId, wearableStatus.providerKey);
       await loadWearableData();
     } catch (e) {
       Alert.alert('Sync failed', 'Could not sync wearable data. Please try again.');
     } finally {
       if (isMounted.current) setSyncing(false);
     }
-  }, [petId, loadWearableData]);
+  }, [petId, wearableStatus.providerKey, loadWearableData]);
 
-  const handleConnect = useCallback(async () => {
+  const handleConnect = useCallback(async (providerKey: string) => {
     // Connect with a mock access token for demonstration/development
     try {
-      await wearableService.connectWearable(petId, 'mockfit', 'demo-token');
-      await wearableService.syncWearable(petId);
+      await wearableService.connectWearable(petId, providerKey, 'demo-token');
+      await wearableService.syncWearable(petId, providerKey);
       await loadWearableData();
       setConnectModalVisible(false);
-      Alert.alert('Connected!', 'MockFit device linked and initial data synced.');
+      const name = providerKey === 'mockfit' ? 'MockFit' : providerKey === 'fitbark' ? 'FitBark' : 'Whistle';
+      Alert.alert('Connected!', `${name} device linked and initial data synced.`);
     } catch (e) {
       Alert.alert('Connection failed', 'Could not connect device. Please try again.');
     }
@@ -708,7 +715,7 @@ const PetHealthMetricsScreen: React.FC<Props> = ({
             <View style={connectStyles.providerList}>
               <TouchableOpacity
                 style={connectStyles.providerRow}
-                onPress={() => void handleConnect()}
+                onPress={() => void handleConnect('mockfit')}
                 accessibilityRole="button"
                 accessibilityLabel="Connect MockFit device"
               >
@@ -716,6 +723,34 @@ const PetHealthMetricsScreen: React.FC<Props> = ({
                 <View>
                   <Text style={connectStyles.providerName}>MockFit</Text>
                   <Text style={connectStyles.providerSub}>Demo wearable provider</Text>
+                </View>
+                <Text style={connectStyles.providerArrow}>›</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={connectStyles.providerRow}
+                onPress={() => void handleConnect('fitbark')}
+                accessibilityRole="button"
+                accessibilityLabel="Connect FitBark device"
+              >
+                <Text style={connectStyles.providerIcon}>🐶</Text>
+                <View>
+                  <Text style={connectStyles.providerName}>FitBark</Text>
+                  <Text style={connectStyles.providerSub}>Sync steps, active hours, and sleep score</Text>
+                </View>
+                <Text style={connectStyles.providerArrow}>›</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={connectStyles.providerRow}
+                onPress={() => void handleConnect('whistle')}
+                accessibilityRole="button"
+                accessibilityLabel="Connect Whistle device"
+              >
+                <Text style={connectStyles.providerIcon}>🐕</Text>
+                <View>
+                  <Text style={connectStyles.providerName}>Whistle</Text>
+                  <Text style={connectStyles.providerSub}>Sync steps, distance, active minutes, and location</Text>
                 </View>
                 <Text style={connectStyles.providerArrow}>›</Text>
               </TouchableOpacity>

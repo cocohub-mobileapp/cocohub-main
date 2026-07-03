@@ -3,6 +3,10 @@ import { query } from '../src/db';
 
 type ProviderKey = string;
 
+type ProviderClient = {
+  sync: (token: string, petId: string) => Promise<any[]>;
+};
+
 interface ProviderTokenRecord {
   id?: number;
   pet_id: string;
@@ -24,12 +28,9 @@ export interface NormalizedMetric {
   raw?: any;
 }
 
-// Minimal provider client interface — real integrations should be implemented
-// separately. We include a mock provider here for tests and local development.
-const PROVIDER_CLIENTS: Record<
-  ProviderKey,
-  { sync: (token: string, petId: string) => Promise<any[]> }
-> = {
+// Provider clients stay credential-safe: configured providers skip sync until
+// their API base URL, activity path, and stored access token are present.
+const PROVIDER_CLIENTS: Record<ProviderKey, ProviderClient> = {
   mockfit: {
     async sync(_token: string, petId: string) {
       const events = [];
@@ -51,7 +52,81 @@ const PROVIDER_CLIENTS: Record<
       return events;
     },
   },
+  fitbark: {
+    async sync(token: string, petId: string) {
+      return fetchConfiguredProviderEvents('fitbark', token, petId);
+    },
+  },
+  whistle: {
+    async sync(token: string, petId: string) {
+      return fetchConfiguredProviderEvents('whistle', token, petId);
+    },
+  },
 };
+
+function providerEnvName(providerKey: ProviderKey, suffix: string): string {
+  return `${providerKey.replace(/[^a-z0-9]/gi, '_').toUpperCase()}_${suffix}`;
+}
+
+function resolveConfiguredProviderUrl(providerKey: ProviderKey, petId: string): string | null {
+  const baseUrl = process.env[providerEnvName(providerKey, 'API_BASE_URL')]?.trim();
+  const activityPath = process.env[providerEnvName(providerKey, 'ACTIVITY_PATH')]?.trim();
+
+  if (!baseUrl || !activityPath) return null;
+
+  const url = new URL(activityPath, baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
+  if (!url.searchParams.has('petId') && !url.searchParams.has('pet_id')) {
+    url.searchParams.set('petId', petId);
+  }
+  return url.toString();
+}
+
+async function fetchConfiguredProviderEvents(
+  providerKey: ProviderKey,
+  token: string,
+  petId: string,
+): Promise<any[]> {
+  const url = resolveConfiguredProviderUrl(providerKey, petId);
+  if (!url || !token) {
+    console.warn(
+      `[wearableService] ${providerKey} API config is absent; skipping wearable sync for ${petId}`,
+    );
+    return [];
+  }
+
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`${providerKey} sync failed with HTTP ${response.status}`);
+  }
+
+  return extractProviderEvents(await response.json());
+}
+
+function extractProviderEvents(payload: any): any[] {
+  if (Array.isArray(payload)) return payload;
+
+  const candidates = [
+    payload?.data,
+    payload?.events,
+    payload?.activities,
+    payload?.activity,
+    payload?.records,
+    payload?.daily,
+    payload?.daily_activity,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+
+  return payload ? [payload] : [];
+}
 
 export async function connectProviderOAuth(
   petId: string,
@@ -77,80 +152,165 @@ export async function refreshTokenIfNeeded(
   return record;
 }
 
-function normalizeProviderEvent(providerKey: ProviderKey, event: any): NormalizedMetric[] {
+function readNumber(...values: any[]): number | undefined {
+  for (const value of values) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) {
+      return Number(value);
+    }
+  }
+  return undefined;
+}
+
+function readTimestamp(event: any): string {
+  return String(
+    event.ts ??
+      event.timestamp ??
+      event.recorded_at ??
+      event.recordedAt ??
+      event.date ??
+      event.day ??
+      new Date().toISOString(),
+  );
+}
+
+function readBaseEventId(event: any): string | null {
+  const id = event.id ?? event.eventId ?? event.event_id ?? event.uuid ?? event.date ?? event.day;
+  return id === undefined || id === null ? null : String(id);
+}
+
+function createMetric(
+  providerKey: ProviderKey,
+  event: any,
+  metricType: string,
+  value: number | undefined,
+  unit: string,
+): NormalizedMetric | null {
+  if (value === undefined || !Number.isFinite(value)) return null;
+
+  const baseEventId = readBaseEventId(event);
+  return {
+    petId: String(event.petId ?? event.pet_id ?? 'unknown'),
+    providerKey,
+    providerEventId: baseEventId ? `${baseEventId}:${metricType}` : null,
+    raw: event,
+    metricType,
+    value,
+    unit,
+    recordedAt: readTimestamp(event),
+  };
+}
+
+function compactMetrics(metrics: Array<NormalizedMetric | null>): NormalizedMetric[] {
+  return metrics.filter((metric): metric is NormalizedMetric => metric !== null);
+}
+
+export function normalizeProviderEvent(providerKey: ProviderKey, event: any): NormalizedMetric[] {
   // For each provider, map provider-specific fields to our normalized metrics.
   if (providerKey === 'mockfit') {
-    const base = {
-      petId: String(event.petId ?? event.pet_id ?? 'unknown'),
-      providerKey,
-      providerEventId: event.id ?? event.eventId ?? null,
-      raw: event,
-    };
+    return compactMetrics([
+      createMetric(providerKey, event, 'steps', readNumber(event.steps), 'count'),
+      createMetric(
+        providerKey,
+        event,
+        'sleep_duration',
+        readNumber(event.sleep_minutes),
+        'minutes',
+      ),
+      createMetric(providerKey, event, 'sleep_quality', readNumber(event.sleep_quality), 'ratio'),
+      createMetric(providerKey, event, 'activity_score', readNumber(event.activity_score), 'score'),
+      createMetric(providerKey, event, 'heart_rate', readNumber(event.heart_rate), 'bpm'),
+    ]);
+  }
 
-    const metrics: NormalizedMetric[] = [];
-    if (typeof event.steps === 'number') {
-      metrics.push({
-        ...base,
-        metricType: 'steps',
-        value: event.steps,
-        unit: 'count',
-        recordedAt: event.ts,
-      });
-    }
-    if (typeof event.sleep_minutes === 'number') {
-      metrics.push({
-        ...base,
-        metricType: 'sleep_duration',
-        value: event.sleep_minutes,
-        unit: 'minutes',
-        recordedAt: event.ts,
-      });
-    }
-    if (typeof event.sleep_quality === 'number') {
-      metrics.push({
-        ...base,
-        metricType: 'sleep_quality',
-        value: event.sleep_quality,
-        unit: 'ratio',
-        recordedAt: event.ts,
-      });
-    }
-    if (typeof event.activity_score === 'number') {
-      metrics.push({
-        ...base,
-        metricType: 'activity_score',
-        value: event.activity_score,
-        unit: 'score',
-        recordedAt: event.ts,
-      });
-    }
-    if (typeof event.heart_rate === 'number') {
-      metrics.push({
-        ...base,
-        metricType: 'heart_rate',
-        value: event.heart_rate,
-        unit: 'bpm',
-        recordedAt: event.ts,
-      });
-    }
-    return metrics;
+  if (providerKey === 'fitbark') {
+    return compactMetrics([
+      createMetric(
+        providerKey,
+        event,
+        'steps',
+        readNumber(event.steps, event.activity?.steps, event.daily_activity?.steps),
+        'count',
+      ),
+      createMetric(
+        providerKey,
+        event,
+        'sleep_duration',
+        readNumber(
+          event.sleep_minutes,
+          event.sleep?.minutes,
+          event.sleep?.duration_minutes,
+          event.daily_activity?.sleep_minutes,
+        ),
+        'minutes',
+      ),
+      createMetric(
+        providerKey,
+        event,
+        'sleep_quality',
+        readNumber(event.sleep_quality, event.sleep_score, event.sleep?.score),
+        'ratio',
+      ),
+      createMetric(
+        providerKey,
+        event,
+        'activity_score',
+        readNumber(
+          event.activity_score,
+          event.bark_points,
+          event.barkpoints,
+          event.health_index,
+          event.activity?.score,
+        ),
+        'score',
+      ),
+    ]);
+  }
+
+  if (providerKey === 'whistle') {
+    return compactMetrics([
+      createMetric(
+        providerKey,
+        event,
+        'steps',
+        readNumber(event.steps, event.activity?.steps),
+        'count',
+      ),
+      createMetric(
+        providerKey,
+        event,
+        'activity_score',
+        readNumber(event.activity_score, event.activity?.score, event.activity?.active_minutes),
+        'score',
+      ),
+      createMetric(
+        providerKey,
+        event,
+        'distance',
+        readNumber(event.distance_meters, event.activity?.distance_meters),
+        'meters',
+      ),
+      createMetric(
+        providerKey,
+        event,
+        'gps_latitude',
+        readNumber(event.latitude, event.location?.latitude, event.gps?.lat),
+        'degrees',
+      ),
+      createMetric(
+        providerKey,
+        event,
+        'gps_longitude',
+        readNumber(event.longitude, event.location?.longitude, event.gps?.lon, event.gps?.lng),
+        'degrees',
+      ),
+    ]);
   }
 
   // Default: attempt best-effort mappings
-  const recordedAt = event.timestamp ?? event.ts ?? new Date().toISOString();
-  const entries: NormalizedMetric[] = [];
-  if (event.steps)
-    entries.push({
-      petId: String(event.petId ?? 'unknown'),
-      metricType: 'steps',
-      value: Number(event.steps),
-      unit: 'count',
-      recordedAt,
-      providerKey,
-      providerEventId: event.id ?? null,
-      raw: event,
-    });
-  return entries;
+  return compactMetrics([
+    createMetric(providerKey, event, 'steps', readNumber(event.steps), 'count'),
+  ]);
 }
 
 export async function syncProviderForPet(
@@ -177,6 +337,8 @@ export async function syncProviderForPet(
   for (const ev of events) {
     metrics.push(...normalizeProviderEvent(providerKey, ev));
   }
+
+  if (metrics.length === 0) return { imported: 0 };
 
   // Upsert metrics
   let imported = 0;

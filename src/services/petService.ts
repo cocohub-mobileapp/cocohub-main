@@ -1,4 +1,4 @@
-﻿import axios from 'axios';
+import axios from 'axios';
 
 import apiClient from './apiClient';
 import { getItem, setItem, removeItem } from './localDB';
@@ -244,7 +244,7 @@ export async function getPetByQRCode(qrCode: string): Promise<Pet> {
     throw err;
   }
 
-  const scan = scanQRCode(value);
+  const scan = await scanQRCode(value);
   if (!scan.valid || !scan.petId) {
     const err = new PetServiceError(scan.error || 'Invalid QR code', 'INVALID_QR_CODE');
     logPetError(err, { service: 'petService', action: 'qr_parse' });

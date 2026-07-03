@@ -36,6 +36,5 @@
     "backend/docs/**",
     "backend/scripts/**",
     "e2e/**"
-  ],
-  "extends": "expo/tsconfig.base"
+  ]
 }
