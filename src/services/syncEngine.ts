@@ -312,10 +312,16 @@ export class SyncEngine {
   }
 
   private async pushRecord(record: DirtyRecord): Promise<void> {
-    const response = await apiClient.post('/sync/push', {
+    const response = await apiClient.post('/sync/push',
+ {
       records: [record],
       strategy: this.options.strategy,
     });
+if (response.status === 200) {
+  clearSyncQueue();
+}
+   
+
     const result = response.data as {
       results?: Array<{ status: string; serverRecord?: Record<string, unknown> }>;
     };
