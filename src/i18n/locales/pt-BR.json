@@ -1,0 +1,125 @@
+{
+  "common": {
+    "loading": "Carregando...",
+    "retry": "Tentar novamente",
+    "cancel": "Cancelar",
+    "save": "Salvar",
+    "delete": "Excluir",
+    "confirm": "Confirmar",
+    "back": "Voltar",
+    "next": "Próximo",
+    "done": "Concluído",
+    "error": "Erro",
+    "success": "Sucesso",
+    "unknown_error": "Ocorreu um erro inesperado.",
+    "network_error": "Erro de rede. Verifique sua conexão.",
+    "timeout_error": "A solicitação demorou demais. Tente novamente."
+  },
+  "auth": {
+    "login_title": "Boas-vindas de volta",
+    "login_subtitle": "Entre na sua conta",
+    "register_title": "Criar conta",
+    "email_label": "E-mail",
+    "email_placeholder": "voce@exemplo.com",
+    "password_label": "Senha",
+    "password_placeholder": "Pelo menos 8 caracteres",
+    "name_label": "Nome completo",
+    "name_placeholder": "Seu nome",
+    "login_button": "Entrar",
+    "register_button": "Criar conta",
+    "logout_button": "Sair",
+    "no_account": "Ainda não tem uma conta?",
+    "have_account": "Já tem uma conta?",
+    "forgot_password": "Esqueceu a senha?",
+    "validation": {
+      "email_required": "O e-mail é obrigatório.",
+      "email_invalid": "Informe um endereço de e-mail válido.",
+      "password_required": "A senha é obrigatória.",
+      "password_weak": "A senha deve ter pelo menos 8 caracteres, incluir 1 letra maiúscula e 1 número.",
+      "name_required": "O nome é obrigatório."
+    }
+  },
+  "home": {
+    "title": "Meus pets",
+    "add_pet": "Adicionar pet",
+    "no_pets": "Você ainda não tem pets. Adicione seu primeiro pet!",
+    "greeting": "Olá, {{name}}"
+  },
+  "pet": {
+    "profile_title": "Perfil do pet",
+    "name_label": "Nome",
+    "species_label": "Espécie",
+    "breed_label": "Raça",
+    "dob_label": "Data de nascimento",
+    "weight_label": "Peso",
+    "edit_button": "Editar perfil",
+    "delete_button": "Remover pet",
+    "delete_confirm": "Tem certeza de que deseja remover {{name}}?",
+    "validation": {
+      "name_required": "O nome do pet é obrigatório.",
+      "dob_invalid": "Informe uma data de nascimento válida."
+    }
+  },
+  "medical": {
+    "title": "Registros médicos",
+    "add_record": "Adicionar registro",
+    "no_records": "Nenhum registro médico encontrado.",
+    "record_date": "Data",
+    "record_type": "Tipo",
+    "record_notes": "Observações",
+    "vaccination": "Vacinação",
+    "checkup": "Check-up",
+    "surgery": "Cirurgia",
+    "other": "Outro"
+  },
+  "appointments": {
+    "title": "Consultas",
+    "add_appointment": "Agendar consulta",
+    "no_appointments": "Nenhuma consulta futura.",
+    "date_label": "Data",
+    "time_label": "Hora",
+    "vet_label": "Veterinário",
+    "notes_label": "Observações",
+    "upcoming": "Próximas",
+    "past": "Passadas",
+    "cancel_confirm": "Cancelar esta consulta?"
+  },
+  "medication": {
+    "title": "Medicamentos",
+    "add_medication": "Adicionar medicamento",
+    "no_medications": "Nenhum medicamento registrado.",
+    "name_label": "Nome do medicamento",
+    "dosage_label": "Dosagem",
+    "frequency_label": "Frequência",
+    "start_date_label": "Data de início",
+    "end_date_label": "Data de término",
+    "reminder": "Lembrete ativado"
+  },
+  "qr": {
+    "title": "Leitor de QR Code",
+    "scan_prompt": "Aponte a câmera para um QR Code",
+    "scan_success": "QR Code lido com sucesso",
+    "scan_error": "Não foi possível ler o QR Code. Tente novamente.",
+    "permission_denied": "É necessário permitir o uso da câmera para ler QR Codes."
+  },
+  "emergency": {
+    "title": "Emergência",
+    "call_vet": "Ligar para o veterinário de emergência",
+    "nearest_clinic": "Encontrar clínica mais próxima",
+    "first_aid": "Guia de primeiros socorros",
+    "alert_sent": "Alerta de emergência enviado"
+  },
+  "error_boundary": {
+    "title": "Algo deu errado",
+    "subtitle": "Ocorreu um erro inesperado na tela {{screen}}. Nossa equipe foi notificada.",
+    "report_retry": "Reportar e tentar novamente"
+  },
+  "accessibility": {
+    "close_button": "Fechar",
+    "menu_button": "Abrir menu",
+    "back_button": "Voltar",
+    "loading_indicator": "Carregando",
+    "error_screen": "Tela de erro",
+    "pet_image": "Foto de {{name}}"
+  }
+}
