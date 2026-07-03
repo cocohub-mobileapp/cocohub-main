@@ -1,4 +1,4 @@
-﻿import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ExpoSQLite from 'expo-sqlite';
 import { AppState, type AppStateStatus } from 'react-native';
 
@@ -246,7 +246,15 @@ export class SyncEngine {
       await this._resetBackoff();
     }
 
+    await executeSql('DELETE FROM dirty_records WHERE attempts >= ?', [this.options.maxRetries]);
     return event;
+  }
+
+  async getQueueSize(): Promise<number> {
+    await this.initialize();
+    const conn = ExpoSQLite.openDatabaseSync('cocohub.db');
+    const row = (await conn.getFirstAsync('SELECT COUNT(*) as count FROM dirty_records')) as { count: number } | null;
+    return row?.count ?? 0;
   }
 
   resolveConflict(
@@ -317,9 +325,10 @@ export class SyncEngine {
       strategy: this.options.strategy,
     });
     const result = response.data as {
+      data?: { results?: Array<{ status: string; serverRecord?: Record<string, unknown> }> };
       results?: Array<{ status: string; serverRecord?: Record<string, unknown> }>;
     };
-    const first = result.results?.[0];
+    const first = (result.data?.results ?? result.results)?.[0];
     if (!first || first.status === 'failed') throw new Error('Server rejected sync record');
     if (first.status === 'conflict' && first.serverRecord) {
       this.emit({ type: 'conflict', total: 1, completed: 0, failed: 0, record });
