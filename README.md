@@ -36,14 +36,30 @@ Records are verified on the **Stellar blockchain** (hashes only — no personal 
 
 <div align="center">
 
-| Dashboard | My Pets | Medication Tracker | Emergency SOS |
-|:---------:|:-------:|:-----------------:|:-------------:|
-| ![Dashboard](https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=300&q=80&fit=crop) | ![Pets](https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=300&q=80&fit=crop) | ![Meds](https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=300&q=80&fit=crop) | ![SOS](https://images.unsplash.com/photo-1548802673-380ab8ebc7b7?w=300&q=80&fit=crop) |
-| Health score, weight chart, vitals | Pet profiles with breed insights | Dose logging + drug interactions | One-tap GPS to contacts |
+<table>
+  <tr>
+    <td align="center"><b>🔐 Login</b></td>
+    <td align="center"><b>📊 Dashboard</b></td>
+    <td align="center"><b>🐾 My Pets</b></td>
+    <td align="center"><b>💊 Care</b></td>
+  </tr>
+  <tr>
+    <td><img src="website/public/screenshots/login.png" width="200" alt="Login screen" onerror="this.src='https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=200&q=80&fit=crop'" /></td>
+    <td><img src="website/public/screenshots/dashboard.png" width="200" alt="Dashboard" onerror="this.src='https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=200&q=80&fit=crop'" /></td>
+    <td><img src="website/public/screenshots/pets.png" width="200" alt="My Pets" onerror="this.src='https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=200&q=80&fit=crop'" /></td>
+    <td><img src="website/public/screenshots/care.png" width="200" alt="Care screen" onerror="this.src='https://images.unsplash.com/photo-1548802673-380ab8ebc7b7?w=200&q=80&fit=crop'" /></td>
+  </tr>
+  <tr>
+    <td>Secure login with biometrics</td>
+    <td>Health score, pets, activity</td>
+    <td>All pets with breed insights</td>
+    <td>Meds + vaccinations tracker</td>
+  </tr>
+</table>
+
+> 📸 Add real screenshots by following [`website/public/screenshots/README.md`](website/public/screenshots/README.md)
 
 </div>
-
-> 📸 **Screenshots above are placeholders.** Real app screenshots coming with v1.0 launch. [Try the live web app →](https://cocohub.app/app)
 
 ---
 
