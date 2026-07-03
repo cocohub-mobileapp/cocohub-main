@@ -22,7 +22,7 @@ export { AppointmentStatus } from '../models/Appointment';
 const BASE_URL = '/appointments';
 
 /** Buffer window (ms) around each appointment that counts as a conflict */
-export const CONFLICT_BUFFER_MS = 60 * 60 * 1000; // 1 hour
+export const CONFLICT_BUFFER_MS = 30 * 60 * 1000; // 30 minutes
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,43 +63,106 @@ export async function detectConflicts(
   proposedTime: Date,
   medications: Medication[] = [],
   excludeId?: string,
+  bufferMs: number = CONFLICT_BUFFER_MS,
+  durationMinutes: number = 30,
 ): Promise<ConflictDetectionResult> {
   const conflicts: AppointmentConflict[] = [];
 
-  const windowStart = new Date(proposedTime.getTime() - CONFLICT_BUFFER_MS).toISOString();
-  const windowEnd = new Date(proposedTime.getTime() + CONFLICT_BUFFER_MS).toISOString();
+  // Look for any appointments on the same day (to handle durations and recurrences properly)
+  const startOfDay = new Date(proposedTime);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(proposedTime);
+  endOfDay.setHours(23, 59, 59, 999);
 
-  const nearby = await getAppointmentsInWindow<Appointment>(petId, windowStart, windowEnd);
-  for (const appt of nearby) {
+  const windowStart = startOfDay.toISOString();
+  const windowEnd = endOfDay.toISOString();
+
+  // 1. Check existing appointments
+  const allAppointments = await getAllAppointmentsByPetId<Appointment>(petId);
+  
+  // Also consider recurring appointments that started before today and don't end before today
+  for (const appt of allAppointments) {
     if (excludeId && appt.id === excludeId) continue;
-    const apptTime = new Date(appt.date);
-    const diffMs = Math.abs(apptTime.getTime() - proposedTime.getTime());
-    if (diffMs <= CONFLICT_BUFFER_MS) {
-      conflicts.push({
-        type: 'appointment',
-        description: `"${appt.title ?? 'Appointment'}" is scheduled ${_formatTimeDiff(diffMs)} from the proposed time.`,
-        conflictingAppointment: appt,
-      });
+    if (appt.status === AppointmentStatus.CANCELLED || (appt.status as string) === 'cancelled') continue;
+
+    // Determine the relevant date/time for this appointment today
+    let apptTime: Date | null = null;
+    const originalDate = new Date(`${appt.date}T${appt.time ?? '00:00'}:00`);
+
+    if (appt.recurrence && appt.recurrence !== 'none') {
+      const isBeforeOrEqual = originalDate.getTime() <= endOfDay.getTime();
+      let isNotEnded = true;
+      if (appt.recurrenceEndDate) {
+        const endDate = new Date(`${appt.recurrenceEndDate}T23:59:59`);
+        if (startOfDay.getTime() > endDate.getTime()) {
+          isNotEnded = false;
+        }
+      }
+      
+      if (isBeforeOrEqual && isNotEnded) {
+        // Simple recurrence check (for daily, we just assume it happens today at original time)
+        // For weekly, we check if today is the same day of the week
+        // For monthly, same date of the month
+        if (appt.recurrence === 'daily') {
+          apptTime = new Date(startOfDay);
+          apptTime.setHours(originalDate.getHours(), originalDate.getMinutes(), 0, 0);
+        } else if (appt.recurrence === 'weekly' && originalDate.getDay() === proposedTime.getDay()) {
+          apptTime = new Date(startOfDay);
+          apptTime.setHours(originalDate.getHours(), originalDate.getMinutes(), 0, 0);
+        } else if (appt.recurrence === 'monthly' && originalDate.getDate() === proposedTime.getDate()) {
+          apptTime = new Date(startOfDay);
+          apptTime.setHours(originalDate.getHours(), originalDate.getMinutes(), 0, 0);
+        }
+      }
+    } else {
+      // Non-recurring: only consider if it's on the exact same date
+      if (appt.date === proposedTime.toISOString().split('T')[0]) {
+        apptTime = originalDate;
+      }
+    }
+
+    if (apptTime) {
+      const apptDurationMs = (appt.durationMinutes ?? 30) * 60 * 1000;
+      const proposedDurationMs = durationMinutes * 60 * 1000;
+      
+      const apptStart = apptTime.getTime();
+      const apptEnd = apptStart + apptDurationMs;
+      
+      const proposedStart = proposedTime.getTime();
+      const proposedEnd = proposedStart + proposedDurationMs;
+
+      // Overlap condition with buffer
+      if (proposedStart < apptEnd + bufferMs && proposedEnd > apptStart - bufferMs) {
+        // Calculate exact distance for the message
+        let distanceMs = 0;
+        if (proposedStart >= apptEnd) distanceMs = proposedStart - apptEnd;
+        else if (apptStart >= proposedEnd) distanceMs = apptStart - proposedEnd;
+        
+        conflicts.push({
+          type: 'appointment',
+          description: `"${appt.title ?? 'Appointment'}" is scheduled ${distanceMs === 0 ? 'at the same time' : _formatTimeDiff(distanceMs) + ' away'} (overlaps with ${bufferMs / 60000}m buffer).`,
+          conflictingAppointment: appt,
+        });
+      }
     }
   }
 
+  // 2. Check medications
   const { getScheduleForRange } = await import('./medicationService');
-  const windowStartDate = new Date(proposedTime.getTime() - CONFLICT_BUFFER_MS);
-  const windowEndDate = new Date(proposedTime.getTime() + CONFLICT_BUFFER_MS);
+  const windowStartDate = new Date(proposedTime.getTime() - bufferMs);
+  const windowEndDate = new Date(proposedTime.getTime() + durationMinutes * 60000 + bufferMs);
 
   for (const med of medications) {
     if (!isVetSupervised(med)) continue;
     const doseTimes = getScheduleForRange(med, windowStartDate, windowEndDate);
     for (const doseTime of doseTimes) {
       const diffMs = Math.abs(doseTime.getTime() - proposedTime.getTime());
-      if (diffMs <= CONFLICT_BUFFER_MS) {
-        conflicts.push({
-          type: 'medication',
-          description: `"${med.name}" requires vet supervision at ${_formatTime(doseTime)} (within ${_formatTimeDiff(diffMs)} of the proposed time).`,
-          medicationName: med.name,
-          medicationTime: doseTime,
-        });
-      }
+      conflicts.push({
+        type: 'medication',
+        description: `"${med.name}" requires vet supervision at ${_formatTime(doseTime)}.`,
+        medicationName: med.name,
+        medicationTime: doseTime,
+      });
     }
   }
 
@@ -131,7 +194,7 @@ export async function findNextAvailableSlot(
   let candidate = new Date(from.getTime() + CONFLICT_BUFFER_MS);
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
-    const result = await detectConflicts(petId, candidate, medications);
+    const result = await detectConflicts(petId, candidate, medications, undefined, CONFLICT_BUFFER_MS, 30);
     if (!result.hasConflicts) return candidate;
     candidate = new Date(candidate.getTime() + CONFLICT_BUFFER_MS);
   }

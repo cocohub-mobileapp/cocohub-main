@@ -30,9 +30,7 @@ jest.mock('../../../backend/middleware/auditLogger', () => ({
   logAuditTrail: jest.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock('../../../backend/utils/logger', () => ({
-  default: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
-}));
+
 
 const app = express();
 app.use(express.json());
@@ -203,14 +201,16 @@ describe('Concurrent booking attempts', () => {
 
 describe('POST /appointments/:id/cancel', () => {
   let apptId: string;
+  let uniqueVetId: string;
 
   beforeEach(async () => {
     const { date, time } = futureDate(50);
+    uniqueVetId = `v-cancel-test-${Date.now()}-${Math.random()}`;
     const res = await request(app)
       .post('/appointments')
       .set('x-test-user', OWNER_HEADER)
-      .send({ petId: 'p-demo-1', vetId: 'v-cancel-test', date, time });
-    apptId = res.body.data.id;
+      .send({ petId: 'p-demo-1', vetId: uniqueVetId, date, time });
+    apptId = res.body.data?.id;
   });
 
   it('cancels an appointment', async () => {
@@ -226,11 +226,12 @@ describe('POST /appointments/:id/cancel', () => {
   });
 
   it('returns 400 when cancelling an already-cancelled appointment', async () => {
-    await request(app).post(`/appointments/${apptId}/cancel`).set('x-test-user', OWNER_HEADER);
+    await request(app).post(`/appointments/${apptId}/cancel`).set('x-test-user', OWNER_HEADER).send();
 
     const res = await request(app)
       .post(`/appointments/${apptId}/cancel`)
-      .set('x-test-user', OWNER_HEADER);
+      .set('x-test-user', OWNER_HEADER)
+      .send();
 
     expect(res.status).toBe(400);
   });
@@ -245,7 +246,7 @@ describe('POST /appointments/:id/cancel', () => {
 
   it('frees the slot after cancellation', async () => {
     const appt = store.appointments.get(apptId)!;
-    await request(app).post(`/appointments/${apptId}/cancel`).set('x-test-user', OWNER_HEADER);
+    await request(app).post(`/appointments/${apptId}/cancel`).set('x-test-user', OWNER_HEADER).send();
 
     // Same slot should now be bookable
     const res = await request(app)
@@ -261,14 +262,16 @@ describe('POST /appointments/:id/cancel', () => {
 
 describe('POST /appointments/:id/reschedule', () => {
   let apptId: string;
+  let uniqueVetId: string;
 
   beforeEach(async () => {
     const { date, time } = futureDate(60);
+    uniqueVetId = `v-reschedule-test-${Date.now()}-${Math.random()}`;
     const res = await request(app)
       .post('/appointments')
       .set('x-test-user', OWNER_HEADER)
-      .send({ petId: 'p-demo-1', vetId: 'v-reschedule-test', date, time });
-    apptId = res.body.data.id;
+      .send({ petId: 'p-demo-1', vetId: uniqueVetId, date, time });
+    apptId = res.body.data?.id;
   });
 
   it('reschedules to a free slot', async () => {
@@ -319,7 +322,7 @@ describe('POST /appointments/:id/reschedule', () => {
   });
 
   it('returns 400 when rescheduling a cancelled appointment', async () => {
-    await request(app).post(`/appointments/${apptId}/cancel`).set('x-test-user', OWNER_HEADER);
+    await request(app).post(`/appointments/${apptId}/cancel`).set('x-test-user', OWNER_HEADER).send();
 
     const { date, time } = futureDate(75);
     const res = await request(app)
