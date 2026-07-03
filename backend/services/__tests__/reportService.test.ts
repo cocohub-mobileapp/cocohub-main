@@ -6,9 +6,11 @@ import type {
   StoredUser,
 } from '../../server/store';
 import {
+  calculateReportHealthScore,
   filterByDateRange,
   generateHealthReport,
   generateQRCodeBuffer,
+  getWeightReadings,
   type ReportOptions,
 } from '../reportService';
 
@@ -18,6 +20,7 @@ const pet: StoredPet = {
   species: 'dog',
   breed: 'Mixed',
   dateOfBirth: '2020-01-15',
+  weightKg: 24,
   microchipId: 'CHIP-1',
   ownerId: 'u-1',
   createdAt: '2024-01-01T00:00:00.000Z',
@@ -60,6 +63,40 @@ const makeMed = (id: string, active: boolean): StoredMedication => ({
   active,
 });
 
+const healthMetrics = [
+  {
+    id: 'v1',
+    petId: 'p-1',
+    vitalType: 'weight',
+    value: 23.5,
+    unit: 'kg',
+    recordedAt: '2024-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'v2',
+    petId: 'p-1',
+    vitalType: 'weight',
+    value: 24,
+    unit: 'kg',
+    recordedAt: '2024-06-15T00:00:00.000Z',
+  },
+  {
+    id: 'v3',
+    petId: 'p-1',
+    vitalType: 'temperature',
+    value: 38.5,
+    unit: 'C',
+    recordedAt: '2024-06-15T00:00:00.000Z',
+  },
+  {
+    id: 'v4',
+    petId: 'p-1',
+    vitalType: 'activity_level',
+    value: 'high',
+    recordedAt: '2024-06-15T00:00:00.000Z',
+  },
+];
+
 describe('filterByDateRange', () => {
   const records = [
     makeRecord('r1', '2024-01-01'),
@@ -99,6 +136,27 @@ describe('generateQRCodeBuffer', () => {
   });
 });
 
+describe('health report metrics helpers', () => {
+  it('extracts sorted weight readings from vitals', () => {
+    expect(getWeightReadings(pet, healthMetrics)).toEqual([
+      { date: '2024-01-01', value: 23.5, unit: 'kg' },
+      { date: '2024-06-15', value: 24, unit: 'kg' },
+    ]);
+  });
+
+  it('falls back to the pet profile weight when no vitals exist', () => {
+    expect(getWeightReadings(pet, [])).toEqual([{ date: '2024-01-01', value: 24, unit: 'kg' }]);
+  });
+
+  it('calculates a strong score for stable vitals', () => {
+    const score = calculateReportHealthScore(healthMetrics, [makeMed('m1', true)], pet);
+
+    expect(score.score).toBeGreaterThanOrEqual(80);
+    expect(score.label).toBe('Excellent');
+    expect(score.factors.join(' ')).toContain('Temperature');
+  });
+});
+
 describe('generateHealthReport', () => {
   const baseOpts: ReportOptions = {
     pet,
@@ -106,6 +164,7 @@ describe('generateHealthReport', () => {
     records: [makeRecord('r1', '2024-06-15', 'tx-abc123')],
     medications: [makeMed('m1', true), makeMed('m2', false)],
     generatedBy: 'u-1',
+    healthMetrics,
   };
 
   it('returns a PDF buffer with correct metadata', async () => {

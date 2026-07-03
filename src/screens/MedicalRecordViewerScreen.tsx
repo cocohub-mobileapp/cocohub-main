@@ -13,13 +13,14 @@ import {
 } from 'react-native';
 
 import MedicalRecordAttachments from '../components/MedicalRecordAttachments';
+import { requireBiometric, verifyPin } from '../services/authService';
 import {
   getMedicalRecords,
   searchMedicalRecords,
   type MedicalRecord,
   type RecordFilters,
 } from '../services/medicalRecordService';
-import { requireBiometric, verifyPin } from '../services/authService';
+import { shareHealthReportPdf } from '../services/pdfService';
 import sessionMonitoringService from '../services/sessionMonitoringService';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -78,6 +79,7 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [detailRecord, setDetailRecord] = useState<MedicalRecord | null>(null);
   const [filtersVisible, setFiltersVisible] = useState(false);
+  const [exportingReport, setExportingReport] = useState(false);
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -242,6 +244,20 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
     setIsSearchMode(false);
   };
 
+  const handleShareHealthReport = useCallback(async () => {
+    setExportingReport(true);
+    try {
+      await shareHealthReportPdf(petId, petName ?? 'pet');
+    } catch (err) {
+      Alert.alert(
+        'Unable to export report',
+        err instanceof Error ? err.message : 'Please try again later.',
+      );
+    } finally {
+      setExportingReport(false);
+    }
+  }, [petId, petName]);
+
   // ─── Filter actions ───────────────────────────────────────────────────────
 
   const applyFilters = () => {
@@ -357,7 +373,7 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
             }}
             keyboardType="number-pad"
             secureTextEntry
-            maxLength= {10}
+            maxLength={10}
             accessibilityLabel="PIN input"
             onSubmitEditing={handlePinSubmit}
           />
@@ -418,6 +434,18 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
           </TouchableOpacity>
         )}
       </View>
+
+      <TouchableOpacity
+        style={[styles.reportBtn, exportingReport && styles.reportBtnDisabled]}
+        onPress={handleShareHealthReport}
+        disabled={exportingReport}
+        accessibilityRole="button"
+        accessibilityLabel="Share vet-ready PDF health report"
+      >
+        <Text style={styles.reportBtnText}>
+          {exportingReport ? 'Preparing PDF…' : 'Share Vet PDF Report'}
+        </Text>
+      </TouchableOpacity>
 
       {/* Active filter chips */}
       {(selectedType || startDate || endDate) && !isSearchMode ? (
@@ -754,6 +782,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   clearBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  reportBtn: {
+    backgroundColor: '#1a56db',
+    marginHorizontal: 12,
+    marginTop: 10,
+    marginBottom: 2,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  reportBtnDisabled: { opacity: 0.65 },
+  reportBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   chipRow: { backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
   chipContent: { paddingHorizontal: 12, paddingVertical: 8, gap: 8, flexDirection: 'row' },
   chip: {

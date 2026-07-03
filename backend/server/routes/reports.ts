@@ -9,14 +9,16 @@
  * Job status stored in Redis with 1-hour TTL.
  * #595
  */
-import express from 'express';
 import { randomUUID } from 'crypto';
 
+import express from 'express';
+
+import { getRedisClient } from '../../config/redis';
 import { authenticateJWT, type AuthenticatedRequest } from '../../middleware/auth';
-import { generateHealthReport } from '../../services/reportService';
+import { generateHealthReport, type ReportVitalReading } from '../../services/reportService';
+import { query } from '../../src/db';
 import { sendError } from '../response';
 import { store } from '../store';
-import { getRedisClient } from '../../config/redis';
 
 const router = express.Router();
 router.use(authenticateJWT);
@@ -31,6 +33,8 @@ interface JobRecord {
   status: JobStatus;
   petId: string;
   userId: string;
+  dateFrom?: string;
+  dateTo?: string;
   filename?: string;
   recordCount?: number;
   error?: string;
@@ -51,6 +55,48 @@ async function loadJob(jobId: string): Promise<JobRecord | null> {
   return raw ? (JSON.parse(raw) as JobRecord) : null;
 }
 
+async function loadHealthMetrics(
+  petId: string,
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<ReportVitalReading[]> {
+  const params: unknown[] = [petId];
+  const conditions = ['pet_id = $1'];
+
+  if (dateFrom) {
+    params.push(dateFrom);
+    conditions.push(`recorded_at >= $${params.length}`);
+  }
+  if (dateTo) {
+    params.push(dateTo);
+    conditions.push(`recorded_at <= $${params.length}`);
+  }
+
+  try {
+    const result = await query(
+      `SELECT id, pet_id, recorded_at, vital_type, value, unit, notes
+       FROM vitals
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY recorded_at ASC
+       LIMIT 1000`,
+      params,
+    );
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      petId: row.pet_id,
+      recordedAt: row.recorded_at,
+      vitalType: row.vital_type,
+      value: row.value,
+      unit: row.unit,
+      notes: row.notes,
+    }));
+  } catch (error) {
+    console.warn('[reports] vitals unavailable for health report:', error);
+    return [];
+  }
+}
+
 /**
  * Runs PDF generation in the background (next tick) and updates Redis job status.
  */
@@ -69,6 +115,7 @@ function processJobAsync(jobId: string): void {
 
       const records = [...store.medicalRecords.values()].filter((r) => r.petId === job.petId);
       const medications = [...store.medications.values()].filter((m) => m.petId === job.petId);
+      const healthMetrics = await loadHealthMetrics(job.petId, job.dateFrom, job.dateTo);
 
       const result = await generateHealthReport({
         pet,
@@ -76,6 +123,9 @@ function processJobAsync(jobId: string): void {
         records,
         medications,
         generatedBy: job.userId,
+        dateFrom: job.dateFrom,
+        dateTo: job.dateTo,
+        healthMetrics,
       });
 
       pdfBuffers.set(jobId, result.buffer);
@@ -97,6 +147,7 @@ function processJobAsync(jobId: string): void {
  */
 router.post('/pets/:petId/health', async (req: AuthenticatedRequest, res) => {
   const { petId } = req.params as { petId: string };
+  const { dateFrom, dateTo } = req.query as { dateFrom?: string; dateTo?: string };
 
   const pet = store.pets.get(petId);
   if (!pet) return sendError(res, 404, 'NOT_FOUND', 'Pet not found');
@@ -110,6 +161,8 @@ router.post('/pets/:petId/health', async (req: AuthenticatedRequest, res) => {
     status: 'queued',
     petId,
     userId: req.user?.id ?? 'unknown',
+    dateFrom,
+    dateTo,
     createdAt: new Date().toISOString(),
   };
 
@@ -119,9 +172,9 @@ router.post('/pets/:petId/health', async (req: AuthenticatedRequest, res) => {
     // Redis unavailable — fall back to synchronous generation
     const owner = store.users.get(pet.ownerId);
     if (!owner) return sendError(res, 404, 'NOT_FOUND', 'Owner not found');
-    const { dateFrom, dateTo } = req.query as { dateFrom?: string; dateTo?: string };
     const records = [...store.medicalRecords.values()].filter((r) => r.petId === petId);
     const medications = [...store.medications.values()].filter((m) => m.petId === petId);
+    const healthMetrics = await loadHealthMetrics(petId, dateFrom, dateTo);
     try {
       const result = await generateHealthReport({
         pet,
@@ -131,6 +184,7 @@ router.post('/pets/:petId/health', async (req: AuthenticatedRequest, res) => {
         generatedBy: req.user?.id ?? 'unknown',
         dateFrom,
         dateTo,
+        healthMetrics,
       });
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
