@@ -33,12 +33,14 @@ import {
   addTrustline,
   removeTrustline,
   loadTrustlineHistory,
+  loadEarnedTokenBalances,
   publicKeyFromSecret,
   isValidSecretKey,
   isValidPublicKey,
   COCOHUB_ASSETS,
   XLM_RESERVE_PER_TRUSTLINE,
   TrustlineError,
+  type EarnedTokenBalance,
 } from '../services/trustlineService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -57,6 +59,8 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
   const [publicKey, setPublicKey] = useState('');
   const [state, setState] = useState<TrustlineState | null>(null);
   const [history, setHistory] = useState<TrustlineTransaction[]>([]);
+  const [earnedBalances, setEarnedBalances] = useState<EarnedTokenBalance[]>([]);
+  const [earnedError, setEarnedError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -97,10 +101,26 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
     }
   }, []);
 
+  const loadEarnedBalances = useCallback(async () => {
+    try {
+      const balances = await loadEarnedTokenBalances();
+      setEarnedBalances(balances);
+      setEarnedError(null);
+    } catch (err) {
+      setEarnedError(
+        err instanceof TrustlineError ? err.message : 'Failed to load earned token balances.',
+      );
+    }
+  }, []);
+
   useEffect(() => {
     if (publicKey && view === 'dashboard') void loadAccount(publicKey);
     if (publicKey && view === 'history') void loadHistory(publicKey);
   }, [publicKey, view, loadAccount, loadHistory]);
+
+  useEffect(() => {
+    void loadEarnedBalances();
+  }, [loadEarnedBalances]);
 
   // ── Secret key entry ────────────────────────────────────────────────────────
 
@@ -260,6 +280,9 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
     </View>
   );
 
+  const getEarnedBalance = (assetCode: string): EarnedTokenBalance | undefined =>
+    earnedBalances.find((balance) => balance.assetCode === assetCode);
+
   const renderHistoryItem = ({ item }: { item: TrustlineTransaction }) => (
     <View style={[styles.histCard, !item.successful && styles.histCardFailed]}>
       <View style={styles.histRow}>
@@ -367,6 +390,10 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
                     <Text style={styles.assetCode}>{asset.assetCode}</Text>
                     <Text style={styles.assetName}>{asset.name}</Text>
                     <Text style={styles.assetDesc}>{asset.description}</Text>
+                    <Text style={styles.assetEarned}>
+                      Earned: {getEarnedBalance(asset.assetCode)?.balance ?? '0.00'}{' '}
+                      {asset.assetCode}
+                    </Text>
                   </View>
                   {selectedAsset?.assetCode === asset.assetCode && (
                     <Text style={styles.assetCheck}>✓</Text>
@@ -488,6 +515,35 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
               {state.trustlines.length} trustline{state.trustlines.length !== 1 ? 's' : ''} ·{' '}
               {XLM_RESERVE_PER_TRUSTLINE} XLM reserved each
             </Text>
+          </View>
+
+          <View style={styles.earnedCard}>
+            <View style={styles.earnedHeader}>
+              <Text style={styles.sectionTitle}>Earned Cocohub Balances</Text>
+              <Text style={styles.testnetBadge}>TESTNET</Text>
+            </View>
+            {earnedError ? (
+              <Text style={styles.earnedError}>{earnedError}</Text>
+            ) : (
+              COCOHUB_ASSETS.map((asset) => {
+                const earned = getEarnedBalance(asset.assetCode);
+                return (
+                  <View key={asset.assetCode} style={styles.earnedRow}>
+                    <Text style={styles.earnedAsset}>
+                      {asset.iconEmoji} {asset.assetCode}
+                    </Text>
+                    <View style={styles.earnedValueGroup}>
+                      <Text style={styles.earnedValue}>
+                        {earned?.balance ?? '0.00'} {asset.assetCode}
+                      </Text>
+                      <Text style={styles.earnedSource} numberOfLines={1}>
+                        {earned?.source ?? 'No backend rewards yet'}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })
+            )}
           </View>
 
           {/* Trustlines list */}
@@ -777,7 +833,45 @@ const styles = StyleSheet.create({
   assetCode: { fontSize: 15, fontWeight: '700', color: '#111827' },
   assetName: { fontSize: 13, color: '#374151', marginTop: 1 },
   assetDesc: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
+  assetEarned: { fontSize: 12, color: '#047857', marginTop: 4, fontWeight: '600' },
   assetCheck: { fontSize: 18, color: '#10B981', fontWeight: '700' },
+
+  earnedCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+  },
+  earnedHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  testnetBadge: {
+    backgroundColor: '#DBEAFE',
+    color: '#1D4ED8',
+    fontSize: 11,
+    fontWeight: '700',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  earnedRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  earnedAsset: { fontSize: 14, fontWeight: '700', color: '#111827', flex: 1 },
+  earnedValueGroup: { flex: 2, alignItems: 'flex-end' },
+  earnedValue: { fontSize: 14, fontWeight: '800', color: '#047857' },
+  earnedSource: { fontSize: 11, color: '#6B7280', marginTop: 2, maxWidth: 210 },
+  earnedError: { fontSize: 12, color: '#B91C1C', lineHeight: 18 },
 
   addBtn: {
     backgroundColor: '#10B981',

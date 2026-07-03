@@ -20,10 +20,25 @@ import {
   addTrustline,
   removeTrustline,
   loadTrustlineState,
+  loadEarnedTokenBalances,
   COCOHUB_ASSETS,
   XLM_RESERVE_PER_TRUSTLINE,
   TrustlineError,
 } from '../trustlineService';
+import apiClient from '../apiClient';
+
+jest.mock('../apiClient', () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+  },
+}));
+
+const mockApiClient = apiClient as jest.Mocked<typeof apiClient>;
+
+beforeEach(() => {
+  jest.clearAllMocks();
+});
 
 // ─── Key utilities ────────────────────────────────────────────────────────────
 
@@ -145,4 +160,34 @@ describe('loadTrustlineState', () => {
   it('throws TrustlineError for an invalid public key', async () => {
     await expect(loadTrustlineState('INVALID')).rejects.toThrow(TrustlineError);
   }, 15000);
+});
+
+describe('loadEarnedTokenBalances', () => {
+  it('loads earned token balances from the backend', async () => {
+    mockApiClient.get.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          balances: [
+            { assetCode: 'PETC', balance: '15.00', source: 'Pet profiles' },
+            { assetCode: 'VETH', balance: '3.00', source: 'Appointments' },
+            { assetCode: 'PAWP', balance: '30.00', source: 'Referrals' },
+          ],
+        },
+      },
+    });
+
+    await expect(loadEarnedTokenBalances()).resolves.toEqual([
+      { assetCode: 'PETC', balance: '15.00', source: 'Pet profiles' },
+      { assetCode: 'VETH', balance: '3.00', source: 'Appointments' },
+      { assetCode: 'PAWP', balance: '30.00', source: 'Referrals' },
+    ]);
+    expect(mockApiClient.get).toHaveBeenCalledWith('/trustlines/earned-balances');
+  });
+
+  it('wraps backend failures in a TrustlineError', async () => {
+    mockApiClient.get.mockRejectedValue(new Error('network down'));
+
+    await expect(loadEarnedTokenBalances()).rejects.toThrow(TrustlineError);
+  });
 });
