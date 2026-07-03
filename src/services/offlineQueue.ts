@@ -84,6 +84,7 @@ class OfflineQueue {
   private conflictListeners: ConflictListener[] = [];
   private isOnline = false;
   private initialized = false;
+  private processingQueue: Promise<void> | null = null;
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -160,6 +161,17 @@ class OfflineQueue {
    * Detects 409 conflicts via If-Match / ETag and queues them for resolution.
    */
   async processQueue(): Promise<void> {
+    if (this.processingQueue) return this.processingQueue;
+
+    this.processingQueue = this.processQueueOnce();
+    try {
+      await this.processingQueue;
+    } finally {
+      this.processingQueue = null;
+    }
+  }
+
+  private async processQueueOnce(): Promise<void> {
     const online = await networkMonitor.isOnline();
     if (!online) return;
 
@@ -173,8 +185,7 @@ class OfflineQueue {
         const headers: Record<string, string> = {};
         if (mutation.etag) headers['If-Match'] = mutation.etag;
 
-        const endpoint = `/${mutation.type}s/${String(mutation.data.id ?? '')}`;
-        const response = await apiClient.put(endpoint, mutation.data, { headers });
+        const response = await this.syncQueuedMutation(mutation, headers);
 
         // Capture updated ETag for future mutations on this entity
         const newEtag = (response.headers as Record<string, string>)?.['etag'];
@@ -227,6 +238,35 @@ class OfflineQueue {
     }
 
     await this.emitStatus();
+  }
+
+  private async syncQueuedMutation(mutation: QueuedMutation, headers: Record<string, string>) {
+    const endpoint = this.getMutationEndpoint(mutation);
+
+    switch (mutation.action) {
+      case 'create':
+        return apiClient.post(endpoint, mutation.data, { headers });
+      case 'update':
+        return apiClient.put(endpoint, mutation.data, { headers });
+      case 'delete':
+        return apiClient.delete(endpoint, { headers });
+    }
+  }
+
+  private getMutationEndpoint(mutation: QueuedMutation): string {
+    const collectionEndpoint =
+      mutation.type === 'medicalRecord'
+        ? this.getMedicalRecordCollectionEndpoint(mutation)
+        : `/${mutation.type}s`;
+
+    if (mutation.action === 'create') return collectionEndpoint;
+
+    return `${collectionEndpoint}/${String(mutation.data.id ?? '')}`;
+  }
+
+  private getMedicalRecordCollectionEndpoint(mutation: QueuedMutation): string {
+    const petId = mutation.data.petId as string | undefined;
+    return petId ? `/pets/${petId}/medical-records` : '/medical-records';
   }
 
   // ── Blockchain anchor queue ───────────────────────────────────────────────
