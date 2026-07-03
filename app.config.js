@@ -91,6 +91,7 @@ module.exports = {
       favicon: './assets/favicon.png',
     },
     plugins: [
+      './expoSosLockScreenPlugin',
       'expo-updates',
       [
         '@sentry/react-native/expo',
