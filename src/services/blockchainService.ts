@@ -1,9 +1,10 @@
 ﻿import * as StellarSdk from '@stellar/stellar-sdk';
 import axios, { type AxiosResponse } from 'axios';
 import CryptoJS from 'crypto-js';
+import * as SorobanClient from 'soroban-client';
 
-import { CircuitBreaker, retryWithBackoff } from '../utils/circuitBreaker';
 import type { MedicalRecord } from './medicalRecordService';
+import { CircuitBreaker, retryWithBackoff } from '../utils/circuitBreaker';
 
 // ==============================
 // TYPES (UNCHANGED)
@@ -48,6 +49,30 @@ export type MedicalRecordWithChainData = MedicalRecord & {
   [key: string]: unknown;
 };
 
+export interface SorobanPetRegistryConfig {
+  contractId?: string;
+  rpcUrl?: string;
+  networkPassphrase?: string;
+  timeoutSeconds?: number;
+  pollAttempts?: number;
+  pollDelayMs?: number;
+}
+
+export interface SorobanRegistryTransactionResult {
+  hash: string;
+  status: string;
+  latestLedger?: number;
+  ledger?: number;
+  returnValue?: unknown;
+}
+
+export interface SorobanPetRecordStoreResult extends SorobanRegistryTransactionResult {
+  recordId: string;
+  recordKey: string;
+  recordHash: string;
+  ownerPublicKey: string;
+}
+
 // ==============================
 // CONFIG
 // ==============================
@@ -61,6 +86,13 @@ const HORIZON_URL =
   STELLAR_NETWORK === 'PUBLIC'
     ? 'https://horizon.stellar.org'
     : 'https://horizon-testnet.stellar.org';
+const DEFAULT_SOROBAN_RPC_URL =
+  STELLAR_NETWORK === 'PUBLIC'
+    ? 'https://soroban-mainnet.stellar.org'
+    : 'https://soroban-testnet.stellar.org';
+const DEFAULT_SOROBAN_TIMEOUT_SECONDS = 30;
+const DEFAULT_SOROBAN_POLL_ATTEMPTS = 12;
+const DEFAULT_SOROBAN_POLL_DELAY_MS = 1250;
 
 // Initialize Stellar Server
 let stellarServer: StellarSdk.Horizon.Server | null = null;
@@ -75,15 +107,101 @@ const horizonCircuitBreaker = new CircuitBreaker({
 const getStellarServer = (): StellarSdk.Horizon.Server => {
   if (!stellarServer) {
     stellarServer = new StellarSdk.Horizon.Server(HORIZON_URL);
-    // Configure network passphrase
-    const _networkPassphrase =
-      STELLAR_NETWORK === 'PUBLIC' ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET;
   }
   return stellarServer;
 };
 
 const responseCache = new Map<string, { data: unknown; expiresAt: number }>();
 const inFlightRequests = new Map<string, Promise<unknown>>();
+
+const getEnv = (key: string): string | undefined => {
+  if (typeof process === 'undefined') return undefined;
+  return process.env?.[key];
+};
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+const normalizeHex32 = (value: string, label: string): string => {
+  const normalized = value.trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(normalized)) {
+    throw new BlockchainServiceError(`${label} must be a 64-character hex string`, 'INVALID_HASH');
+  }
+  return normalized;
+};
+
+const hexToBytes = (hex: string): Uint8Array => {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i += 1) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+};
+
+const bytesToHex = (value: unknown): string => {
+  if (typeof value === 'string') {
+    return normalizeHex32(value, 'Contract hash');
+  }
+
+  if (value instanceof Uint8Array || Array.isArray(value)) {
+    return Array.from(value as ArrayLike<number>)
+      .map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
+  if (value && typeof value === 'object' && 'toString' in value) {
+    const maybeHex = (value as { toString: (encoding?: string) => string }).toString('hex');
+    if (/^[0-9a-f]{64}$/i.test(maybeHex)) return maybeHex.toLowerCase();
+  }
+
+  throw new BlockchainServiceError(
+    'Contract returned an invalid record hash',
+    'INVALID_CONTRACT_RESPONSE',
+  );
+};
+
+const makeSorobanBytes32 = (hex: string): SorobanClient.xdr.ScVal =>
+  SorobanClient.nativeToScVal(hexToBytes(normalizeHex32(hex, 'Soroban bytes')), { type: 'bytes' });
+
+export const deriveSorobanRecordKey = (recordId: string): string => {
+  const normalizedRecordId = recordId.trim();
+  if (!normalizedRecordId) {
+    throw new BlockchainServiceError('Record ID is required', 'INVALID_RECORD_ID');
+  }
+  return CryptoJS.SHA256(normalizedRecordId).toString(CryptoJS.enc.Hex);
+};
+
+const getSorobanNetworkPassphrase = (config?: SorobanPetRegistryConfig): string =>
+  config?.networkPassphrase ||
+  (STELLAR_NETWORK === 'PUBLIC' ? SorobanClient.Networks.PUBLIC : SorobanClient.Networks.TESTNET);
+
+const normalizeSorobanConfig = (
+  config?: SorobanPetRegistryConfig,
+): Required<SorobanPetRegistryConfig> => {
+  const contractId =
+    config?.contractId ||
+    getEnv('EXPO_PUBLIC_SOROBAN_PET_REGISTRY_CONTRACT_ID') ||
+    getEnv('SOROBAN_PET_REGISTRY_CONTRACT_ID');
+
+  if (!contractId?.trim()) {
+    throw new BlockchainServiceError(
+      'Soroban pet registry contract ID is required',
+      'MISSING_CONTRACT_ID',
+    );
+  }
+
+  return {
+    contractId: contractId.trim(),
+    rpcUrl:
+      config?.rpcUrl ||
+      getEnv('EXPO_PUBLIC_SOROBAN_RPC_URL') ||
+      getEnv('SOROBAN_RPC_URL') ||
+      DEFAULT_SOROBAN_RPC_URL,
+    networkPassphrase: getSorobanNetworkPassphrase(config),
+    timeoutSeconds: config?.timeoutSeconds || DEFAULT_SOROBAN_TIMEOUT_SECONDS,
+    pollAttempts: config?.pollAttempts || DEFAULT_SOROBAN_POLL_ATTEMPTS,
+    pollDelayMs: config?.pollDelayMs || DEFAULT_SOROBAN_POLL_DELAY_MS,
+  };
+};
 
 /**
  * Get circuit breaker metrics for debugging/monitoring
@@ -173,13 +291,11 @@ const queryWithCache = async <T>(cacheKey: string, requestFn: () => Promise<T>):
 // ==============================
 
 export const computeRecordHash = (record: MedicalRecordWithChainData): string => {
-  const {
-    hash: _hash,
-    recordHash: _recordHash,
-    txHash: _txHash,
-    blockchainTxHash: _blockchainTxHash,
-    ...payload
-  } = record;
+  const payload = { ...record };
+  delete payload.hash;
+  delete payload.recordHash;
+  delete payload.txHash;
+  delete payload.blockchainTxHash;
 
   const canonical = JSON.stringify(sortObject(payload));
   return CryptoJS.SHA256(canonical).toString(CryptoJS.enc.Hex);
@@ -370,9 +486,7 @@ export const getStellarNetworkInfo = async (): Promise<{
           network: STELLAR_NETWORK,
           horizonUrl: HORIZON_URL,
           passphrase:
-            STELLAR_NETWORK === 'PUBLIC'
-              ? StellarSdk.Networks.PUBLIC
-              : StellarSdk.Networks.TESTNET,
+            STELLAR_NETWORK === 'PUBLIC' ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET,
           currentLedger: latestLedger.sequence,
           latestLedger: latestLedger.sequence,
         };
@@ -454,7 +568,7 @@ export const fundTestnetAccount = async (publicKey: string): Promise<boolean> =>
 
 /**
  * Submit a transaction to Stellar network with circuit breaker and exponential backoff retry.
- * 
+ *
  * - Wraps calls in circuit breaker (3 failures → open for 8s)
  * - Retries on 503/504/429 with exponential backoff + jitter (max 3 attempts)
  * - Returns typed errors so callers can distinguish network vs. logic failures
@@ -641,6 +755,190 @@ export const batchVerifyRecords = async (
       throw error; // unreachable but satisfies type checker
     }
   });
+};
+
+const waitForSorobanTransaction = async (
+  server: SorobanClient.Server,
+  hash: string,
+  config: Required<SorobanPetRegistryConfig>,
+): Promise<SorobanRegistryTransactionResult> => {
+  for (let attempt = 0; attempt < config.pollAttempts; attempt += 1) {
+    const tx = await server.getTransaction(hash);
+
+    if (tx.status === SorobanClient.SorobanRpc.GetTransactionStatus.SUCCESS) {
+      const returnValue =
+        'returnValue' in tx && tx.returnValue
+          ? SorobanClient.scValToNative(tx.returnValue)
+          : undefined;
+      return {
+        hash,
+        status: tx.status,
+        latestLedger: tx.latestLedger,
+        ledger: 'ledger' in tx ? tx.ledger : undefined,
+        returnValue,
+      };
+    }
+
+    if (tx.status === SorobanClient.SorobanRpc.GetTransactionStatus.FAILED) {
+      throw new BlockchainServiceError('Soroban transaction failed', 'SOROBAN_TRANSACTION_FAILED');
+    }
+
+    if (attempt < config.pollAttempts - 1) {
+      await sleep(config.pollDelayMs);
+    }
+  }
+
+  throw new BlockchainServiceError('Timed out waiting for Soroban transaction', 'SOROBAN_TIMEOUT');
+};
+
+export const invokeSorobanPetRegistry = async (
+  method: string,
+  args: SorobanClient.xdr.ScVal[],
+  sourceSecretKey: string,
+  config?: SorobanPetRegistryConfig,
+): Promise<SorobanRegistryTransactionResult> => {
+  const normalizedConfig = normalizeSorobanConfig(config);
+  const sourceSecret = sourceSecretKey.trim();
+
+  if (!sourceSecret) {
+    throw new BlockchainServiceError('Source secret key is required', 'MISSING_SOURCE_SECRET');
+  }
+
+  try {
+    const server = new SorobanClient.Server(normalizedConfig.rpcUrl, {
+      allowHttp: normalizedConfig.rpcUrl.startsWith('http://'),
+    });
+    const sourceKeypair = SorobanClient.Keypair.fromSecret(sourceSecret);
+    const sourceAccount = await server.getAccount(sourceKeypair.publicKey());
+    const contract = new SorobanClient.Contract(normalizedConfig.contractId);
+    const tx = new SorobanClient.TransactionBuilder(sourceAccount, {
+      fee: SorobanClient.BASE_FEE,
+      networkPassphrase: normalizedConfig.networkPassphrase,
+    })
+      .addOperation(contract.call(method, ...args))
+      .setTimeout(normalizedConfig.timeoutSeconds)
+      .build();
+    const prepared = (await server.prepareTransaction(
+      tx,
+      normalizedConfig.networkPassphrase,
+    )) as SorobanClient.Transaction;
+
+    prepared.sign(sourceKeypair);
+
+    const submitted = await server.sendTransaction(prepared);
+    if (submitted.status === 'ERROR') {
+      throw new BlockchainServiceError('Soroban RPC rejected the transaction', 'SOROBAN_RPC_ERROR');
+    }
+
+    return waitForSorobanTransaction(server, submitted.hash, normalizedConfig);
+  } catch (error) {
+    if (error instanceof BlockchainServiceError) throw error;
+    throw new BlockchainServiceError(
+      error instanceof Error ? error.message : 'Soroban contract invocation failed',
+      'SOROBAN_INVOCATION_FAILED',
+    );
+  }
+};
+
+export const storePetRecordInSoroban = async (
+  record: MedicalRecordWithChainData,
+  ownerSecretKey: string,
+  config?: SorobanPetRegistryConfig,
+): Promise<SorobanPetRecordStoreResult> => {
+  if (!record?.id?.trim()) {
+    throw new BlockchainServiceError('Valid record with ID is required', 'INVALID_RECORD');
+  }
+
+  const owner = SorobanClient.Keypair.fromSecret(ownerSecretKey.trim()).publicKey();
+  const recordKey = deriveSorobanRecordKey(record.id);
+  const recordHash = computeRecordHash(record);
+  const receipt = await invokeSorobanPetRegistry(
+    'upsert_record',
+    [
+      new SorobanClient.Address(owner).toScVal(),
+      makeSorobanBytes32(recordKey),
+      makeSorobanBytes32(recordHash),
+    ],
+    ownerSecretKey,
+    config,
+  );
+
+  return {
+    ...receipt,
+    recordId: record.id,
+    recordKey,
+    recordHash,
+    ownerPublicKey: owner,
+  };
+};
+
+export const grantVetRecordAccess = async (
+  recordId: string,
+  ownerSecretKey: string,
+  vetPublicKey: string,
+  config?: SorobanPetRegistryConfig,
+): Promise<SorobanRegistryTransactionResult> => {
+  const owner = SorobanClient.Keypair.fromSecret(ownerSecretKey.trim()).publicKey();
+  const vet = vetPublicKey.trim();
+  if (!vet) {
+    throw new BlockchainServiceError('Vet public key is required', 'INVALID_VET');
+  }
+
+  return invokeSorobanPetRegistry(
+    'grant_vet',
+    [
+      new SorobanClient.Address(owner).toScVal(),
+      makeSorobanBytes32(deriveSorobanRecordKey(recordId)),
+      new SorobanClient.Address(vet).toScVal(),
+    ],
+    ownerSecretKey,
+    config,
+  );
+};
+
+export const revokeVetRecordAccess = async (
+  recordId: string,
+  ownerSecretKey: string,
+  vetPublicKey: string,
+  config?: SorobanPetRegistryConfig,
+): Promise<SorobanRegistryTransactionResult> => {
+  const owner = SorobanClient.Keypair.fromSecret(ownerSecretKey.trim()).publicKey();
+  const vet = vetPublicKey.trim();
+  if (!vet) {
+    throw new BlockchainServiceError('Vet public key is required', 'INVALID_VET');
+  }
+
+  return invokeSorobanPetRegistry(
+    'revoke_vet',
+    [
+      new SorobanClient.Address(owner).toScVal(),
+      makeSorobanBytes32(deriveSorobanRecordKey(recordId)),
+      new SorobanClient.Address(vet).toScVal(),
+    ],
+    ownerSecretKey,
+    config,
+  );
+};
+
+export const readPetRecordHashFromSoroban = async (
+  recordId: string,
+  readerSecretKey: string,
+  config?: SorobanPetRegistryConfig,
+): Promise<SorobanRegistryTransactionResult & { recordHash: string; recordKey: string }> => {
+  const reader = SorobanClient.Keypair.fromSecret(readerSecretKey.trim()).publicKey();
+  const recordKey = deriveSorobanRecordKey(recordId);
+  const receipt = await invokeSorobanPetRegistry(
+    'get_record_hash',
+    [makeSorobanBytes32(recordKey), new SorobanClient.Address(reader).toScVal()],
+    readerSecretKey,
+    config,
+  );
+
+  return {
+    ...receipt,
+    recordKey,
+    recordHash: bytesToHex(receipt.returnValue),
+  };
 };
 
 /**

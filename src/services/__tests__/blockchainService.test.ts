@@ -6,11 +6,16 @@ import {
   clearBlockchainCache,
   computeRecordHash,
   createStellarAccount,
+  deriveSorobanRecordKey,
   fundTestnetAccount,
   getStellarAccountDetails,
   getStellarNetworkInfo,
   getTransactionHistory,
+  grantVetRecordAccess,
   retrieveRecordHash,
+  revokeVetRecordAccess,
+  readPetRecordHashFromSoroban,
+  storePetRecordInSoroban,
   storeMedicalRecordOnChain,
   storeRecordOnChain,
   verifyMedicalRecordOnChain,
@@ -20,6 +25,74 @@ import {
 
 jest.mock('axios');
 jest.mock('@stellar/stellar-sdk');
+jest.mock('soroban-client', () => {
+  const mockTransaction = { sign: jest.fn() };
+  const mockContractCall = jest.fn((method: string, ...args: unknown[]) => ({
+    method,
+    args,
+    type: 'invoke',
+  }));
+  const mockServer = {
+    getAccount: jest.fn().mockResolvedValue({ accountId: 'GOWNER' }),
+    prepareTransaction: jest.fn().mockResolvedValue(mockTransaction),
+    sendTransaction: jest.fn().mockResolvedValue({
+      hash: 'soroban-tx',
+      status: 'PENDING',
+      latestLedger: 123,
+    }),
+    getTransaction: jest.fn().mockResolvedValue({
+      hash: 'soroban-tx',
+      status: 'SUCCESS',
+      latestLedger: 124,
+      ledger: 125,
+      returnValue: { native: new Uint8Array(32).fill(9) },
+    }),
+  };
+  const mockBuilder = {
+    addOperation: jest.fn().mockReturnThis(),
+    setTimeout: jest.fn().mockReturnThis(),
+    build: jest.fn().mockReturnValue({ built: true }),
+  };
+  const mockKeypair = {
+    publicKey: jest.fn().mockReturnValue('GOWNER'),
+  };
+
+  return {
+    __mocks: {
+      contractCall: mockContractCall,
+      server: mockServer,
+      builder: mockBuilder,
+      keypair: mockKeypair,
+      transaction: mockTransaction,
+    },
+    Address: jest.fn().mockImplementation((address: string) => ({
+      toScVal: jest.fn().mockReturnValue({ type: 'address', address }),
+      toString: jest.fn().mockReturnValue(address),
+    })),
+    BASE_FEE: '100',
+    Contract: jest.fn().mockImplementation(() => ({
+      call: mockContractCall,
+    })),
+    Keypair: {
+      fromSecret: jest.fn().mockReturnValue(mockKeypair),
+    },
+    Networks: {
+      PUBLIC: 'Public Global Stellar Network ; September 2015',
+      TESTNET: 'Test SDF Network ; September 2015',
+    },
+    Server: jest.fn().mockImplementation(() => mockServer),
+    SorobanRpc: {
+      GetTransactionStatus: {
+        FAILED: 'FAILED',
+        NOT_FOUND: 'NOT_FOUND',
+        SUCCESS: 'SUCCESS',
+      },
+    },
+    TransactionBuilder: jest.fn().mockImplementation(() => mockBuilder),
+    nativeToScVal: jest.fn((value: unknown, opts: unknown) => ({ value, opts })),
+    scValToNative: jest.fn((value: { native?: unknown }) => value.native),
+  };
+});
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
@@ -250,6 +323,76 @@ describe('blockchainService', () => {
     it('should throw error if record has no id', async () => {
       await expect(storeMedicalRecordOnChain({ data: 'test' } as any)).rejects.toThrow(
         'Valid record with ID is required',
+      );
+    });
+  });
+
+  describe('Soroban pet record registry', () => {
+    const config = {
+      contractId: 'CCONTRACTID',
+      rpcUrl: 'https://soroban-testnet.stellar.org',
+      pollAttempts: 1,
+    };
+
+    it('derives a stable 32-byte record key from the app record id', () => {
+      const key = deriveSorobanRecordKey('record1');
+
+      expect(key).toBe(deriveSorobanRecordKey('record1'));
+      expect(key).toMatch(/^[0-9a-f]{64}$/);
+      expect(key).not.toBe(deriveSorobanRecordKey('record2'));
+    });
+
+    it('stores a record hash through the Soroban registry contract', async () => {
+      const SorobanClient = require('soroban-client');
+      const record = { id: 'record1', data: 'test' };
+
+      const result = await storePetRecordInSoroban(record, 'SOWNER', config);
+
+      expect(result.recordId).toBe('record1');
+      expect(result.recordKey).toBe(deriveSorobanRecordKey('record1'));
+      expect(result.recordHash).toBe(computeRecordHash(record));
+      expect(result.ownerPublicKey).toBe('GOWNER');
+      expect(SorobanClient.__mocks.contractCall).toHaveBeenCalledWith(
+        'upsert_record',
+        expect.objectContaining({ type: 'address', address: 'GOWNER' }),
+        expect.any(Object),
+        expect.any(Object),
+      );
+      expect(SorobanClient.__mocks.transaction.sign).toHaveBeenCalled();
+    });
+
+    it('grants and revokes vet access through owner-authorized contract calls', async () => {
+      const SorobanClient = require('soroban-client');
+
+      await grantVetRecordAccess('record1', 'SOWNER', 'GVET', config);
+      await revokeVetRecordAccess('record1', 'SOWNER', 'GVET', config);
+
+      expect(SorobanClient.__mocks.contractCall).toHaveBeenNthCalledWith(
+        1,
+        'grant_vet',
+        expect.objectContaining({ type: 'address', address: 'GOWNER' }),
+        expect.any(Object),
+        expect.objectContaining({ type: 'address', address: 'GVET' }),
+      );
+      expect(SorobanClient.__mocks.contractCall).toHaveBeenNthCalledWith(
+        2,
+        'revoke_vet',
+        expect.objectContaining({ type: 'address', address: 'GOWNER' }),
+        expect.any(Object),
+        expect.objectContaining({ type: 'address', address: 'GVET' }),
+      );
+    });
+
+    it('reads a granted record hash from the Soroban transaction return value', async () => {
+      const result = await readPetRecordHashFromSoroban('record1', 'SOWNER', config);
+
+      expect(result.recordKey).toBe(deriveSorobanRecordKey('record1'));
+      expect(result.recordHash).toBe('09'.repeat(32));
+    });
+
+    it('requires a configured contract id before invoking Soroban', async () => {
+      await expect(storePetRecordInSoroban({ id: 'record1' }, 'SOWNER', {})).rejects.toThrow(
+        'Soroban pet registry contract ID is required',
       );
     });
   });
