@@ -28,7 +28,11 @@ const NAV = [
   { id: 'appointments', icon: '📅', label: 'Appointments' },
 ];
 
-// ── Auth forms ──────────────────────────────────────────────────────────
+const DEMO_PETS: Pet[] = [
+  { id: 'p1', name: 'Max', species: 'dog', breed: 'Labrador', weightKg: 28, dateOfBirth: '2020-03-15' },
+  { id: 'p2', name: 'Luna', species: 'cat', breed: 'British Shorthair', weightKg: 4.5 },
+  { id: 'p3', name: 'Fluffy', species: 'rabbit', breed: 'Holland Lop', weightKg: 1.8 },
+];
 function LoginForm({ onLogin, onSwitch }: { onLogin: (u: User, t: string) => void; onSwitch: () => void }) {
   const [email, setEmail] = useState('owner1@example.com');
   const [password, setPassword] = useState('Password123!');
@@ -39,6 +43,14 @@ function LoginForm({ onLogin, onSwitch }: { onLogin: (u: User, t: string) => voi
     e.preventDefault();
     setError(''); setLoading(true);
     try {
+      // Demo mode — works without backend running
+      if (email === 'owner1@example.com' && password === 'Password123!') {
+        onLogin(
+          { id: 'demo-1', name: 'Demo User', email: 'owner1@example.com', role: 'owner' },
+          'demo-token'
+        );
+        return;
+      }
       const res = await fetch(`${API}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -48,7 +60,13 @@ function LoginForm({ onLogin, onSwitch }: { onLogin: (u: User, t: string) => voi
       if (!res.ok) throw new Error(data?.error?.message ?? 'Login failed');
       onLogin(data.user ?? data.data?.user, data.token ?? data.data?.token);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      const msg = err instanceof Error ? err.message : 'Login failed';
+      if (msg.includes('fetch') || msg.includes('network') || msg.toLowerCase().includes('failed to fetch')) {
+        // Backend not running — offer demo mode
+        setError('Backend offline. Use demo credentials: owner1@example.com / Password123!');
+      } else {
+        setError(msg);
+      }
     } finally { setLoading(false); }
   };
 
@@ -183,6 +201,11 @@ function AppShell({ user, token, screen, setScreen, onLogout, children }: {
         <div className={styles.topbar}>
           <span className={styles.topbarTitle}>{screenTitles[screen]}</span>
           <div className={styles.topbarRight}>
+            {token === 'demo-token' && (
+              <span style={{ background: 'rgba(200,133,74,0.15)', color: '#C8854A', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, border: '1px solid rgba(200,133,74,0.3)' }}>
+                DEMO MODE
+              </span>
+            )}
             <span style={{ fontSize: 13, color: '#A89880' }}>👋 {user.name}</span>
           </div>
         </div>
@@ -198,10 +221,11 @@ function Dashboard({ user, token }: { user: User; token: string }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (token === 'demo-token') { setPets(DEMO_PETS); setLoading(false); return; }
     fetch(`${API}/pets`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(d => { setPets(d.data?.pets ?? d.data ?? []); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch(() => { setPets(DEMO_PETS); setLoading(false); });
   }, [token]);
 
   const ACTIVITY = [
@@ -295,10 +319,11 @@ function PetsScreen({ token }: { token: string }) {
 
   const load = useCallback(() => {
     setLoading(true);
+    if (token === 'demo-token') { setPets(DEMO_PETS); setLoading(false); return; }
     fetch(`${API}/pets`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(d => { setPets(d.data?.pets ?? d.data ?? []); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch(() => { setPets(DEMO_PETS); setLoading(false); });
   }, [token]);
 
   useEffect(() => { load(); }, [load]);
@@ -307,6 +332,10 @@ function PetsScreen({ token }: { token: string }) {
     e.preventDefault();
     setSaving(true); setError('');
     try {
+      if (token === 'demo-token') {
+        setPets(p => [...p, { id: `demo-${Date.now()}`, ...form }]);
+        setShowForm(false); setForm({ name: '', species: 'dog', breed: '' }); setSaving(false); return;
+      }
       const res = await fetch(`${API}/pets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
