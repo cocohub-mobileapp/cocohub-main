@@ -169,6 +169,8 @@ npm run migrate            # Run DB migrations
 npm run seed:dev           # Seed test data
 ```
 
+For a backend-only walkthrough with Docker, PostgreSQL, Redis, environment variables, migrations, seed data, API verification, and troubleshooting, see [Backend API Local Setup](docs/BACKEND-SETUP.md).
+
 **Test credentials:** `owner1@example.com` / `Password123!`
 
 ---
