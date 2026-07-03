@@ -66,15 +66,24 @@ export async function detectConflicts(
 ): Promise<ConflictDetectionResult> {
   const conflicts: AppointmentConflict[] = [];
 
-  const windowStart = new Date(proposedTime.getTime() - CONFLICT_BUFFER_MS).toISOString();
-  const windowEnd = new Date(proposedTime.getTime() + CONFLICT_BUFFER_MS).toISOString();
+  // Normalize proposed time to UTC epoch for timezone-safe comparison
+  const proposedMs = proposedTime.getTime();
+
+  const windowStart = new Date(proposedMs - CONFLICT_BUFFER_MS).toISOString();
+  const windowEnd = new Date(proposedMs + CONFLICT_BUFFER_MS).toISOString();
 
   const nearby = await getAppointmentsInWindow<Appointment>(petId, windowStart, windowEnd);
   for (const appt of nearby) {
     if (excludeId && appt.id === excludeId) continue;
-    const apptTime = new Date(appt.date);
-    const diffMs = Math.abs(apptTime.getTime() - proposedTime.getTime());
-    if (diffMs <= CONFLICT_BUFFER_MS) {
+    // Parse appointment date as UTC epoch for timezone-safe comparison
+    const apptMs = new Date(appt.date).getTime();
+    if (Number.isNaN(apptMs)) {
+      console.warn(`[AppointmentService] Invalid date on appointment ${appt.id}: ${appt.date}`);
+      continue;
+    }
+    const diffMs = Math.abs(apptMs - proposedMs);
+    // Use strict less-than to avoid false positives at exact buffer boundary
+    if (diffMs < CONFLICT_BUFFER_MS) {
       conflicts.push({
         type: 'appointment',
         description: `"${appt.title ?? 'Appointment'}" is scheduled ${_formatTimeDiff(diffMs)} from the proposed time.`,
@@ -84,15 +93,16 @@ export async function detectConflicts(
   }
 
   const { getScheduleForRange } = await import('./medicationService');
-  const windowStartDate = new Date(proposedTime.getTime() - CONFLICT_BUFFER_MS);
-  const windowEndDate = new Date(proposedTime.getTime() + CONFLICT_BUFFER_MS);
+  const windowStartDate = new Date(proposedMs - CONFLICT_BUFFER_MS);
+  const windowEndDate = new Date(proposedMs + CONFLICT_BUFFER_MS);
 
   for (const med of medications) {
     if (!isVetSupervised(med)) continue;
     const doseTimes = getScheduleForRange(med, windowStartDate, windowEndDate);
     for (const doseTime of doseTimes) {
-      const diffMs = Math.abs(doseTime.getTime() - proposedTime.getTime());
-      if (diffMs <= CONFLICT_BUFFER_MS) {
+      const doseMs = doseTime.getTime();
+      const diffMs = Math.abs(doseMs - proposedMs);
+      if (diffMs < CONFLICT_BUFFER_MS) {
         conflicts.push({
           type: 'medication',
           description: `"${med.name}" requires vet supervision at ${_formatTime(doseTime)} (within ${_formatTimeDiff(diffMs)} of the proposed time).`,
