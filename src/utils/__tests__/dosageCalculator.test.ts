@@ -80,12 +80,20 @@ describe('convertFromMg', () => {
     expect(() => convertFromMg(150, 'ml', 0)).toThrow('Concentration');
   });
 
+  it('throws if ml conversion has negative concentration', () => {
+    expect(() => convertFromMg(150, 'ml', -10)).toThrow('Concentration');
+  });
+
   it('throws if tablet conversion missing tablet strength', () => {
     expect(() => convertFromMg(150, 'tablets')).toThrow('Tablet strength');
   });
 
   it('throws if tablet conversion has zero tablet strength', () => {
     expect(() => convertFromMg(150, 'tablets', undefined, 0)).toThrow('Tablet strength');
+  });
+
+  it('throws if tablet conversion has negative tablet strength', () => {
+    expect(() => convertFromMg(150, 'tablets', undefined, -25)).toThrow('Tablet strength');
   });
 
   it('handles tiny ml dose for 0.1 kg cat on meloxicam (1.5 mg/ml)', () => {
@@ -123,8 +131,24 @@ describe('convertToMg', () => {
     expect(() => convertToMg(5, 'ml')).toThrow('Concentration');
   });
 
+  it('throws if ml conversion has zero concentration', () => {
+    expect(() => convertToMg(5, 'ml', 0)).toThrow('Concentration');
+  });
+
+  it('throws if ml conversion has negative concentration', () => {
+    expect(() => convertToMg(5, 'ml', -2)).toThrow('Concentration');
+  });
+
   it('throws if tablet conversion missing tablet strength', () => {
     expect(() => convertToMg(2, 'tablets')).toThrow('Tablet strength');
+  });
+
+  it('throws if tablet conversion has zero tablet strength', () => {
+    expect(() => convertToMg(2, 'tablets', undefined, 0)).toThrow('Tablet strength');
+  });
+
+  it('throws if tablet conversion has negative tablet strength', () => {
+    expect(() => convertToMg(2, 'tablets', undefined, -50)).toThrow('Tablet strength');
   });
 
   it('round-trips mg → ml → mg', () => {
@@ -280,9 +304,17 @@ describe('computeDosage', () => {
     expect(result.safetyLevel).toBe('critical');
   });
 
+  it('returns critical for negative dose per kg', () => {
+    const result = computeDosage({ weightKg: 10, dosePerKg: -2, targetUnit: 'mg' });
+    expect(result.safetyLevel).toBe('critical');
+    expect(result.dose).toBe(0);
+    expect(result.warnings[0]).toMatch(/dose per kg/i);
+  });
+
   it('returns critical when ml selected but no concentration provided', () => {
     const result = computeDosage({ weightKg: 10, dosePerKg: 0.1, targetUnit: 'ml' });
     expect(result.safetyLevel).toBe('critical');
+    expect(result.doseInMg).toBe(1);
     expect(result.warnings[0]).toMatch(/Concentration/i);
   });
 
@@ -374,6 +406,41 @@ describe('computeDosage', () => {
     // 0.001 mg/kg for a 10 kg dog = 0.01 mg total
     const result = computeDosage({ weightKg: 10, dosePerKg: 0.001, targetUnit: 'mg' });
     expect(result.dose).toBe(0.01);
+  });
+
+  it('rounds calculated mg doses and ranges to three decimals', () => {
+    const range = { minPerKg: 1.1111, maxPerKg: 3.3333, typicalPerKg: 2.3456 };
+    const result = computeDosage({ weightKg: 1.2345, dosePerKg: 2.3456, targetUnit: 'mg' }, range);
+
+    expect(result.dose).toBe(2.896);
+    expect(result.doseInMg).toBe(2.896);
+    expect(result.rangeMin).toBe(1.372);
+    expect(result.rangeMax).toBe(4.115);
+  });
+
+  it('rounds liquid doses after concentration conversion', () => {
+    const result = computeDosage({
+      weightKg: 1.2345,
+      dosePerKg: 2.3456,
+      targetUnit: 'ml',
+      concentration: 7,
+    });
+
+    expect(result.doseInMg).toBe(2.896);
+    expect(result.dose).toBe(0.414);
+  });
+
+  it('rounds tablet doses and converted safe ranges', () => {
+    const range = { minPerKg: 5, maxPerKg: 10, typicalPerKg: 7.5 };
+    const result = computeDosage(
+      { weightKg: 13.333, dosePerKg: 7.5, targetUnit: 'tablets', tabletStrength: 30 },
+      range,
+    );
+
+    expect(result.doseInMg).toBe(99.998);
+    expect(result.dose).toBe(3.333);
+    expect(result.rangeMin).toBe(2.222);
+    expect(result.rangeMax).toBe(4.444);
   });
 });
 
