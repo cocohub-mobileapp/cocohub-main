@@ -7,6 +7,7 @@ const LOCALE_MAP: Record<string, string> = {
   en: 'en-US',
   es: 'es-ES',
   ar: 'ar-SA',
+  'pt-BR': 'pt-BR',
 };
 
 /** Returns the BCP-47 locale tag for the active language. */
