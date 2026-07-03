@@ -36,6 +36,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
   const [showRationale, setShowRationale] = useState(false);
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastScanRef = useRef<number>(0);
+  const cameraRef = useRef<CameraView>(null);
 
   const [_permission, requestPermission] = useCameraPermissions();
 
@@ -100,7 +101,22 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
     })();
   };
 
-  const toggleTorch = () => setTorchEnabled(!torchEnabled);
+  const toggleTorch = useCallback(async () => {
+    const newValue = !torchEnabled;
+
+    if (Platform.OS === 'ios' && cameraRef.current) {
+      // iOS requires AVCaptureDevice.torchMode to be set on the main thread.
+      // Use imperative camera ref API to ensure main-thread dispatch.
+      try {
+        // @ts-expect-error - Native setTorchMode method exists on CameraView ref
+        await cameraRef.current.setTorchMode?.(newValue ? 'on' : 'off');
+      } catch (err) {
+        console.warn('Torch toggle failed on iOS:', err);
+      }
+    }
+
+    setTorchEnabled(newValue);
+  }, [torchEnabled]);
 
   const handlePermissionDenied = () => {
     Alert.alert(
@@ -137,6 +153,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
     return (
       <View style={styles.cameraContainer}>
         <CameraView
+          ref={cameraRef}
           style={styles.camera}
           facing="back"
           enableTorch={torchEnabled}
