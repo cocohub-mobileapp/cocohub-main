@@ -1,13 +1,14 @@
+import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer, type LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
 import React, { Suspense } from 'react';
 import { ActivityIndicator, StatusBar, Text, View } from 'react-native';
 
-import { useNavigationTheme } from '../theme';
 import { useTheme } from '../context/ThemeContext';
+import { useNavigationTheme } from '../theme';
+import CareNavigator from './CareNavigator';
 import type { RootStackParamList, MainTabParamList, PetStackParamList } from './types';
 import { DEEP_LINK_PREFIX } from './types';
 import LazyScreen from '../components/LazyScreen';
@@ -61,7 +62,6 @@ import { getSession } from '../services/authService';
 import { extractDeepLinkParams } from '../services/notificationService';
 import onboardingService from '../services/onboardingService';
 import performance from '../utils/performance';
-import CareNavigator from './CareNavigator';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -295,22 +295,40 @@ function PetNavigator() {
 }
 
 // ─── Tab icon helper ──────────────────────────────────────────────────────────
-function TabIcon({ icon, color, size, badge }: {
+function TabIcon({
+  icon,
+  color,
+  size,
+  badge,
+}: {
   icon: keyof typeof Ionicons.glyphMap;
   color: string;
   size: number;
   badge?: number;
 }) {
   return (
-    <View style={{ width: size + 4, height: size + 4, alignItems: 'center', justifyContent: 'center' }}>
+    <View
+      style={{ width: size + 4, height: size + 4, alignItems: 'center', justifyContent: 'center' }}
+    >
       <Ionicons name={icon} size={size} color={color} />
       {badge ? (
-        <View style={{
-          position: 'absolute', top: -2, right: -4,
-          backgroundColor: '#EF4444', borderRadius: 8,
-          minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3,
-        }}>
-          <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>{badge > 99 ? '99+' : badge}</Text>
+        <View
+          style={{
+            position: 'absolute',
+            top: -2,
+            right: -4,
+            backgroundColor: '#EF4444',
+            borderRadius: 8,
+            minWidth: 16,
+            height: 16,
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingHorizontal: 3,
+          }}
+        >
+          <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>
+            {badge > 99 ? '99+' : badge}
+          </Text>
         </View>
       ) : null}
     </View>
@@ -342,7 +360,11 @@ function MainTabs() {
         headerTintColor: colors.text,
         headerTitleStyle: { fontWeight: '700' },
       }}
-      screenListeners={{ tabPress: () => { refreshBadge(); } }}
+      screenListeners={{
+        tabPress: () => {
+          refreshBadge();
+        },
+      }}
     >
       {/* 1 — Pets */}
       <Tab.Screen
@@ -362,7 +384,10 @@ function MainTabs() {
         options={{
           title: 'Care',
           headerShown: false,
-          tabBarIcon: ({ color, size }) => <TabIcon icon="medkit-outline" color={color} size={size} />,
+          tabBarTestID: 'care-tab',
+          tabBarIcon: ({ color, size }) => (
+            <TabIcon icon="medkit-outline" color={color} size={size} />
+          ),
         }}
       />
 
@@ -371,7 +396,9 @@ function MainTabs() {
         name="Schedule"
         options={{
           title: 'Schedule',
-          tabBarIcon: ({ color, size }) => <TabIcon icon="calendar-outline" color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => (
+            <TabIcon icon="calendar-outline" color={color} size={size} />
+          ),
         }}
       >
         {() => (
@@ -386,7 +413,9 @@ function MainTabs() {
         name="Search"
         options={{
           title: 'Search',
-          tabBarIcon: ({ color, size }) => <TabIcon icon="search-outline" color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => (
+            <TabIcon icon="search-outline" color={color} size={size} />
+          ),
         }}
       >
         {({ navigation }) => (
@@ -394,10 +423,14 @@ function MainTabs() {
             <GlobalSearchScreen
               onSelectResult={(item) => {
                 if (item.category === 'pet')
-                  (navigation as any).navigate('PetList', { screen: 'PetDetail', params: { petId: item.id } });
+                  (navigation as any).navigate('PetList', {
+                    screen: 'PetDetail',
+                    params: { petId: item.id },
+                  });
               }}
               onQuickAction={(action) => {
-                if (action === 'add_pet') (navigation as any).navigate('PetList', { screen: 'PetForm', params: {} });
+                if (action === 'add_pet')
+                  (navigation as any).navigate('PetList', { screen: 'PetForm', params: {} });
                 if (action === 'scan_qr') navigation.getParent()?.navigate('QRScanner' as any);
               }}
             />
@@ -412,12 +445,23 @@ function MainTabs() {
           title: 'More',
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
-            <TabIcon icon="menu-outline" color={color} size={size} badge={badgeCount > 0 ? badgeCount : undefined} />
+            <TabIcon
+              icon="menu-outline"
+              color={color}
+              size={size}
+              badge={badgeCount > 0 ? badgeCount : undefined}
+            />
           ),
         }}
       >
         {() => (
-          <Suspense fallback={<View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator /></View>}>
+          <Suspense
+            fallback={
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                <ActivityIndicator />
+              </View>
+            }
+          >
             <MoreScreen />
           </Suspense>
         )}
@@ -476,6 +520,7 @@ export const handleNotificationDeepLink = (data: Record<string, unknown>): void 
 
   const deepLink = extractDeepLinkParams(data);
   if (!deepLink) return;
+  const tabRoute = deepLink.route === 'Medications' ? 'Care' : deepLink.route;
 
   // Get the current state to know if we're in the Main tab
   const nav = navigationRef.current;
@@ -486,15 +531,14 @@ export const handleNotificationDeepLink = (data: Record<string, unknown>): void 
 
   if (isMainScreen) {
     // We're in Main, navigate within tabs
-    const mainState = state?.routes?.[0]?.state;
     (nav as any)?.navigate?.('Main', {
-      screen: deepLink.route,
+      screen: tabRoute,
       params: deepLink.params,
     });
   } else {
     // App might be in cold start, navigate to Main first
     (nav as any)?.navigate?.('Main', {
-      screen: deepLink.route,
+      screen: tabRoute,
       params: deepLink.params,
     });
   }
@@ -510,7 +554,9 @@ export default function AppNavigator() {
 
   // Determine the correct initial route: skip onboarding if already completed,
   // skip auth if a valid session exists.
-  const [initialRoute, setInitialRoute] = React.useState<'Onboarding' | 'Auth' | 'Main' | null>(null);
+  const [initialRoute, setInitialRoute] = React.useState<'Onboarding' | 'Auth' | 'Main' | null>(
+    null,
+  );
 
   const navTheme = useNavigationTheme();
   const currentScreenSpan = React.useRef<ReturnType<typeof performance.startSpan> | undefined>(
@@ -601,17 +647,22 @@ export default function AppNavigator() {
             }
           }}
         >
-          <RootStack.Navigator screenOptions={{ headerShown: false }} initialRouteName={initialRoute}>
+          <RootStack.Navigator
+            screenOptions={{ headerShown: false }}
+            initialRouteName={initialRoute}
+          >
             <RootStack.Screen name="Onboarding">
               {({ navigation }) => (
                 <OnboardingScreen
                   onComplete={async () => {
-                    const state = await onboardingService.load() ?? await onboardingService.init();
+                    const state =
+                      (await onboardingService.load()) ?? (await onboardingService.init());
                     await onboardingService.complete(state);
                     navigation.replace('Auth');
                   }}
                   onSkip={async () => {
-                    const state = await onboardingService.load() ?? await onboardingService.init();
+                    const state =
+                      (await onboardingService.load()) ?? (await onboardingService.init());
                     await onboardingService.complete(state);
                     navigation.replace('Auth');
                   }}
