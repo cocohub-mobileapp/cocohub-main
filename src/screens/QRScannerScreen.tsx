@@ -1,4 +1,4 @@
-﻿import type { BarCodeScannerResult } from 'expo-barcode-scanner';
+import type { BarCodeScannerResult } from 'expo-barcode-scanner';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -182,6 +182,18 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
           >
             <Text style={styles.controlButtonText}>📝</Text>
           </TouchableOpacity>
+          {__DEV__ && (
+            <TouchableOpacity
+              testID="detox-mock-scan"
+              style={{ position: 'absolute', top: -100, width: 1, height: 1, opacity: 0 }}
+              onPress={() => {
+                const mockPayload = 'eyJ2ZXJzaW9uIjoyLCJwZXRJZCI6InBldC0xMjMiLCJkZWVwTGluayI6ImNvY29odWI6Ly9wZXRzL3BldC0xMjMiLCJnZW5lcmF0ZWRBdCI6MTIzNDU2Nzg5MCwiY2hlY2tzdW0iOiJtb2NrLWNoZWNrc3VtIiwicGV0Ijp7ImlkIjoicGV0LTEyMyIsIm5hbWUiOiJNb2NrIFBldCIsInNwZWNpZXMiOiJEb2cifX0=';
+                handleBarCodeScanned({ data: mockPayload } as BarCodeScannerResult);
+              }}
+            >
+              <Text>Mock Scan</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
