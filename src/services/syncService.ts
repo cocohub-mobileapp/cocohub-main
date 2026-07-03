@@ -192,6 +192,16 @@ export class SyncService {
     return serverData;
   }
 
+  // ── Queue removal ──
+  async removeFromQueue(entityId: string, type: SyncEntityType, action: SyncAction): Promise<void> {
+    const queue = await this.getQueue();
+    const filtered = queue.filter(
+      (i) => !(i.data.id === entityId && i.type === type && i.action === action),
+    );
+    await setItem(SYNC_QUEUE_KEY, JSON.stringify(filtered));
+    await this.patchStatus({ pendingCount: filtered.length });
+  }
+
   // ── Helpers ──
   private async syncItem(item: SyncItem): Promise<void> {
     let endpoint = `/${item.type}s`;
