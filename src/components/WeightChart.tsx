@@ -17,6 +17,7 @@ import {
   buildWeightChartAccessibilityLabel,
   filterDataByRange,
   formatDateLabel,
+  rangeLabel,
   type DateRangeFilter,
   type WeightDataPoint,
 } from './weightChartAccessibility';
@@ -51,6 +52,7 @@ interface Props {
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CHART_PADDING = { top: 20, right: 16, bottom: 40, left: 48 };
+const POINT_TOUCH_TARGET_SIZE = 44;
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -154,10 +156,16 @@ const WeightChart: React.FC<Props> = ({
     );
   }
 
-  const linePath = filteredData
-    .map((point, idx) => {
-      const x = CHART_PADDING.left + xScale(idx);
-      const y = CHART_PADDING.top + yScale(point.weightKg);
+  const chartPoints = filteredData.map((point, idx) => ({
+    point,
+    idx,
+    x: CHART_PADDING.left + xScale(idx),
+    y: CHART_PADDING.top + yScale(point.weightKg),
+    accessibilityLabel: buildDataPointAccessibilityLabel(point),
+  }));
+
+  const linePath = chartPoints
+    .map(({ x, y }, idx) => {
       return idx === 0 ? `M ${x} ${y}` : `L ${x} ${y}`;
     })
     .join(' ');
@@ -254,111 +262,132 @@ const WeightChart: React.FC<Props> = ({
         />
       ) : (
         <>
-          <View style={styles.chartContainer} importantForAccessibility="no-hide-descendants">
-            <Svg width={chartWidth} height={height} accessible={false}>
-              <Defs>
-                <LinearGradient id="rangeGradient" x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0" stopColor={colors.primary} stopOpacity="0.22" />
-                  <Stop offset="1" stopColor={colors.primary} stopOpacity="0.06" />
-                </LinearGradient>
-              </Defs>
+          <View style={styles.chartContainer}>
+            <View importantForAccessibility="no-hide-descendants">
+              <Svg width={chartWidth} height={height} accessible={false}>
+                <Defs>
+                  <LinearGradient id="rangeGradient" x1="0" y1="0" x2="0" y2="1">
+                    <Stop offset="0" stopColor={colors.primary} stopOpacity="0.22" />
+                    <Stop offset="1" stopColor={colors.primary} stopOpacity="0.06" />
+                  </LinearGradient>
+                </Defs>
 
-              {vetRecommendedRange && (
-                <Rect
-                  x={CHART_PADDING.left}
-                  y={CHART_PADDING.top + yScale(vetRecommendedRange.max)}
-                  width={chartWidth - CHART_PADDING.left - CHART_PADDING.right}
-                  height={yScale(vetRecommendedRange.min) - yScale(vetRecommendedRange.max)}
-                  fill="url(#rangeGradient)"
-                />
-              )}
-
-              {yTicks.map((tick, idx) => {
-                const y = CHART_PADDING.top + yScale(tick);
-                return (
-                  <Line
-                    key={idx}
-                    x1={CHART_PADDING.left}
-                    y1={y}
-                    x2={chartWidth - CHART_PADDING.right}
-                    y2={y}
-                    stroke={colors.chartGrid}
-                    strokeWidth="1"
-                    strokeDasharray="4,4"
+                {vetRecommendedRange && (
+                  <Rect
+                    x={CHART_PADDING.left}
+                    y={CHART_PADDING.top + yScale(vetRecommendedRange.max)}
+                    width={chartWidth - CHART_PADDING.left - CHART_PADDING.right}
+                    height={yScale(vetRecommendedRange.min) - yScale(vetRecommendedRange.max)}
+                    fill="url(#rangeGradient)"
                   />
-                );
-              })}
+                )}
 
-              {yTicks.map((tick, idx) => {
-                const y = CHART_PADDING.top + yScale(tick);
-                return (
-                  <SvgText
-                    key={idx}
-                    x={CHART_PADDING.left - 8}
-                    y={y + 4}
-                    fontSize="11"
-                    fill={colors.chartAxis}
-                    textAnchor="end"
-                  >
-                    {tick.toFixed(1)}
-                  </SvgText>
-                );
-              })}
-
-              <Path d={linePath} stroke={colors.chartLine} strokeWidth="2.5" fill="none" />
-
-              {filteredData.map((point, idx) => {
-                const x = CHART_PADDING.left + xScale(idx);
-                const y = CHART_PADDING.top + yScale(point.weightKg);
-                const isAnnotated = Boolean(point.note);
-                const isSelected = selectedPoint === idx;
-
-                return (
-                  <React.Fragment key={idx}>
-                    <Circle
-                      cx={x}
-                      cy={y}
-                      r={isAnnotated ? 6 : 4}
-                      fill={isAnnotated ? colors.chartAnnotation : colors.chartLine}
-                      stroke={colors.card}
-                      strokeWidth="2"
-                      onPress={() => setSelectedPoint(isSelected ? null : idx)}
+                {yTicks.map((tick, idx) => {
+                  const y = CHART_PADDING.top + yScale(tick);
+                  return (
+                    <Line
+                      key={idx}
+                      x1={CHART_PADDING.left}
+                      y1={y}
+                      x2={chartWidth - CHART_PADDING.right}
+                      y2={y}
+                      stroke={colors.chartGrid}
+                      strokeWidth="1"
+                      strokeDasharray="4,4"
                     />
-                    {isSelected && (
+                  );
+                })}
+
+                {yTicks.map((tick, idx) => {
+                  const y = CHART_PADDING.top + yScale(tick);
+                  return (
+                    <SvgText
+                      key={idx}
+                      x={CHART_PADDING.left - 8}
+                      y={y + 4}
+                      fontSize="11"
+                      fill={colors.chartAxis}
+                      textAnchor="end"
+                    >
+                      {tick.toFixed(1)}
+                    </SvgText>
+                  );
+                })}
+
+                <Path d={linePath} stroke={colors.chartLine} strokeWidth="2.5" fill="none" />
+
+                {chartPoints.map(({ point, idx, x, y }) => {
+                  const isAnnotated = Boolean(point.note);
+                  const isSelected = selectedPoint === idx;
+
+                  return (
+                    <React.Fragment key={idx}>
                       <Circle
                         cx={x}
                         cy={y}
-                        r={10}
-                        fill="none"
-                        stroke={colors.chartLine}
-                        strokeWidth="1.5"
+                        r={isAnnotated ? 6 : 4}
+                        fill={isAnnotated ? colors.chartAnnotation : colors.chartLine}
+                        stroke={colors.card}
+                        strokeWidth="2"
                       />
-                    )}
-                  </React.Fragment>
-                );
-              })}
+                      {isSelected && (
+                        <Circle
+                          cx={x}
+                          cy={y}
+                          r={10}
+                          fill="none"
+                          stroke={colors.chartLine}
+                          strokeWidth="1.5"
+                        />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
 
-              {filteredData.map((point, idx) => {
-                if (filteredData.length > 10 && idx % Math.ceil(filteredData.length / 6) !== 0) {
-                  return null;
-                }
-                const x = CHART_PADDING.left + xScale(idx);
-                const y = height - CHART_PADDING.bottom + 16;
-                return (
-                  <SvgText
-                    key={idx}
-                    x={x}
-                    y={y}
-                    fontSize="10"
-                    fill={colors.chartAxis}
-                    textAnchor="middle"
-                    transform={`rotate(-45, ${x}, ${y})`}
-                  >
-                    {formatDateLabel(point.date, true)}
-                  </SvgText>
-                );
-              })}
-            </Svg>
+                {chartPoints.map(({ point, idx, x }) => {
+                  if (filteredData.length > 10 && idx % Math.ceil(filteredData.length / 6) !== 0) {
+                    return null;
+                  }
+                  const y = height - CHART_PADDING.bottom + 16;
+                  return (
+                    <SvgText
+                      key={idx}
+                      x={x}
+                      y={y}
+                      fontSize="10"
+                      fill={colors.chartAxis}
+                      textAnchor="middle"
+                      transform={`rotate(-45, ${x}, ${y})`}
+                    >
+                      {formatDateLabel(point.date, true)}
+                    </SvgText>
+                  );
+                })}
+              </Svg>
+            </View>
+
+            {chartPoints.map(({ idx, x, y, accessibilityLabel }) => {
+              const isSelected = selectedPoint === idx;
+              return (
+                <TouchableOpacity
+                  key={`point-${idx}`}
+                  activeOpacity={1}
+                  onPress={() => setSelectedPoint(isSelected ? null : idx)}
+                  style={[
+                    styles.accessiblePointButton,
+                    {
+                      left: x - POINT_TOUCH_TARGET_SIZE / 2,
+                      top: y - POINT_TOUCH_TARGET_SIZE / 2,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={accessibilityLabel}
+                  accessibilityHint="Selects this weight entry on the chart"
+                  accessibilityState={{ selected: isSelected }}
+                  testID={`weight-chart-point-${idx}`}
+                />
+              );
+            })}
 
             {selectedPoint !== null && filteredData[selectedPoint] && (
               <View style={[styles.tooltip, { backgroundColor: colors.cardElevated }]}>
@@ -375,20 +404,6 @@ const WeightChart: React.FC<Props> = ({
                 )}
               </View>
             )}
-          </View>
-
-          <View style={styles.accessiblePointsList} accessibilityRole="list">
-            {filteredData.map((point, idx) => (
-              <Text
-                key={`${point.date}-${idx}`}
-                accessible
-                accessibilityRole="text"
-                accessibilityLabel={buildDataPointAccessibilityLabel(point)}
-                style={styles.accessiblePointItem}
-              >
-                {buildDataPointAccessibilityLabel(point)}
-              </Text>
-            ))}
           </View>
         </>
       )}
@@ -483,13 +498,11 @@ const styles = StyleSheet.create({
   chartContainer: {
     position: 'relative',
   },
-  accessiblePointsList: {
-    marginTop: 12,
-  },
-  accessiblePointItem: {
-    fontSize: 13,
-    lineHeight: 20,
-    marginBottom: 4,
+  accessiblePointButton: {
+    position: 'absolute',
+    width: POINT_TOUCH_TARGET_SIZE,
+    height: POINT_TOUCH_TARGET_SIZE,
+    borderRadius: POINT_TOUCH_TARGET_SIZE / 2,
   },
   tableList: {
     marginBottom: 8,
