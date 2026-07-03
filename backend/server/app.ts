@@ -4,8 +4,11 @@ import cors from 'cors';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 
 import { errBody } from './response';
+import { getPoolStats } from '../config/database';
 import { getRedisClient } from '../config/redis';
+import { attachAudit } from '../middleware/auditLog';
 import performanceLogger from '../middleware/performanceLogger';
+import { authRateLimiter, dataRateLimiter, publicRateLimiter } from '../middleware/rateLimiter';
 import { createRedisSessionMiddleware } from '../middleware/redisSession';
 import { requestLogger } from '../middleware/requestLogger';
 import { sanitizeInputs } from '../middleware/sanitize';
@@ -37,6 +40,7 @@ import referralsRouter from './routes/referrals';
 import reportsRouter from './routes/reports';
 import searchRouter from './routes/search';
 import supportRouter from './routes/support';
+import symptomCheckerRouter from './routes/symptomChecker';
 import syncRouter from './routes/sync';
 import telemedicineRouter from './routes/telemedicine';
 import travelCertificatesRouter from './routes/travelCertificates';
@@ -44,8 +48,6 @@ import usersRouter from './routes/users';
 import vaccinationsRouter from './routes/vaccinations';
 import vetsRouter from './routes/vets';
 import vitalsRouter from './routes/vitals';
-import { attachAudit } from '../middleware/auditLog';
-import { authRateLimiter, dataRateLimiter, publicRateLimiter } from '../middleware/rateLimiter';
 import activityRouter from '../src/routes/activity';
 import adminRouter from '../src/routes/admin';
 import anchorRouter from '../src/routes/anchor';
@@ -60,8 +62,6 @@ import notificationsRouter from '../src/routes/notifications';
 import notificationTemplatesRouter from '../src/routes/notificationTemplates';
 import oauthRouter from '../src/routes/oauth';
 import shelterRouter from '../src/routes/shelter';
-
-import { getPoolStats } from '../config/database';
 
 // Readiness probe state — set to false while the process is draining
 let isReady = true;
@@ -185,6 +185,7 @@ export function createApp(): Express {
   api.use('/breeds', breedsRouter);
   api.use('/reports', reportsRouter);
   api.use('/sync', dataRateLimiter, syncRouter);
+  api.use('/symptom-checker', dataRateLimiter, symptomCheckerRouter);
   api.use('/activity', dataRateLimiter, activityRouter);
   api.use('/travel-certificates', travelCertificatesRouter);
   api.use('/reconciliation', reconciliationRouter);
