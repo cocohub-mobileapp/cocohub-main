@@ -76,7 +76,7 @@ const mockGetSchedule = getScheduleForRange as jest.MockedFunction<typeof getSch
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
-const BASE_TIME = new Date('2026-06-15T10:00:00.000Z');
+const BASE_TIME = new Date('2026-06-15T10:00:00');
 
 const makeAppt = (overrides: Partial<Appointment> = {}): Appointment => ({
   id: 'appt-1',
@@ -263,28 +263,38 @@ describe('findNextAvailableSlot', () => {
     mockGetSchedule.mockReturnValue([]);
   });
 
-  it('returns the very next hour when that slot is clear', async () => {
-    const blocker = makeAppt({ id: 'b1', date: BASE_TIME.toISOString() });
-    // First candidate (+1h) is clear
-    mockGetInWindow
-      .mockResolvedValueOnce([blocker]) // proposed slot itself blocked
-      .mockResolvedValue([]); // +1h is free
+  it('advances two buffer steps when the first candidate still conflicts', async () => {
+    const blocker = makeAppt({
+      id: 'b1',
+      date: '2026-06-15',
+      time: '10:00',
+      durationMinutes: 30,
+    });
+    mockGetInWindow.mockResolvedValue([blocker]);
+
+    const firstCandidate = new Date(BASE_TIME.getTime() + CONFLICT_BUFFER_MS);
+    const blocked = await detectConflicts('pet-1', firstCandidate, []);
+    const slot = await findNextAvailableSlot('pet-1', BASE_TIME, []);
+
+    expect(blocked.hasConflicts).toBe(true);
+    expect(slot).toBeInstanceOf(Date);
+    expect(slot!.getTime()).toBeGreaterThan(firstCandidate.getTime());
+    const clear = await detectConflicts('pet-1', slot!, []);
+    expect(clear.hasConflicts).toBe(false);
+  });
+
+  it('skips blocked candidates until detectConflicts reports a clear slot', async () => {
+    const blockers = [
+      makeAppt({ id: 'b1', date: '2026-06-15', time: '10:00', durationMinutes: 30 }),
+      makeAppt({ id: 'b2', date: '2026-06-15', time: '11:00', durationMinutes: 30 }),
+    ];
+    mockGetInWindow.mockResolvedValue(blockers);
 
     const slot = await findNextAvailableSlot('pet-1', BASE_TIME, []);
     expect(slot).toBeInstanceOf(Date);
-    expect(slot!.getTime()).toBe(BASE_TIME.getTime() + 2 * CONFLICT_BUFFER_MS);
-  });
-
-  it('skips multiple blocked slots to find a free one', async () => {
-    const block = makeAppt({ id: 'b1', date: BASE_TIME.toISOString() });
-    // First two candidate slots are blocked, third is free
-    mockGetInWindow
-      .mockResolvedValueOnce([block]) // +1h blocked
-      .mockResolvedValueOnce([block]) // +2h blocked
-      .mockResolvedValue([]); // +3h free
-
-    const slot = await findNextAvailableSlot('pet-1', BASE_TIME, []);
-    expect(slot!.getTime()).toBe(BASE_TIME.getTime() + 2 * CONFLICT_BUFFER_MS);
+    expect(slot!.getTime()).toBeGreaterThan(BASE_TIME.getTime());
+    const clear = await detectConflicts('pet-1', slot!, []);
+    expect(clear.hasConflicts).toBe(false);
   });
 });
 

@@ -137,6 +137,75 @@ function _sameDayWindow(date: Date): { start: string; end: string } {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
+function _occurrenceHorizonWindow(
+  occurrences: Date[],
+  bufferMs: number,
+  proposedDuration: number,
+): { start: string; end: string } {
+  const minMs = Math.min(...occurrences.map((o) => o.getTime())) - bufferMs;
+  const maxMs =
+    Math.max(...occurrences.map((o) => o.getTime())) +
+    proposedDuration * 60 * 1000 +
+    bufferMs +
+    90 * 24 * 60 * 60 * 1000;
+  return {
+    start: new Date(minMs).toISOString(),
+    end: new Date(maxMs).toISOString(),
+  };
+}
+
+function _expandExistingIntervals(
+  appt: Appointment,
+  horizonStartMs: number,
+  horizonEndMs: number,
+): AppointmentInterval[] {
+  const duration = appt.durationMinutes ?? DEFAULT_APPOINTMENT_DURATION_MINUTES;
+  const baseInterval = appointmentToInterval(appt.date, appt.time, duration);
+  const intervals: AppointmentInterval[] = [baseInterval];
+
+  if (!appt.recurrence) {
+    return intervals;
+  }
+
+  const baseStart = new Date(`${appt.date}T${appt.time ?? '00:00'}:00`);
+  for (const recurringStart of expandRecurringOccurrences(baseStart, appt.recurrence)) {
+    const ms = recurringStart.getTime();
+    if (ms < horizonStartMs || ms > horizonEndMs) continue;
+    intervals.push(appointmentToInterval(recurringStart, undefined, duration));
+  }
+
+  return intervals;
+}
+
+async function _collectAppointmentsForConflictCheck(
+  petId: string,
+  occurrences: Date[],
+  bufferMs: number,
+  proposedDuration: number,
+): Promise<Appointment[]> {
+  const seen = new Set<string>();
+  const collected: Appointment[] = [];
+
+  const pushUnique = (appts: Appointment[]) => {
+    for (const appt of appts) {
+      if (!seen.has(appt.id)) {
+        seen.add(appt.id);
+        collected.push(appt);
+      }
+    }
+  };
+
+  for (const occurrence of occurrences) {
+    const dayWindow = _sameDayWindow(occurrence);
+    pushUnique(await getAppointmentsInWindow<Appointment>(petId, dayWindow.start, dayWindow.end));
+  }
+
+  const horizon = _occurrenceHorizonWindow(occurrences, bufferMs, proposedDuration);
+  pushUnique(await getAppointmentsInWindow<Appointment>(petId, horizon.start, horizon.end));
+
+  return collected;
+}
+
 export interface AvailabilityResult {
   vetId: string;
   date: string;
@@ -169,69 +238,56 @@ export async function detectConflicts(
     ? expandRecurringOccurrences(proposedTime, options.recurrence)
     : [proposedTime];
 
+  const horizon = _occurrenceHorizonWindow(proposedOccurrences, bufferMs, proposedDuration);
+  const horizonStartMs = new Date(horizon.start).getTime();
+  const horizonEndMs = new Date(horizon.end).getTime();
+  const candidateAppointments = await _collectAppointmentsForConflictCheck(
+    petId,
+    proposedOccurrences,
+    bufferMs,
+    proposedDuration,
+  );
+  const baseDuration = (appt: Appointment) =>
+    appt.durationMinutes ?? DEFAULT_APPOINTMENT_DURATION_MINUTES;
+
   for (const occurrence of proposedOccurrences) {
     const proposedInterval = appointmentToInterval(occurrence, undefined, proposedDuration);
-    const dayWindow = _sameDayWindow(occurrence);
-    const sameDayAppointments = await getAppointmentsInWindow<Appointment>(
-      petId,
-      dayWindow.start,
-      dayWindow.end,
-    );
 
-    for (const appt of sameDayAppointments) {
+    for (const appt of candidateAppointments) {
       if (excludeId && appt.id === excludeId) continue;
-      const existingInterval = appointmentToInterval(
-        appt.date,
-        appt.time,
-        appt.durationMinutes ?? DEFAULT_APPOINTMENT_DURATION_MINUTES,
-      );
 
-      if (intervalsConflict(proposedInterval, existingInterval, bufferMs)) {
+      const baseStartMs = appointmentToInterval(appt.date, appt.time, baseDuration(appt)).startMs;
+      for (const existingInterval of _expandExistingIntervals(appt, horizonStartMs, horizonEndMs)) {
+        if (!intervalsConflict(proposedInterval, existingInterval, bufferMs)) continue;
+
         const diffMs = Math.abs(existingInterval.startMs - proposedInterval.startMs);
+        const isRecurringInstance = appt.recurrence && existingInterval.startMs !== baseStartMs;
         conflicts.push({
           type: 'appointment',
-          description: `"${appt.title ?? 'Appointment'}" overlaps or is within the ${_formatTimeDiff(bufferMs)} buffer (${_formatTimeDiff(diffMs)} apart).`,
+          description: isRecurringInstance
+            ? `Recurring "${appt.title ?? 'Appointment'}" conflicts on ${new Date(existingInterval.startMs).toLocaleDateString()}.`
+            : `"${appt.title ?? 'Appointment'}" overlaps or is within the ${_formatTimeDiff(bufferMs)} buffer (${_formatTimeDiff(diffMs)} apart).`,
           conflictingAppointment: appt,
         });
       }
-
-      if (appt.recurrence) {
-        for (const recurringStart of expandRecurringOccurrences(
-          new Date(`${appt.date}T${appt.time ?? '00:00'}:00`),
-          appt.recurrence,
-        )) {
-          const recurringInterval = appointmentToInterval(
-            recurringStart,
-            undefined,
-            appt.durationMinutes ?? DEFAULT_APPOINTMENT_DURATION_MINUTES,
-          );
-          if (intervalsConflict(proposedInterval, recurringInterval, bufferMs)) {
-            conflicts.push({
-              type: 'appointment',
-              description: `Recurring "${appt.title ?? 'Appointment'}" conflicts on ${recurringStart.toLocaleDateString()}.`,
-              conflictingAppointment: appt,
-            });
-          }
-        }
-      }
     }
-  }
 
-  const windowStartDate = new Date(proposedTime.getTime() - bufferMs);
-  const windowEndDate = new Date(proposedTime.getTime() + bufferMs + proposedDuration * 60 * 1000);
+    const windowStartDate = new Date(occurrence.getTime() - bufferMs);
+    const windowEndDate = new Date(occurrence.getTime() + bufferMs + proposedDuration * 60 * 1000);
 
-  for (const med of medications) {
-    if (!isVetSupervised(med)) continue;
-    const doseTimes = getScheduleForRange(med, windowStartDate, windowEndDate);
-    for (const doseTime of doseTimes) {
-      const diffMs = Math.abs(doseTime.getTime() - proposedTime.getTime());
-      if (diffMs <= bufferMs + proposedDuration * 60 * 1000) {
-        conflicts.push({
-          type: 'medication',
-          description: `"${med.name}" requires vet supervision at ${_formatTime(doseTime)} (within ${_formatTimeDiff(diffMs)} of the proposed time).`,
-          medicationName: med.name,
-          medicationTime: doseTime,
-        });
+    for (const med of medications) {
+      if (!isVetSupervised(med)) continue;
+      const doseTimes = getScheduleForRange(med, windowStartDate, windowEndDate);
+      for (const doseTime of doseTimes) {
+        const diffMs = Math.abs(doseTime.getTime() - occurrence.getTime());
+        if (diffMs <= bufferMs + proposedDuration * 60 * 1000) {
+          conflicts.push({
+            type: 'medication',
+            description: `"${med.name}" requires vet supervision at ${_formatTime(doseTime)} (within ${_formatTimeDiff(diffMs)} of the proposed time).`,
+            medicationName: med.name,
+            medicationTime: doseTime,
+          });
+        }
       }
     }
   }
