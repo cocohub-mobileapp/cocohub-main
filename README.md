@@ -169,6 +169,8 @@ npm run migrate            # Run DB migrations
 npm run seed:dev           # Seed test data
 ```
 
+For local Stellar testnet setup, including keypair creation, Friendbot funding, Freighter testnet setup, environment variables, and blockchain record verification, see [Stellar Testnet Setup](docs/STELLAR-SETUP.md).
+
 **Test credentials:** `owner1@example.com` / `Password123!`
 
 ---
