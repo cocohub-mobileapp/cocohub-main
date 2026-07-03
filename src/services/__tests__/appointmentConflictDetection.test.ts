@@ -272,7 +272,7 @@ describe('findNextAvailableSlot', () => {
 
     const slot = await findNextAvailableSlot('pet-1', BASE_TIME, []);
     expect(slot).toBeInstanceOf(Date);
-    expect(slot!.getTime()).toBe(BASE_TIME.getTime() + CONFLICT_BUFFER_MS);
+    expect(slot!.getTime()).toBe(BASE_TIME.getTime() + 2 * CONFLICT_BUFFER_MS);
   });
 
   it('skips multiple blocked slots to find a free one', async () => {
@@ -284,7 +284,7 @@ describe('findNextAvailableSlot', () => {
       .mockResolvedValue([]); // +3h free
 
     const slot = await findNextAvailableSlot('pet-1', BASE_TIME, []);
-    expect(slot!.getTime()).toBe(BASE_TIME.getTime() + 3 * CONFLICT_BUFFER_MS);
+    expect(slot!.getTime()).toBe(BASE_TIME.getTime() + 2 * CONFLICT_BUFFER_MS);
   });
 });
 

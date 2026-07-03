@@ -176,6 +176,22 @@ export interface Appointment {
   location?: string;
   /** Notification ID for cancellation */
   notificationId?: string;
+
+  /**
+   * Optional recurrence rule for repeating appointments.
+   * Used by conflict detection to flag clashes across future occurrences.
+   */
+  recurrence?: AppointmentRecurrence;
+}
+
+export interface AppointmentRecurrence {
+  frequency: 'daily' | 'weekly' | 'monthly';
+  /** Repeat every N periods (default 1). */
+  interval?: number;
+  /** Maximum number of occurrences to materialize for conflict checks. */
+  count?: number;
+  /** Stop generating occurrences after this ISO date (YYYY-MM-DD). */
+  until?: string;
 }
 
 export type CreateAppointmentPayload = Omit<

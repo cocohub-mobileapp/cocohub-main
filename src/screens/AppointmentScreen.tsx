@@ -113,6 +113,8 @@ const AppointmentScreen: React.FC = () => {
   const [pendingAppointment, setPendingAppointment] = useState<Appointment | null>(null);
   const [conflictModalVisible, setConflictModalVisible] = useState(false);
   const [isCheckingConflicts, setIsCheckingConflicts] = useState(false);
+  const [bookingConflictPreview, setBookingConflictPreview] =
+    useState<ConflictDetectionResult | null>(null);
 
   const {
     currentStep: bookingStep,
@@ -264,6 +266,32 @@ const AppointmentScreen: React.FC = () => {
     return true;
   };
 
+  const previewBookingConflicts = useCallback(async () => {
+    if (!form.date.trim() || (!form.petId.trim() && !form.petName.trim())) {
+      setBookingConflictPreview(null);
+      return;
+    }
+    const dateObj = new Date(form.date);
+    if (isNaN(dateObj.getTime())) {
+      setBookingConflictPreview(null);
+      return;
+    }
+    const petId = form.petId.trim() || 'preview-pet';
+    const petMeds = medications.filter((m) => m.petId === petId || m.petId === form.petId);
+    const result = await detectConflicts(petId, dateObj, petMeds, undefined, {
+      proposedDurationMinutes: 30,
+    });
+    setBookingConflictPreview(result.hasConflicts ? result : null);
+  }, [form.date, form.petId, form.petName, medications]);
+
+  useEffect(() => {
+    if (!bookingVisible || bookingStep < 1) {
+      setBookingConflictPreview(null);
+      return;
+    }
+    void previewBookingConflicts();
+  }, [bookingVisible, bookingStep, previewBookingConflicts]);
+
   const buildAppointment = (): Appointment | null => {
     if (!form.petName.trim()) {
       focusBookingError('petName', 'Pet name is required.', 0);
@@ -311,6 +339,7 @@ const AppointmentScreen: React.FC = () => {
     await syncAppointmentToCalendar(saved).catch(() => {});
     setForm(EMPTY_FORM);
     setConflictState(null);
+    setBookingConflictPreview(null);
     closeBookingModal();
     setConflictModalVisible(false);
     setPendingAppointment(null);
@@ -327,7 +356,9 @@ const AppointmentScreen: React.FC = () => {
     setIsCheckingConflicts(true);
     try {
       const petMeds = medications.filter((m) => m.petId === appt.petId);
-      const result = await detectConflicts(appt.petId, new Date(appt.date), petMeds);
+      const result = await detectConflicts(appt.petId, new Date(appt.date), petMeds, undefined, {
+        proposedDurationMinutes: appt.durationMinutes ?? 30,
+      });
 
       if (result.hasConflicts) {
         setPendingAppointment(appt);
@@ -715,6 +746,18 @@ const AppointmentScreen: React.FC = () => {
                 ))}
               </>
             )}
+            {bookingConflictPreview && bookingStep >= 1 && (
+              <View style={styles.conflictPreviewBanner} accessibilityRole="alert">
+                <Text style={styles.conflictPreviewTitle}>Scheduling conflict detected</Text>
+                <Text style={styles.conflictPreviewBody}>
+                  {bookingConflictPreview.conflicts[0]?.description ??
+                    'This time conflicts with an existing appointment.'}
+                </Text>
+                <Text style={styles.conflictPreviewHint}>
+                  Resolve the conflict before confirming, or choose a different time.
+                </Text>
+              </View>
+            )}
             {bookingStep === 3 && (
               <View style={styles.field}>
                 <Text style={styles.label}>Notes</Text>
@@ -757,9 +800,12 @@ const AppointmentScreen: React.FC = () => {
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity
-                  style={[styles.primaryBtn, isCheckingConflicts && styles.btnDisabled]}
+                  style={[
+                    styles.primaryBtn,
+                    (isCheckingConflicts || bookingConflictPreview) && styles.btnDisabled,
+                  ]}
                   onPress={() => void handleBook()}
-                  disabled={isCheckingConflicts}
+                  disabled={isCheckingConflicts || Boolean(bookingConflictPreview)}
                   accessibilityRole="button"
                   accessibilityLabel="Confirm booking"
                 >
@@ -1113,6 +1159,17 @@ const styles = StyleSheet.create({
   conflictIcon: { fontSize: 24 },
   conflictTitle: { fontSize: 18, fontWeight: '700', color: '#92400E' },
   conflictSubtitle: { fontSize: 13, color: '#6B7280', marginBottom: 12 },
+  conflictPreviewBanner: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#F59E0B',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  conflictPreviewTitle: { fontSize: 14, fontWeight: '700', color: '#92400E', marginBottom: 4 },
+  conflictPreviewBody: { fontSize: 13, color: '#78350F', marginBottom: 4 },
+  conflictPreviewHint: { fontSize: 12, color: '#92400E' },
   conflictList: { maxHeight: 160, marginBottom: 8 },
   conflictItem: {
     flexDirection: 'row',
