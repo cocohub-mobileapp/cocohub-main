@@ -37,6 +37,7 @@ import referralsRouter from './routes/referrals';
 import reportsRouter from './routes/reports';
 import searchRouter from './routes/search';
 import supportRouter from './routes/support';
+import symptomCheckerRouter from './routes/symptomChecker';
 import syncRouter from './routes/sync';
 import telemedicineRouter from './routes/telemedicine';
 import travelCertificatesRouter from './routes/travelCertificates';
@@ -183,6 +184,7 @@ export function createApp(): Express {
   api.use('/forum', forumRouter);
   api.use('/photos', dataRateLimiter, photosRouter);
   api.use('/breeds', breedsRouter);
+  api.use('/symptom-checker', dataRateLimiter, symptomCheckerRouter);
   api.use('/reports', reportsRouter);
   api.use('/sync', dataRateLimiter, syncRouter);
   api.use('/activity', dataRateLimiter, activityRouter);
