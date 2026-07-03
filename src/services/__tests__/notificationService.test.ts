@@ -1,4 +1,5 @@
 import * as Notifications from 'expo-notifications';
+import { Linking } from 'react-native';
 
 import { getItem, setItem } from '../localDB';
 import {
@@ -10,8 +11,11 @@ import {
   scheduleAppointmentNotification,
   scheduleVaccinationReminder,
   cancelEntityNotification,
+  registerNotificationActions,
+  handleNotificationAction,
   filterNotificationsByCategory,
   groupNotificationsByCategory,
+  scheduleSOSLockScreenNotification,
   scheduleFutureNotification,
   updateScheduledNotification,
   cancelScheduledNotification,
@@ -25,12 +29,30 @@ jest.mock('../localDB', () => ({
 }));
 
 jest.mock('expo-notifications', () => ({
+  AndroidImportance: { MAX: 'max' },
+  AndroidNotificationPriority: { MAX: 'max' },
+  AndroidNotificationVisibility: { PUBLIC: 'public' },
   getPermissionsAsync: jest.fn(),
   requestPermissionsAsync: jest.fn(),
   setNotificationHandler: jest.fn(),
+  setNotificationCategoryAsync: jest.fn(),
+  setNotificationChannelAsync: jest.fn(),
   scheduleNotificationAsync: jest.fn(),
   cancelScheduledNotificationAsync: jest.fn(),
   getAllScheduledNotificationsAsync: jest.fn(),
+  dismissNotificationAsync: jest.fn(),
+}));
+
+jest.mock('react-native', () => ({
+  Linking: { openURL: jest.fn() },
+  Platform: { OS: 'android' },
+}));
+
+jest.mock('../emergencyService', () => ({
+  __esModule: true,
+  default: {
+    triggerSOS: jest.fn(),
+  },
 }));
 
 describe('notificationService', () => {
@@ -232,6 +254,98 @@ describe('notificationService', () => {
       expect(grouped.appointments).toEqual([requests[1]]);
       expect(grouped.health).toEqual([requests[2]]);
       expect(grouped.general).toEqual([requests[3]]);
+    });
+  });
+
+  describe('SOS lock screen notification', () => {
+    it('registers an Android SOS notification action that does not require unlocking', async () => {
+      await registerNotificationActions();
+
+      expect(Notifications.setNotificationChannelAsync).toHaveBeenCalledWith(
+        'sos-emergency',
+        expect.objectContaining({
+          importance: 'max',
+          lockscreenVisibility: 'public',
+        }),
+      );
+      expect(Notifications.setNotificationCategoryAsync).toHaveBeenCalledWith(
+        'sos',
+        expect.arrayContaining([
+          expect.objectContaining({
+            identifier: 'TRIGGER_SOS',
+            options: expect.objectContaining({
+              opensAppToForeground: false,
+              isAuthenticationRequired: false,
+            }),
+          }),
+        ]),
+      );
+    });
+
+    it('schedules a sticky SOS notification for the lock screen', async () => {
+      (getItem as jest.Mock).mockResolvedValue(null);
+      (Notifications.scheduleNotificationAsync as jest.Mock).mockResolvedValue('sos-notif-id');
+
+      const result = await scheduleSOSLockScreenNotification();
+
+      expect(result).toBe('sos-notif-id');
+      expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: expect.objectContaining({
+            categoryIdentifier: 'sos',
+            sticky: true,
+            autoDismiss: false,
+            data: expect.objectContaining({
+              type: 'sos',
+              notificationId: 'sos-lock-screen',
+            }),
+          }),
+          trigger: { channelId: 'sos-emergency' },
+        }),
+      );
+      expect(setItem).toHaveBeenCalledWith(
+        '@notification_map',
+        JSON.stringify({ 'sos-lock-screen': ['sos-notif-id'] }),
+      );
+    });
+
+    it('triggers SOS from the notification action without opening the app first', async () => {
+      const emergencyService = require('../emergencyService').default;
+      emergencyService.triggerSOS.mockResolvedValue({});
+      const notification = {
+        request: {
+          identifier: 'sos-notif-id',
+          content: { data: { type: 'sos' }, categoryIdentifier: 'sos' },
+        },
+      } as Notifications.Notification;
+
+      await handleNotificationAction({
+        actionIdentifier: 'TRIGGER_SOS',
+        notification,
+      } as Notifications.NotificationResponse);
+
+      expect(emergencyService.triggerSOS).toHaveBeenCalledWith(
+        'Pet emergency - need immediate help',
+        { allowForegroundActions: false },
+      );
+      expect(Notifications.dismissNotificationAsync).not.toHaveBeenCalled();
+    });
+
+    it('opens the app from the SOS notification without dismissing the persistent entry', async () => {
+      const notification = {
+        request: {
+          identifier: 'sos-notif-id',
+          content: { data: { type: 'sos' }, categoryIdentifier: 'sos' },
+        },
+      } as Notifications.Notification;
+
+      await handleNotificationAction({
+        actionIdentifier: 'OPEN_APP',
+        notification,
+      } as Notifications.NotificationResponse);
+
+      expect(Linking.openURL).toHaveBeenCalledWith('cocohub://emergency');
+      expect(Notifications.dismissNotificationAsync).not.toHaveBeenCalled();
     });
   });
 

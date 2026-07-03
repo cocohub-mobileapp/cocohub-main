@@ -51,6 +51,10 @@ interface LiveSOSSession {
   expiresAt: string;
 }
 
+interface TriggerSOSOptions {
+  allowForegroundActions?: boolean;
+}
+
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 
 const CONTACTS_KEY = '@emergency_contacts';
@@ -106,6 +110,7 @@ class EmergencyService {
     };
     contacts.push(newContact);
     await setItem(CONTACTS_KEY, JSON.stringify(contacts));
+    void this.syncSOSLockScreenNotification(contacts);
     return newContact;
   }
 
@@ -118,6 +123,7 @@ class EmergencyService {
     if (idx === -1) throw new Error('Contact not found');
     contacts[idx] = { ...contacts[idx], ...updates };
     await setItem(CONTACTS_KEY, JSON.stringify(contacts));
+    void this.syncSOSLockScreenNotification(contacts);
     return contacts[idx];
   }
 
@@ -125,8 +131,27 @@ class EmergencyService {
     const contacts = await this.getEmergencyContacts();
     const filtered = contacts.filter((c) => c.id !== id);
     await setItem(CONTACTS_KEY, JSON.stringify(filtered));
+    void this.syncSOSLockScreenNotification(filtered);
     // Also remove from favorites if present
     await this.removeFavoriteContact(id);
+  }
+
+  async syncSOSLockScreenNotification(contacts?: EmergencyContact[]): Promise<void> {
+    try {
+      const resolvedContacts = contacts ?? (await this.getEmergencyContacts());
+      const { scheduleSOSLockScreenNotification, cancelSOSLockScreenNotification } = await import(
+        './notificationService'
+      );
+
+      if (resolvedContacts.length > 0) {
+        await scheduleSOSLockScreenNotification();
+        return;
+      }
+
+      await cancelSOSLockScreenNotification();
+    } catch {
+      // Emergency contacts must remain editable even if notification setup fails.
+    }
   }
 
   // ── Favorites ────────────────────────────────────────────────────────────────
@@ -347,7 +372,8 @@ class EmergencyService {
    * One-tap SOS: gets current location (with fail-safe fallback),
    * dispatches alerts to all emergency contacts, and returns the SOS payload.
    */
-  async triggerSOS(message?: string): Promise<SOSPayload> {
+  async triggerSOS(message?: string, options: TriggerSOSOptions = {}): Promise<SOSPayload> {
+    const allowForegroundActions = options.allowForegroundActions ?? true;
     const location = await this.getCurrentLocation();
     const contacts = await this.getEmergencyContacts();
     const session = await this.startLiveLocationSession(location, contacts, message);
@@ -361,11 +387,11 @@ class EmergencyService {
     };
 
     // Dispatch alerts to all emergency contacts
-    await this.sendSOSAlerts(payload);
+    await this.sendSOSAlerts(payload, allowForegroundActions);
 
     // Auto-call first 24h emergency contact as a primary action
     const primaryContact = contacts.find((c) => c.available24h) || contacts[0];
-    if (primaryContact) {
+    if (allowForegroundActions && primaryContact) {
       this.callContact(primaryContact.phoneNumber);
     }
 
@@ -375,7 +401,7 @@ class EmergencyService {
   /**
    * Dispatches alerts via the most reliable available channels (SMS, Local Push).
    */
-  private async sendSOSAlerts(payload: SOSPayload): Promise<void> {
+  private async sendSOSAlerts(payload: SOSPayload, allowForegroundActions = true): Promise<void> {
     const contacts = await this.getEmergencyContacts();
     const mapsLink =
       payload.shareUrl ||
@@ -388,7 +414,7 @@ class EmergencyService {
     }
 
     // 2. Open SMS for the first contact (as it's a foreground action)
-    if (contacts.length > 0) {
+    if (allowForegroundActions && contacts.length > 0) {
       this.sendSMS(contacts[0].phoneNumber, fullMessage);
     }
   }
