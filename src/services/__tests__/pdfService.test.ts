@@ -7,16 +7,34 @@ import * as Sharing from 'expo-sharing';
 import QRCode from 'qrcode';
 
 import {
+  generateInsuranceClaimSummary,
   generateVaccinationCertificate,
+  shareInsuranceClaimSummary,
   shareCertificate,
   type PetCertificateInfo,
 } from '../../services/pdfService';
+import { getToken } from '../authService';
 import type { VaccinationReminder } from '../../services/vaccinationService';
 
+jest.mock('../authService', () => ({
+  getToken: jest.fn(),
+}));
+
+jest.mock('../../config', () => ({
+  __esModule: true,
+  default: {
+    api: {
+      baseUrl: 'https://api.test/api',
+    },
+  },
+}));
+
 const mockWriteFile = FileSystem.writeAsStringAsync as jest.Mock;
+const mockDownload = FileSystem.downloadAsync as jest.Mock;
 const mockIsAvailable = Sharing.isAvailableAsync as jest.Mock;
 const mockShare = Sharing.shareAsync as jest.Mock;
 const mockQRCode = QRCode.toDataURL as jest.Mock;
+const mockGetToken = getToken as jest.Mock;
 
 const mockPet: PetCertificateInfo = {
   petId: 'pet-123',
@@ -81,9 +99,13 @@ const mockVaccinations: VaccinationReminder[] = [
 beforeEach(() => {
   jest.clearAllMocks();
   mockWriteFile.mockResolvedValue(undefined);
+  mockDownload.mockImplementation((_uri: string, fileUri: string) =>
+    Promise.resolve({ uri: fileUri, status: 200, headers: {} }),
+  );
   mockIsAvailable.mockResolvedValue(true);
   mockShare.mockResolvedValue(undefined);
   mockQRCode.mockResolvedValue('data:image/png;base64,mockqr');
+  mockGetToken.mockResolvedValue('jwt-token');
 });
 
 describe('pdfService — Vaccination Certificate PDF Generator (Issue #417)', () => {
@@ -160,6 +182,37 @@ describe('pdfService — Vaccination Certificate PDF Generator (Issue #417)', ()
       mockIsAvailable.mockResolvedValue(false);
       await expect(shareCertificate('/mock/cert.txt')).rejects.toThrow(
         'Sharing is not available on this device.',
+      );
+    });
+  });
+
+  describe('generateInsuranceClaimSummary', () => {
+    it('downloads the backend-generated claim summary PDF', async () => {
+      const summary = await generateInsuranceClaimSummary('123456789abcdef');
+
+      expect(mockDownload).toHaveBeenCalledWith(
+        'https://api.test/api/insurance/claims/123456789abcdef/summary.pdf',
+        '/mock/documents/insurance-claim-12345678.pdf',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Accept: 'application/pdf',
+            Authorization: 'Bearer jwt-token',
+          }),
+        }),
+      );
+      expect(summary.filePath).toBe('/mock/documents/insurance-claim-12345678.pdf');
+      expect(summary.filename).toBe('insurance-claim-12345678.pdf');
+      expect(summary.generatedAt).toBeDefined();
+    });
+  });
+
+  describe('shareInsuranceClaimSummary', () => {
+    it('shares the generated PDF with the native share sheet', async () => {
+      await shareInsuranceClaimSummary('/mock/documents/claim.pdf');
+
+      expect(mockShare).toHaveBeenCalledWith(
+        '/mock/documents/claim.pdf',
+        expect.objectContaining({ mimeType: 'application/pdf' }),
       );
     });
   });
