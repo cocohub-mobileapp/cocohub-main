@@ -114,6 +114,8 @@ Email:    owner1@example.com
 Password: Password123!
 ```
 
+For Stellar testnet development, follow [Stellar Testnet Setup](docs/STELLAR-SETUP.md) to create and fund a testnet account, configure local environment variables, and verify the blockchain record flow.
+
 ---
 
 ## Development Workflow
