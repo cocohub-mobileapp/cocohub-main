@@ -171,6 +171,10 @@ npm run seed:dev           # Seed test data
 
 **Test credentials:** `owner1@example.com` / `Password123!`
 
+For a detailed backend setup walkthrough with Docker, environment variables,
+migrations, seeding, API verification, and troubleshooting, see
+[`docs/BACKEND-SETUP.md`](docs/BACKEND-SETUP.md).
+
 ---
 
 ## ⛓️ Blockchain Architecture
