@@ -68,6 +68,18 @@ exports[`Storybook component snapshots ErrorFallback CustomHandlers has valid ar
 }
 `;
 
+exports[`Storybook component snapshots ErrorFallback Dark has valid args: ErrorFallback_Dark 1`] = `
+{
+  "args": {
+    "onClearCache": "[function mockConstructor]",
+    "onContactSupport": "[function mockConstructor]",
+    "onRestart": "[function mockConstructor]",
+    "onRetry": "[function mockConstructor]",
+  },
+  "hasRender": true,
+}
+`;
+
 exports[`Storybook component snapshots ErrorFallback Default has valid args: ErrorFallback_Default 1`] = `
 {
   "args": {
@@ -88,6 +100,12 @@ exports[`Storybook component snapshots ErrorFallback MinimalConfig has valid arg
 `;
 
 exports[`Storybook component snapshots ErrorFallback has correct title: ErrorFallback_title 1`] = `"Components/ErrorFallback"`;
+
+exports[`Storybook component snapshots LanguageSelector Dark has valid args: LanguageSelector_Dark 1`] = `
+{
+  "hasRender": true,
+}
+`;
 
 exports[`Storybook component snapshots LanguageSelector Default has valid args: LanguageSelector_Default 1`] = `{}`;
 
@@ -293,11 +311,84 @@ exports[`Storybook component snapshots PermissionRationaleModal OpenSettings has
 
 exports[`Storybook component snapshots PermissionRationaleModal has correct title: PermissionRationaleModal_title 1`] = `"Components/PermissionRationaleModal"`;
 
-exports[`Storybook component snapshots PetAggregateView Default has valid args: PetAggregateView_Default 1`] = `
+exports[`Storybook component snapshots PetAggregateView EmptyState has valid args: PetAggregateView_EmptyState 1`] = `
 {
   "args": {
     "onSelectPet": "[function mockConstructor]",
   },
+  "hasRender": true,
+}
+`;
+
+exports[`Storybook component snapshots PetAggregateView ErrorState has valid args: PetAggregateView_ErrorState 1`] = `
+{
+  "args": {
+    "onSelectPet": "[function mockConstructor]",
+  },
+  "hasRender": true,
+}
+`;
+
+exports[`Storybook component snapshots PetAggregateView FreePlanLimitReached has valid args: PetAggregateView_FreePlanLimitReached 1`] = `
+{
+  "args": {
+    "onSelectPet": "[function mockConstructor]",
+  },
+  "hasRender": true,
+}
+`;
+
+exports[`Storybook component snapshots PetAggregateView LoadingState has valid args: PetAggregateView_LoadingState 1`] = `
+{
+  "args": {
+    "onSelectPet": "[function mockConstructor]",
+  },
+  "hasRender": true,
+}
+`;
+
+exports[`Storybook component snapshots PetAggregateView MultiplePets has valid args: PetAggregateView_MultiplePets 1`] = `
+{
+  "args": {
+    "onSelectPet": "[function mockConstructor]",
+  },
+  "hasRender": true,
+}
+`;
+
+exports[`Storybook component snapshots PetAggregateView PetWithActiveHealthAlert has valid args: PetAggregateView_PetWithActiveHealthAlert 1`] = `
+{
+  "args": {
+    "onSelectPet": "[function mockConstructor]",
+  },
+  "hasRender": true,
+}
+`;
+
+exports[`Storybook component snapshots PetAggregateView PetWithNoPhoto has valid args: PetAggregateView_PetWithNoPhoto 1`] = `
+{
+  "args": {
+    "onSelectPet": "[function mockConstructor]",
+  },
+  "hasRender": true,
+}
+`;
+
+exports[`Storybook component snapshots PetAggregateView PremiumPlanMaxPets has valid args: PetAggregateView_PremiumPlanMaxPets 1`] = `
+{
+  "args": {
+    "onSelectPet": "[function mockConstructor]",
+  },
+  "hasRender": true,
+}
+`;
+
+exports[`Storybook component snapshots PetAggregateView SinglePet has valid args: PetAggregateView_SinglePet 1`] = `
+{
+  "args": {
+    "onSelectPet": "[function mockConstructor]",
+  },
+  "hasRender": true,
 }
 `;
 
@@ -324,6 +415,15 @@ exports[`Storybook component snapshots PetPhotoUploader WithPhoto has valid args
 `;
 
 exports[`Storybook component snapshots PetPhotoUploader has correct title: PetPhotoUploader_title 1`] = `"Components/PetPhotoUploader"`;
+
+exports[`Storybook component snapshots PetSelectorBar Dark has valid args: PetSelectorBar_Dark 1`] = `
+{
+  "args": {
+    "onAddPet": "[function mockConstructor]",
+  },
+  "hasRender": true,
+}
+`;
 
 exports[`Storybook component snapshots PetSelectorBar WithAddButton has valid args: PetSelectorBar_WithAddButton 1`] = `
 {
@@ -372,6 +472,18 @@ exports[`Storybook component snapshots ReminderSnoozeModal Default has valid arg
 `;
 
 exports[`Storybook component snapshots ReminderSnoozeModal has correct title: ReminderSnoozeModal_title 1`] = `"Components/ReminderSnoozeModal"`;
+
+exports[`Storybook component snapshots RetryError Dark has valid args: RetryError_Dark 1`] = `
+{
+  "args": {
+    "error": "[Error: Network request failed]",
+    "maxRetries": 3,
+    "onRetry": "[function mockConstructor]",
+    "retryCount": 1,
+  },
+  "hasRender": true,
+}
+`;
 
 exports[`Storybook component snapshots RetryError FirstFailure has valid args: RetryError_FirstFailure 1`] = `
 {
@@ -568,6 +680,21 @@ exports[`Storybook component snapshots VetVerifiedBadge Verified has valid args:
 `;
 
 exports[`Storybook component snapshots VetVerifiedBadge has correct title: VetVerifiedBadge_title 1`] = `"Components/VetVerifiedBadge"`;
+
+exports[`Storybook component snapshots WeightChart AccessibleView has valid args: WeightChart_AccessibleView 1`] = `
+{
+  "args": {
+    "data": "[Array(14)]",
+    "height": 300,
+    "onExport": "[function mockConstructor]",
+    "petName": "Buddy",
+    "vetRecommendedRange": {
+      "max": 5.5,
+      "min": 4.5,
+    },
+  },
+}
+`;
 
 exports[`Storybook component snapshots WeightChart Empty has valid args: WeightChart_Empty 1`] = `
 {

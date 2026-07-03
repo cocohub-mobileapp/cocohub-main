@@ -1,8 +1,8 @@
 import { action } from '@storybook/addon-actions';
 import type { Meta, StoryObj } from '@storybook/react';
-import { View } from 'react-native';
 
 import ErrorFallback from './ErrorFallback';
+import { ThemeStoryFrame } from './storybookThemeDecorator';
 
 /**
  * `ErrorFallback` — A full-screen error recovery UI displayed when the app
@@ -34,9 +34,9 @@ const meta: Meta<typeof ErrorFallback> = {
   component: ErrorFallback,
   decorators: [
     (Story) => (
-      <View style={{ flex: 1, backgroundColor: '#fff' }}>
+      <ThemeStoryFrame mode="light">
         <Story />
-      </View>
+      </ThemeStoryFrame>
     ),
   ],
   argTypes: {
@@ -76,4 +76,19 @@ export const MinimalConfig: Story = {
   args: {
     onRetry: action('onRetry'),
   },
+};
+
+/** Dark mode preview using the same theme provider as the app. */
+export const Dark: Story = {
+  args: {
+    onRetry: action('dark-onRetry'),
+    onContactSupport: action('dark-onContactSupport'),
+    onRestart: action('dark-onRestart'),
+    onClearCache: action('dark-onClearCache'),
+  },
+  render: (args) => (
+    <ThemeStoryFrame mode="dark">
+      <ErrorFallback {...args} />
+    </ThemeStoryFrame>
+  ),
 };

@@ -13,6 +13,7 @@ import { AccessibilityInfo, Modal, StyleSheet, Text, TouchableOpacity, View } fr
 
 import { logout } from '../services/authService';
 import sessionMonitoringService from '../services/sessionMonitoringService';
+import { useAppTheme } from '../theme';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,7 @@ function formatCountdown(seconds: number): string {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const SessionTimeoutModal: React.FC = () => {
+  const colors = useAppTheme();
   const [visible, setVisible] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState(120);
   const stayButtonRef = useRef<TouchableOpacity>(null);
@@ -74,14 +76,20 @@ const SessionTimeoutModal: React.FC = () => {
       onRequestClose={handleStayLoggedIn}
       accessibilityViewIsModal
     >
-      <View style={styles.overlay}>
-        <View style={styles.card} accessibilityRole="alert">
-          <Text style={styles.title} accessibilityRole="header">
+      <View style={[styles.overlay, { backgroundColor: colors.overlay }]}>
+        <View
+          style={[styles.card, { backgroundColor: colors.surface, shadowColor: colors.shadow }]}
+          accessibilityRole="alert"
+        >
+          <Text style={[styles.title, { color: colors.text }]} accessibilityRole="header">
             Session expiring soon
           </Text>
-          <Text style={styles.message}>
+          <Text style={[styles.message, { color: colors.secondaryText }]}>
             Your session will expire in{' '}
-            <Text style={styles.countdown} accessibilityLabel={formatCountdown(secondsRemaining)}>
+            <Text
+              style={[styles.countdown, { color: colors.error }]}
+              accessibilityLabel={formatCountdown(secondsRemaining)}
+            >
               {formatCountdown(secondsRemaining)}
             </Text>{' '}
             — tap to stay logged in.
@@ -89,23 +97,25 @@ const SessionTimeoutModal: React.FC = () => {
 
           <TouchableOpacity
             ref={stayButtonRef}
-            style={[styles.button, styles.primaryButton]}
+            style={[styles.button, { backgroundColor: colors.info }]}
             onPress={handleStayLoggedIn}
             accessibilityRole="button"
             accessibilityLabel="Stay logged in"
             accessibilityHint="Extends your session and dismisses this dialog"
           >
-            <Text style={styles.primaryButtonText}>Stay logged in</Text>
+            <Text style={[styles.primaryButtonText, { color: colors.white }]}>Stay logged in</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.button, styles.secondaryButton]}
+            style={[styles.button, styles.secondaryButton, { borderColor: colors.border }]}
             onPress={handleLogoutNow}
             accessibilityRole="button"
             accessibilityLabel="Log out now"
             accessibilityHint="Immediately logs you out of the app"
           >
-            <Text style={styles.secondaryButtonText}>Log out now</Text>
+            <Text style={[styles.secondaryButtonText, { color: colors.secondaryText }]}>
+              Log out now
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -116,18 +126,15 @@ const SessionTimeoutModal: React.FC = () => {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
   card: {
-    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 24,
     width: '100%',
     maxWidth: 400,
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
@@ -137,17 +144,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 12,
-    color: '#1a1a1a',
   },
   message: {
     fontSize: 15,
-    color: '#444',
     marginBottom: 24,
     lineHeight: 22,
   },
   countdown: {
     fontWeight: '700',
-    color: '#d32f2f',
   },
   button: {
     borderRadius: 8,
@@ -155,21 +159,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
-  primaryButton: {
-    backgroundColor: '#1976d2',
-  },
   primaryButtonText: {
-    color: '#fff',
     fontWeight: '600',
     fontSize: 15,
   },
   secondaryButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#999',
   },
   secondaryButtonText: {
-    color: '#444',
     fontWeight: '500',
     fontSize: 15,
   },

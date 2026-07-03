@@ -2,6 +2,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native';
 
 import updateService from '../services/updateService';
+import { useAppTheme } from '../theme';
 import { encryptedAsyncStorage } from '../utils/encryptedAsyncStorage';
 
 interface Props {
@@ -17,6 +18,8 @@ export default function ErrorFallback({
   onRestart,
   onClearCache,
 }: Props) {
+  const colors = useAppTheme();
+
   const contactSupport = () => {
     if (onContactSupport) return onContactSupport();
     const mailto =
@@ -39,37 +42,41 @@ export default function ErrorFallback({
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Something went wrong</Text>
-      <Text style={styles.message}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Text style={[styles.title, { color: colors.text }]}>Something went wrong</Text>
+      <Text style={[styles.message, { color: colors.secondaryText }]}>
         An unexpected error occurred. Try retrying or contact support.
       </Text>
       <View style={styles.actions}>
-        <TouchableOpacity style={styles.btn} onPress={onRetry} accessibilityRole="button">
-          <Text style={styles.btnText}>Retry</Text>
+        <TouchableOpacity
+          style={[styles.btn, { backgroundColor: colors.primary }]}
+          onPress={onRetry}
+          accessibilityRole="button"
+        >
+          <Text style={[styles.btnText, { color: colors.white }]}>Retry</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.btn, styles.secondary]}
+          style={[styles.btn, { backgroundColor: colors.muted }]}
           onPress={contactSupport}
           accessibilityRole="button"
         >
-          <Text style={[styles.btnText, styles.secondaryText]}>Contact Support</Text>
+          <Text style={[styles.btnText, { color: colors.text }]}>Contact Support</Text>
         </TouchableOpacity>
       </View>
       <View style={styles.actions}>
         <TouchableOpacity
-          style={[styles.btn, styles.alt]}
+          style={[styles.btn, { backgroundColor: colors.info }]}
           onPress={clearCache}
           accessibilityRole="button"
         >
-          <Text style={styles.btnText}>Clear Cache</Text>
+          <Text style={[styles.btnText, { color: colors.white }]}>Clear Cache</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.btn, styles.alt]}
+          style={[styles.btn, { backgroundColor: colors.info }]}
           onPress={restart}
           accessibilityRole="button"
         >
-          <Text style={styles.btnText}>Restart App</Text>
+          <Text style={[styles.btnText, { color: colors.white }]}>Restart App</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -82,20 +89,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    backgroundColor: '#fff',
   },
-  title: { fontSize: 20, fontWeight: '700', marginBottom: 8, color: '#1a1a1a' },
-  message: { fontSize: 14, color: '#444', textAlign: 'center', marginBottom: 20 },
+  title: { fontSize: 20, fontWeight: '700', marginBottom: 8 },
+  message: { fontSize: 14, textAlign: 'center', marginBottom: 20 },
   actions: { flexDirection: 'row', gap: 12, marginVertical: 8 },
   btn: {
-    backgroundColor: '#4CAF50',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
     marginHorizontal: 8,
   },
-  btnText: { color: '#fff', fontWeight: '600' },
-  secondary: { backgroundColor: '#e0e0e0' },
-  secondaryText: { color: '#333' },
-  alt: { backgroundColor: '#1976D2' },
+  btnText: { fontWeight: '600' },
 });

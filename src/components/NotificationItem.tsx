@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 
 import type { AppNotification, NotificationCategory } from '../services/notificationStore';
+import { useAppTheme } from '../theme';
 
 // Re-export so existing imports from this file continue to work.
 export { resolveNavPayload } from '../utils/notificationNavigation';
@@ -61,6 +62,7 @@ function NotificationItem({
   style,
   testID,
 }: NotificationItemProps) {
+  const colors = useAppTheme();
   const meta = CATEGORY_META[notification.category] ?? CATEGORY_META.system;
 
   const handlePress = useCallback(() => onPress(notification), [onPress, notification]);
@@ -77,11 +79,21 @@ function NotificationItem({
       accessibilityHint="Tap to open, long press for options"
       onPress={handlePress}
       onLongPress={onLongPress ? handleLongPress : undefined}
-      style={[styles.container, !notification.isRead && styles.unread, style]}
+      style={[
+        styles.container,
+        { backgroundColor: colors.surface, borderBottomColor: colors.border },
+        !notification.isRead && { backgroundColor: colors.primaryMuted },
+        style,
+      ]}
       activeOpacity={0.7}
     >
       {/* Unread indicator */}
-      {!notification.isRead && <View style={styles.unreadDot} accessibilityElementsHidden />}
+      {!notification.isRead && (
+        <View
+          style={[styles.unreadDot, { backgroundColor: colors.primary }]}
+          accessibilityElementsHidden
+        />
+      )}
 
       {/* Icon */}
       <Text style={styles.icon} accessibilityElementsHidden>
@@ -92,17 +104,23 @@ function NotificationItem({
       <View style={styles.content}>
         <View style={styles.headerRow}>
           <Text
-            style={[styles.title, !notification.isRead && styles.titleUnread]}
+            style={[
+              styles.title,
+              { color: colors.text },
+              !notification.isRead && styles.titleUnread,
+            ]}
             numberOfLines={1}
           >
             {notification.title}
           </Text>
-          <Text style={styles.time}>{formatRelativeTime(notification.createdAt)}</Text>
+          <Text style={[styles.time, { color: colors.placeholder }]}>
+            {formatRelativeTime(notification.createdAt)}
+          </Text>
         </View>
-        <Text style={styles.body} numberOfLines={2}>
+        <Text style={[styles.body, { color: colors.secondaryText }]} numberOfLines={2}>
           {notification.body}
         </Text>
-        <Text style={styles.category}>{meta.label}</Text>
+        <Text style={[styles.category, { color: colors.placeholder }]}>{meta.label}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -118,18 +136,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#D1D5DB',
-  },
-  unread: {
-    backgroundColor: '#F0FDF4',
   },
   unreadDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#4CAF50',
     marginTop: 6,
     marginEnd: 4,
     flexShrink: 0,
@@ -151,7 +163,6 @@ const styles = StyleSheet.create({
   title: {
     flex: 1,
     fontSize: 15,
-    color: '#111827',
     marginEnd: 8,
   },
   titleUnread: {
@@ -159,18 +170,15 @@ const styles = StyleSheet.create({
   },
   time: {
     fontSize: 12,
-    color: '#6B7280',
     flexShrink: 0,
   },
   body: {
     fontSize: 13,
-    color: '#4B5563',
     lineHeight: 18,
     marginBottom: 4,
   },
   category: {
     fontSize: 11,
-    color: '#9CA3AF',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },

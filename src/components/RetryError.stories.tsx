@@ -1,8 +1,8 @@
 import { action } from '@storybook/addon-actions';
 import type { Meta, StoryObj } from '@storybook/react';
-import { View } from 'react-native';
 
 import { RetryError } from './RetryError';
+import { ThemeStoryFrame } from './storybookThemeDecorator';
 
 /**
  * `RetryError` — An inline error state component with a retry button and
@@ -31,9 +31,9 @@ const meta: Meta<typeof RetryError> = {
   component: RetryError,
   decorators: [
     (Story) => (
-      <View style={{ padding: 24, backgroundColor: '#fff' }}>
+      <ThemeStoryFrame mode="light" style={{ padding: 24 }}>
         <Story />
-      </View>
+      </ThemeStoryFrame>
     ),
   ],
   argTypes: {
@@ -74,4 +74,19 @@ export const MaxRetriesReached: Story = {
     retryCount: 3,
     maxRetries: 3,
   },
+};
+
+/** Dark mode preview for inline retry errors. */
+export const Dark: Story = {
+  args: {
+    error: new Error('Network request failed'),
+    onRetry: action('dark-onRetry'),
+    retryCount: 1,
+    maxRetries: 3,
+  },
+  render: (args) => (
+    <ThemeStoryFrame mode="dark" style={{ padding: 24 }}>
+      <RetryError {...args} />
+    </ThemeStoryFrame>
+  ),
 };
