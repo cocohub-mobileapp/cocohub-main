@@ -15,6 +15,7 @@ import type {
   AddTrustlineParams,
   RemoveTrustlineParams,
   CocohubAssetDefinition,
+  CocohubTrustlineStatus,
 } from '../models/Trustline';
 
 // ─── Network config ───────────────────────────────────────────────────────────
@@ -114,6 +115,24 @@ function parseBalance(balances: StellarSdk.Horizon.HorizonApi.BalanceLine[]): {
   }
 
   return { xlm, trustlines };
+}
+
+export function getCocohubTrustlineStatuses(
+  trustlines: TrustlineAsset[],
+  assets: CocohubAssetDefinition[] = COCOHUB_ASSETS,
+): CocohubTrustlineStatus[] {
+  return assets.map((asset) => {
+    const trustline = trustlines.find(
+      (tl) => tl.assetCode === asset.assetCode && tl.issuerPublicKey === asset.issuerPublicKey,
+    );
+
+    return {
+      asset,
+      status: trustline ? 'active' : 'not_enabled',
+      balance: trustline?.balance ?? '0',
+      ...(trustline ? { trustline } : {}),
+    };
+  });
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
