@@ -8,6 +8,7 @@ import {
   upsertAppointment,
   deleteAppointmentById,
 } from './localDB';
+import { getScheduleForRange } from './medicationService';
 import { AppointmentStatus } from '../models/Appointment';
 import type { Appointment } from '../models/Appointment';
 import type { Medication } from '../models/Medication';
@@ -23,6 +24,8 @@ const BASE_URL = '/appointments';
 
 /** Buffer window (ms) around each appointment that counts as a conflict */
 export const CONFLICT_BUFFER_MS = 60 * 60 * 1000; // 1 hour
+const DEFAULT_APPOINTMENT_DURATION_MINUTES = 30;
+const MAX_APPOINTMENT_LOOKBACK_MS = 8 * 60 * 60 * 1000;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,27 +66,38 @@ export async function detectConflicts(
   proposedTime: Date,
   medications: Medication[] = [],
   excludeId?: string,
+  includeSuggestedTime = true,
 ): Promise<ConflictDetectionResult> {
   const conflicts: AppointmentConflict[] = [];
+  const proposedStart = proposedTime;
+  const proposedEnd = new Date(
+    proposedStart.getTime() + DEFAULT_APPOINTMENT_DURATION_MINUTES * 60_000,
+  );
 
-  const windowStart = new Date(proposedTime.getTime() - CONFLICT_BUFFER_MS).toISOString();
-  const windowEnd = new Date(proposedTime.getTime() + CONFLICT_BUFFER_MS).toISOString();
+  const windowStart = new Date(
+    proposedStart.getTime() - CONFLICT_BUFFER_MS - MAX_APPOINTMENT_LOOKBACK_MS,
+  ).toISOString();
+  const windowEnd = new Date(proposedEnd.getTime() + CONFLICT_BUFFER_MS).toISOString();
 
   const nearby = await getAppointmentsInWindow<Appointment>(petId, windowStart, windowEnd);
   for (const appt of nearby) {
     if (excludeId && appt.id === excludeId) continue;
-    const apptTime = new Date(appt.date);
-    const diffMs = Math.abs(apptTime.getTime() - proposedTime.getTime());
-    if (diffMs <= CONFLICT_BUFFER_MS) {
+    const apptStart = _getAppointmentStart(appt);
+    if (Number.isNaN(apptStart.getTime())) continue;
+    const apptEnd = _getAppointmentEnd(apptStart, appt.durationMinutes);
+    const overlaps = _timeRangesOverlap(proposedStart, proposedEnd, apptStart, apptEnd);
+    const gapMs = _gapBetweenRanges(proposedStart, proposedEnd, apptStart, apptEnd);
+    if (overlaps || gapMs < CONFLICT_BUFFER_MS) {
       conflicts.push({
         type: 'appointment',
-        description: `"${appt.title ?? 'Appointment'}" is scheduled ${_formatTimeDiff(diffMs)} from the proposed time.`,
+        description: overlaps
+          ? `"${appt.title ?? 'Appointment'}" overlaps the proposed time.`
+          : `"${appt.title ?? 'Appointment'}" is scheduled ${_formatTimeDiff(gapMs)} from the proposed time.`,
         conflictingAppointment: appt,
       });
     }
   }
 
-  const { getScheduleForRange } = await import('./medicationService');
   const windowStartDate = new Date(proposedTime.getTime() - CONFLICT_BUFFER_MS);
   const windowEndDate = new Date(proposedTime.getTime() + CONFLICT_BUFFER_MS);
 
@@ -104,9 +118,10 @@ export async function detectConflicts(
   }
 
   const hasConflicts = conflicts.length > 0;
-  const suggestedTime = hasConflicts
-    ? await findNextAvailableSlot(petId, proposedTime, medications)
-    : undefined;
+  const suggestedTime =
+    hasConflicts && includeSuggestedTime
+      ? await findNextAvailableSlot(petId, proposedTime, medications)
+      : undefined;
 
   return { hasConflicts, conflicts, suggestedTime };
 }
@@ -131,7 +146,7 @@ export async function findNextAvailableSlot(
   let candidate = new Date(from.getTime() + CONFLICT_BUFFER_MS);
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
-    const result = await detectConflicts(petId, candidate, medications);
+    const result = await detectConflicts(petId, candidate, medications, undefined, false);
     if (!result.hasConflicts) return candidate;
     candidate = new Date(candidate.getTime() + CONFLICT_BUFFER_MS);
   }
@@ -369,6 +384,29 @@ function _formatTimeDiff(ms: number): string {
 
 function _formatTime(d: Date): string {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function _getAppointmentStart(appt: Appointment): Date {
+  if (appt.date.includes('T')) return new Date(appt.date);
+  return new Date(`${appt.date}T${appt.time ?? '00:00'}:00`);
+}
+
+function _getAppointmentEnd(start: Date, durationMinutes?: number): Date {
+  const duration =
+    typeof durationMinutes === 'number' && durationMinutes > 0
+      ? durationMinutes
+      : DEFAULT_APPOINTMENT_DURATION_MINUTES;
+  return new Date(start.getTime() + duration * 60_000);
+}
+
+function _timeRangesOverlap(start1: Date, end1: Date, start2: Date, end2: Date): boolean {
+  return start1 < end2 && end1 > start2;
+}
+
+function _gapBetweenRanges(start1: Date, end1: Date, start2: Date, end2: Date): number {
+  if (end1 <= start2) return Math.max(0, start2.getTime() - end1.getTime());
+  if (end2 <= start1) return Math.max(0, start1.getTime() - end2.getTime());
+  return 0;
 }
 
 export interface ConflictCheckResponse {

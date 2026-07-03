@@ -164,6 +164,17 @@ describe('detectConflicts — appointment buffer', () => {
     mockGetSchedule.mockReturnValue([]);
   });
 
+  const mockWindowQueryFor = (appointments: Appointment[]) => {
+    mockGetInWindow.mockImplementation(async (_petId, windowStart, windowEnd) => {
+      const startMs = new Date(windowStart).getTime();
+      const endMs = new Date(windowEnd).getTime();
+      return appointments.filter((appt) => {
+        const apptStartMs = new Date(appt.date).getTime();
+        return apptStartMs >= startMs && apptStartMs <= endMs;
+      });
+    });
+  };
+
   it('flags an existing appointment at the exact same time', async () => {
     const existing = makeAppt({ id: 'existing-1', date: BASE_TIME.toISOString() });
     mockGetInWindow.mockResolvedValue([existing]);
@@ -192,6 +203,48 @@ describe('detectConflicts — appointment buffer', () => {
 
     const result = await detectConflicts('pet-1', BASE_TIME, []);
     expect(result.hasConflicts).toBe(false);
+  });
+
+  it('flags a previous long appointment that ends at the proposed time', async () => {
+    const previousStart = new Date(BASE_TIME.getTime() - 2 * 60 * 60_000);
+    const previous = makeAppt({
+      id: 'back-to-back-1',
+      date: previousStart.toISOString(),
+      durationMinutes: 120,
+    });
+    mockWindowQueryFor([previous]);
+
+    const result = await detectConflicts('pet-1', BASE_TIME, []);
+    expect(result.hasConflicts).toBe(true);
+    expect(result.conflicts[0].conflictingAppointment?.id).toBe('back-to-back-1');
+  });
+
+  it('flags an appointment that overlaps after midnight even when its start is outside the buffer', async () => {
+    const proposed = new Date('2026-06-16T00:15:00.000Z');
+    const previous = makeAppt({
+      id: 'midnight-1',
+      date: '2026-06-15T22:30:00.000Z',
+      durationMinutes: 120,
+    });
+    mockWindowQueryFor([previous]);
+
+    const result = await detectConflicts('pet-1', proposed, []);
+    expect(result.hasConflicts).toBe(true);
+    expect(result.conflicts[0].conflictingAppointment?.id).toBe('midnight-1');
+  });
+
+  it('flags a short travel buffer gap after an existing appointment ends', async () => {
+    const previousStart = new Date(BASE_TIME.getTime() - 90 * 60_000);
+    const previous = makeAppt({
+      id: 'travel-buffer-1',
+      date: previousStart.toISOString(),
+      durationMinutes: 60,
+    });
+    mockWindowQueryFor([previous]);
+
+    const result = await detectConflicts('pet-1', BASE_TIME, []);
+    expect(result.hasConflicts).toBe(true);
+    expect(result.conflicts[0].conflictingAppointment?.id).toBe('travel-buffer-1');
   });
 
   it('excludes the appointment with the given excludeId', async () => {
@@ -264,11 +317,7 @@ describe('findNextAvailableSlot', () => {
   });
 
   it('returns the very next hour when that slot is clear', async () => {
-    const blocker = makeAppt({ id: 'b1', date: BASE_TIME.toISOString() });
-    // First candidate (+1h) is clear
-    mockGetInWindow
-      .mockResolvedValueOnce([blocker]) // proposed slot itself blocked
-      .mockResolvedValue([]); // +1h is free
+    mockGetInWindow.mockResolvedValue([]);
 
     const slot = await findNextAvailableSlot('pet-1', BASE_TIME, []);
     expect(slot).toBeInstanceOf(Date);
@@ -276,11 +325,12 @@ describe('findNextAvailableSlot', () => {
   });
 
   it('skips multiple blocked slots to find a free one', async () => {
-    const block = makeAppt({ id: 'b1', date: BASE_TIME.toISOString() });
+    const firstBlockedSlot = new Date(BASE_TIME.getTime() + CONFLICT_BUFFER_MS);
+    const secondBlockedSlot = new Date(BASE_TIME.getTime() + 2 * CONFLICT_BUFFER_MS);
     // First two candidate slots are blocked, third is free
     mockGetInWindow
-      .mockResolvedValueOnce([block]) // +1h blocked
-      .mockResolvedValueOnce([block]) // +2h blocked
+      .mockResolvedValueOnce([makeAppt({ id: 'b1', date: firstBlockedSlot.toISOString() })])
+      .mockResolvedValueOnce([makeAppt({ id: 'b2', date: secondBlockedSlot.toISOString() })])
       .mockResolvedValue([]); // +3h free
 
     const slot = await findNextAvailableSlot('pet-1', BASE_TIME, []);
