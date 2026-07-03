@@ -136,13 +136,16 @@ class OfflineQueue {
     action: SyncAction,
     data: Record<string, unknown>,
   ): Promise<void> {
+    // Check actual connectivity rather than relying on cached this.isOnline
+    const actuallyOnline = await networkMonitor.isOnline();
+
     // Persist to our own queue key for resilience
-    await this.persistToQueue({ type, action, data });
+    await this.persistToQueue({ type, action, data }, actuallyOnline);
 
     // Also enqueue in syncService (which manages retries + conflicts)
     await syncService.enqueue(type, action, data);
 
-    if (this.isOnline) {
+    if (actuallyOnline) {
       await this.processQueue();
     } else {
       await this.notifyUser(
@@ -188,6 +191,14 @@ class OfflineQueue {
       } catch (err) {
         const status = (err as { response?: { status?: number; data?: unknown } })?.response
           ?.status;
+
+        // Log the error for debugging (not completely silent)
+        if (status !== 409) {
+          console.warn(
+            `[OfflineQueue] Sync failed for ${mutation.type}.${mutation.action}:`,
+            err instanceof Error ? err.message : 'Unknown error',
+          );
+        }
 
         if (status === 409) {
           // Conflict detected — fetch server version and queue for resolution
@@ -244,7 +255,9 @@ class OfflineQueue {
       [id, recordId, JSON.stringify(payload)],
     );
 
-    if (this.isOnline) {
+    const actuallyOnline = await networkMonitor.isOnline();
+
+    if (actuallyOnline) {
       await this.processBlockchainQueue();
     } else {
       await this.notifyUser(
@@ -376,16 +389,17 @@ class OfflineQueue {
 
   private async persistToQueue(
     mutation: Omit<QueuedMutation, 'id' | 'timestamp' | 'retries'>,
+    isOnline = true,
   ): Promise<void> {
     const queue = await this.getPersistentQueue();
     // Fetch current ETag for the entity so we can detect conflicts on push
     let etag: string | undefined;
-    if (mutation.data.id) {
+    if (mutation.data.id && isOnline) {
       try {
         const res = await apiClient.head(`/${mutation.type}s/${String(mutation.data.id)}`);
         etag = (res.headers as Record<string, string>)?.['etag'];
       } catch {
-        /* no ETag available */
+        /* no ETag available — skip silently when offline */
       }
     }
     const item: QueuedMutation = {
