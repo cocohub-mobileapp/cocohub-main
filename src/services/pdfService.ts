@@ -11,6 +11,8 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import QRCode from 'qrcode';
 
+import config from '../config';
+import { getToken } from './authService';
 import type { VaccinationReminder } from './vaccinationService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -35,6 +37,12 @@ export interface GeneratedCertificate {
   generatedAt: string;
 }
 
+export interface GeneratedClaimSummary {
+  filePath: string;
+  filename: string;
+  generatedAt: string;
+}
+
 // ─── QR code helper ───────────────────────────────────────────────────────────
 
 async function generateQRDataUrl(content: string): Promise<string> {
@@ -52,6 +60,14 @@ async function sha256(text: string): Promise<string> {
     hash = hash >>> 0; // convert to unsigned 32-bit
   }
   return hash.toString(16).padStart(8, '0');
+}
+
+function joinUrl(baseUrl: string, path: string): string {
+  return `${baseUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
+}
+
+function safeFilename(value: string): string {
+  return value.replace(/[^a-z0-9._-]/gi, '-');
 }
 
 // ─── PDF content builder ──────────────────────────────────────────────────────
@@ -166,6 +182,44 @@ export async function shareCertificate(filePath: string): Promise<void> {
   await Sharing.shareAsync(filePath, {
     mimeType: 'text/plain',
     dialogTitle: 'Share Vaccination Certificate',
+  });
+}
+
+/**
+ * Download the backend-generated insurance claim summary PDF.
+ */
+export async function generateInsuranceClaimSummary(claimId: string): Promise<GeneratedClaimSummary> {
+  const dir = FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? '';
+  if (!dir) throw new Error('File storage is not available on this device.');
+
+  const generatedAt = new Date().toISOString();
+  const filename = safeFilename(`insurance-claim-${claimId.slice(0, 8)}.pdf`);
+  const filePath = `${dir}${filename}`;
+  const token = await getToken();
+  const headers: Record<string, string> = { Accept: 'application/pdf' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const result = await FileSystem.downloadAsync(
+    joinUrl(config.api.baseUrl, `/insurance/claims/${claimId}/summary.pdf`),
+    filePath,
+    { headers },
+  );
+
+  return { filePath: result.uri, filename, generatedAt };
+}
+
+/**
+ * Share an insurance claim summary PDF via the native share sheet.
+ */
+export async function shareInsuranceClaimSummary(filePath: string): Promise<void> {
+  const isAvailable = await Sharing.isAvailableAsync();
+  if (!isAvailable) {
+    throw new Error('Sharing is not available on this device.');
+  }
+  await Sharing.shareAsync(filePath, {
+    mimeType: 'application/pdf',
+    UTI: 'com.adobe.pdf',
+    dialogTitle: 'Share Insurance Claim Summary',
   });
 }
 

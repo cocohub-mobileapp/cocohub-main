@@ -3,6 +3,7 @@ import {
   getPolicies,
   getPolicy,
   submitClaim,
+  generateClaimSummaryPdf,
   getClaims,
   getClaim,
   type InsurancePolicy,
@@ -153,6 +154,9 @@ describe('insuranceService', () => {
       expect(claim.petId).toBe(testPetId);
       expect(claim.amount).toBe(500);
       expect(claim.status).toBe('submitted');
+      expect(claim.statusEvents).toEqual([
+        expect.objectContaining({ status: 'submitted', label: 'Submitted' }),
+      ]);
     });
 
     it('should generate unique claim IDs', () => {
@@ -214,6 +218,26 @@ describe('insuranceService', () => {
 
       const updated = getClaim(claim.id);
       expect(updated?.status).toBe('under_review');
+      expect(updated?.statusEvents).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ status: 'submitted' }),
+          expect.objectContaining({ status: 'under_review', label: 'Under Review' }),
+        ]),
+      );
+    });
+
+    it('generates a PDF summary for a claim', async () => {
+      const claim = submitClaim(policyId, testUserId, {
+        amount: 500,
+        description: 'Treatment',
+        attachmentUrls: ['https://example.com/receipt.pdf'],
+      });
+
+      const result = await generateClaimSummaryPdf(claim.id);
+
+      expect(result).not.toBeNull();
+      expect(result?.filename).toMatch(/^insurance-claim-.+\.pdf$/);
+      expect(result?.buffer.slice(0, 4).toString()).toBe('%PDF');
     });
   });
 
@@ -267,7 +291,7 @@ describe('insuranceService', () => {
       expect(claims[1].id).toBe(claim1.id);
     });
 
-    it('should not include claims from other users', () => {
+    it('should not include claims from other users', async () => {
       submitClaim(policyId, testUserId, {
         amount: 500,
         description: 'Treatment',
@@ -331,6 +355,7 @@ describe('insuranceService', () => {
       expect(retrieved).toHaveProperty('description');
       expect(retrieved).toHaveProperty('status');
       expect(retrieved).toHaveProperty('attachmentUrls');
+      expect(retrieved).toHaveProperty('statusEvents');
       expect(retrieved).toHaveProperty('submittedAt');
       expect(retrieved).toHaveProperty('updatedAt');
     });

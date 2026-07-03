@@ -22,6 +22,11 @@ export interface InsuranceClaim {
   description: string;
   status: ClaimStatus;
   attachmentUrls: string[];
+  statusEvents?: Array<{
+    status: ClaimStatus;
+    label: string;
+    timestamp: string;
+  }>;
   submittedAt: string;
   updatedAt: string;
 }

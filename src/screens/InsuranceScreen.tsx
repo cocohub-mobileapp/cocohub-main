@@ -22,6 +22,7 @@ import {
   type InsuranceClaim,
   type InsurancePolicy,
 } from '../services/claimsService';
+import { generateInsuranceClaimSummary, shareInsuranceClaimSummary } from '../services/pdfService';
 
 type Screen = 'policies' | 'claims' | 'newClaim';
 
@@ -40,19 +41,19 @@ const TIMELINE_STEPS: { status: ClaimStatus; label: string }[] = [
 
 const STATUS_ORDER: ClaimStatus[] = ['submitted', 'under_review', 'approved'];
 
-/** Claims have no per-step timestamps, so derive a best-effort timeline from
- * the claim's submittedAt/updatedAt and current status. */
 function buildTimeline(claim: InsuranceClaim) {
   const currentIndex = STATUS_ORDER.indexOf(claim.status === 'denied' ? 'under_review' : claim.status);
+  const events = claim.statusEvents ?? [];
   return TIMELINE_STEPS.map((step, i) => {
     const stepIndex = STATUS_ORDER.indexOf(step.status);
     const reached = claim.status === 'denied' ? stepIndex <= 1 : stepIndex <= currentIndex;
     const isCurrent = claim.status !== 'denied' && stepIndex === currentIndex;
+    const event = events.find((item) => item.status === step.status);
     return {
       ...step,
       reached,
       isCurrent,
-      date: reached ? (i === 0 ? claim.submittedAt : claim.updatedAt) : null,
+      date: event?.timestamp ?? (reached ? (i === 0 ? claim.submittedAt : claim.updatedAt) : null),
     };
   });
 }
@@ -73,6 +74,13 @@ function buildAppealMailto(claim: InsuranceClaim): string {
   return `mailto:claims-appeals@cocohub.app?subject=${subject}&body=${body}`;
 }
 
+function parseAttachmentUrls(value: string): string[] {
+  return value
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 const InsuranceScreen: React.FC = () => {
   const [screen, setScreen] = useState<Screen>('policies');
   const [policies, setPolicies] = useState<InsurancePolicy[]>([]);
@@ -84,7 +92,9 @@ const InsuranceScreen: React.FC = () => {
   const [selectedPolicyId, setSelectedPolicyId] = useState('');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [attachmentUrls, setAttachmentUrls] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [exportingClaimId, setExportingClaimId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -125,22 +135,52 @@ const InsuranceScreen: React.FC = () => {
       Alert.alert('Validation', 'Please fill all fields');
       return;
     }
+    const parsedAmount = Number(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      Alert.alert('Validation', 'Claim amount must be greater than zero.');
+      return;
+    }
+    const parsedAttachments = parseAttachmentUrls(attachmentUrls);
+    const invalidAttachment = parsedAttachments.find((url) => !/^https?:\/\//i.test(url));
+    if (invalidAttachment) {
+      Alert.alert('Validation', 'Attachment URLs must start with http:// or https://.');
+      return;
+    }
     setSubmitting(true);
     try {
       const claim = await submitClaim({
         policyId: selectedPolicyId,
-        amount: parseFloat(amount),
+        amount: parsedAmount,
         description,
+        attachmentUrls: parsedAttachments,
       });
       setClaimsData((prev) => [claim, ...prev]);
       Alert.alert('Submitted', `Claim #${claim.id.slice(0, 8)} submitted.`);
+      setAmount('');
+      setDescription('');
+      setAttachmentUrls('');
       setScreen('claims');
     } catch {
       Alert.alert('Error', 'Failed to submit claim');
     } finally {
       setSubmitting(false);
     }
-  }, [selectedPolicyId, amount, description]);
+  }, [selectedPolicyId, amount, description, attachmentUrls]);
+
+  const handleExportClaimSummary = useCallback(async (claim: InsuranceClaim) => {
+    setExportingClaimId(claim.id);
+    try {
+      const summary = await generateInsuranceClaimSummary(claim.id);
+      await shareInsuranceClaimSummary(summary.filePath);
+    } catch (err) {
+      Alert.alert(
+        'Export Failed',
+        err instanceof Error ? err.message : 'Unable to export claim summary.',
+      );
+    } finally {
+      setExportingClaimId(null);
+    }
+  }, []);
 
   if (loading) return <ActivityIndicator style={styles.loader} size="large" color="#4299e1" />;
 
@@ -265,6 +305,7 @@ const InsuranceScreen: React.FC = () => {
               </TouchableOpacity>
               <Text style={styles.title}>Claim #{claimDetail.id.slice(0, 8).toUpperCase()}</Text>
               <Text style={styles.cardSub}>{claimDetail.description}</Text>
+              <Text style={styles.cardSub}>Amount: ${claimDetail.amount.toFixed(2)}</Text>
 
               <View style={styles.timeline}>
                 {buildTimeline(claimDetail).map((step, i) => (
@@ -322,6 +363,32 @@ const InsuranceScreen: React.FC = () => {
                   </View>
                 )}
               </View>
+
+              <View style={styles.attachmentSection}>
+                <Text style={styles.sectionTitle}>Attachments</Text>
+                {claimDetail.attachmentUrls.length === 0 ? (
+                  <Text style={styles.emptyInline}>No attachments submitted.</Text>
+                ) : (
+                  claimDetail.attachmentUrls.map((url, index) => (
+                    <Text key={`${url}-${index}`} style={styles.attachmentUrl} numberOfLines={1}>
+                      {index + 1}. {url}
+                    </Text>
+                  ))
+                )}
+              </View>
+
+              <TouchableOpacity
+                style={[styles.exportBtn, exportingClaimId === claimDetail.id && styles.btnDisabled]}
+                onPress={() => void handleExportClaimSummary(claimDetail)}
+                disabled={exportingClaimId === claimDetail.id}
+                accessibilityLabel="Export claim summary PDF"
+              >
+                {exportingClaimId === claimDetail.id ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.exportBtnText}>Export Summary PDF</Text>
+                )}
+              </TouchableOpacity>
 
               {claimDetail.status === 'denied' && (
                 <TouchableOpacity
@@ -381,6 +448,19 @@ const InsuranceScreen: React.FC = () => {
         numberOfLines={4}
         accessibilityLabel="Claim description"
       />
+
+      <Text style={styles.label}>Attachments</Text>
+      <TextInput
+        style={[styles.input, styles.textAreaSmall]}
+        value={attachmentUrls}
+        onChangeText={setAttachmentUrls}
+        placeholder="Paste receipt or invoice URLs, one per line"
+        multiline
+        numberOfLines={3}
+        autoCapitalize="none"
+        accessibilityLabel="Claim attachment URLs"
+      />
+      <Text style={styles.helpText}>Receipts, invoices, or vet documents can be added as URLs.</Text>
 
       <TouchableOpacity
         style={[styles.btn, submitting && styles.btnDisabled]}
@@ -460,6 +540,8 @@ const styles = StyleSheet.create({
     color: '#1a202c',
   },
   textArea: { height: 100, textAlignVertical: 'top' },
+  textAreaSmall: { height: 76, textAlignVertical: 'top' },
+  helpText: { fontSize: 12, color: '#718096', marginTop: 6 },
   policyOption: {
     borderWidth: 1,
     borderColor: '#e2e8f0',
@@ -470,6 +552,7 @@ const styles = StyleSheet.create({
   policyOptionActive: { borderColor: '#4299e1', backgroundColor: '#ebf8ff' },
   policyOptionText: { fontSize: 14, color: '#2d3748' },
   detailContent: { padding: 16, paddingBottom: 40 },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#1a202c', marginBottom: 8 },
   timeline: { marginTop: 24 },
   timelineRow: { flexDirection: 'row' },
   timelineMarkerCol: { width: 24, alignItems: 'center' },
@@ -492,6 +575,18 @@ const styles = StyleSheet.create({
   timelineLabelDenied: { color: '#e53e3e' },
   timelineDate: { fontSize: 12, color: '#718096', marginTop: 2 },
   timelineEta: { fontSize: 12, color: '#4299e1', marginTop: 4, fontWeight: '600' },
+  attachmentSection: { marginTop: 4, marginBottom: 16 },
+  emptyInline: { fontSize: 13, color: '#718096' },
+  attachmentUrl: { fontSize: 13, color: '#2b6cb0', marginBottom: 4 },
+  exportBtn: {
+    marginTop: 4,
+    marginBottom: 12,
+    backgroundColor: '#2b6cb0',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  exportBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   appealBtn: {
     marginTop: 12,
     backgroundColor: '#e53e3e',
