@@ -1,6 +1,6 @@
 import apiClient from '../apiClient';
 import { getItem, setItem } from '../localDB';
-import { networkMonitor } from '../utils/networkMonitor';
+import { networkMonitor } from '../../utils/networkMonitor';
 import { SyncService } from '../syncService';
 
 jest.mock('../localDB', () => ({
@@ -10,7 +10,7 @@ jest.mock('../localDB', () => ({
 }));
 
 jest.mock('../apiClient');
-jest.mock('../utils/networkMonitor', () => ({
+jest.mock('../../utils/networkMonitor', () => ({
   networkMonitor: { isOnline: jest.fn().mockResolvedValue(true) },
 }));
 
