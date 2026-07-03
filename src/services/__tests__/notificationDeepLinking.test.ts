@@ -8,6 +8,29 @@
  * - All notification types (medication, appointment, vaccination, SOS)
  */
 
+jest.mock('../localDB', () => ({
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+}));
+
+jest.mock('expo-notifications', () => ({
+  getPermissionsAsync: jest.fn(),
+  requestPermissionsAsync: jest.fn(),
+  setNotificationHandler: jest.fn(),
+  scheduleNotificationAsync: jest.fn(),
+  cancelScheduledNotificationAsync: jest.fn(),
+  getAllScheduledNotificationsAsync: jest.fn(),
+}));
+
+jest.mock('../apiClient', () => ({
+  get: jest.fn(),
+  post: jest.fn(),
+  put: jest.fn(),
+  delete: jest.fn(),
+  patch: jest.fn(),
+}));
+
 import { extractDeepLinkParams } from '../notificationService';
 
 describe('Notification Deep Linking', () => {

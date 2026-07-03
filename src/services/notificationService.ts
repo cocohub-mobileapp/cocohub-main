@@ -1,4 +1,4 @@
-﻿import * as Notifications from 'expo-notifications';
+import * as Notifications from 'expo-notifications';
 import { Linking } from 'react-native';
 
 import apiClient from './apiClient';
@@ -20,6 +20,7 @@ export interface Appointment {
   title: string;
   date: string;
   location?: string;
+  petId?: string;
 }
 
 export interface Vaccination {
@@ -313,8 +314,9 @@ export const extractDeepLinkParams = (
     };
   }
 
-  if (type === 'vaccination' && data.vaccinationId) {
-    const params: Record<string, any> = { vaccinationId: data.vaccinationId };
+  if (type === 'vaccination') {
+    const params: Record<string, any> = {};
+    if (data.vaccinationId) params.vaccinationId = data.vaccinationId;
     if (data.petId) params.petId = data.petId;
     if (data.dueDate) params.dueDate = data.dueDate;
     return {
@@ -344,9 +346,6 @@ export const extractDeepLinkParams = (
   }
   if (type === 'appointment') {
     return { route: 'Appointments', params: {} };
-  }
-  if (type === 'vaccination') {
-    return { route: 'Vaccinations', params: {} };
   }
   if (type === 'sos') {
     return { route: 'Emergency', params: {} };
@@ -567,6 +566,7 @@ export const scheduleMedicationReminder = async (medication: Medication): Promis
             type: 'medication' as NotificationGroup,
             category: resolveNotificationCategory('medication'),
             medicationId: medication.id,
+            petId: medication.petId,
           },
           categoryIdentifier: resolveNotificationCategory('medication'),
         },
@@ -610,6 +610,7 @@ export const scheduleAppointmentNotification = async (
         type: 'appointment' as NotificationGroup,
         category: resolveNotificationCategory('appointment'),
         appointmentId: appointment.id,
+        petId: appointment.petId,
       },
       categoryIdentifier: resolveNotificationCategory('appointment'),
     },

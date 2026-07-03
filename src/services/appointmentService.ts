@@ -319,6 +319,7 @@ export async function scheduleAppointmentReminders(
           title: `Reminder: ${title} tomorrow`,
           date: new Date(apptMs - 24 * 60 * 60 * 1000).toISOString(),
           location: appointment.location,
+          petId: appointment.petId,
         }).catch(() => null)
       : null;
 
@@ -329,6 +330,7 @@ export async function scheduleAppointmentReminders(
           title: `Reminder: ${title} in 1 hour`,
           date: new Date(apptMs - 60 * 60 * 1000).toISOString(),
           location: appointment.location,
+          petId: appointment.petId,
         }).catch(() => null)
       : null;
 

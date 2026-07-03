@@ -18,6 +18,14 @@ import {
   type ScheduledNotification,
 } from '../notificationService';
 
+jest.mock('../apiClient', () => ({
+  get: jest.fn(),
+  post: jest.fn(),
+  put: jest.fn(),
+  delete: jest.fn(),
+  patch: jest.fn(),
+}));
+
 jest.mock('../localDB', () => ({
   getItem: jest.fn(),
   setItem: jest.fn(),

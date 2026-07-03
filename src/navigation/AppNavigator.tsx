@@ -19,8 +19,10 @@ import OnboardingScreen from '../screens/OnboardingScreen';
 import PetHealthDashboardScreen from '../screens/PetHealthDashboardScreen';
 import PetListScreen from '../screens/PetListScreen';
 // ── Non-critical screens (lazy loaded) ───────────────────────────────────────
+import { usePetSelector } from '../components/GlobalPetSelector';
 const AdoptionScreen = React.lazy(() => import('../screens/AdoptionScreen'));
 const AppointmentScreen = React.lazy(() => import('../screens/AppointmentScreen'));
+const AppointmentDetailScreen = React.lazy(() => import('../screens/AppointmentDetailScreen'));
 const AuditHistoryScreen = React.lazy(() => import('../screens/AuditHistoryScreen'));
 const ClinicalNotesScreen = React.lazy(() => import('../screens/ClinicalNotesScreen'));
 const CommunityScreen = React.lazy(() => import('../screens/CommunityScreen'));
@@ -467,12 +469,18 @@ export const navigationRef = React.createRef<
   }
 >();
 
+let selectedPetIdSetter: ((id: string) => void) | null = null;
+let pendingDeepLinkData: Record<string, unknown> | null = null;
+
 /**
  * Handle notification deep linking
  * Navigates to the appropriate screen based on notification data
  */
 export const handleNotificationDeepLink = (data: Record<string, unknown>): void => {
-  if (!navigationRef.current) return;
+  if (!navigationRef.current) {
+    pendingDeepLinkData = data;
+    return;
+  }
 
   const deepLink = extractDeepLinkParams(data);
   if (!deepLink) return;
@@ -480,19 +488,53 @@ export const handleNotificationDeepLink = (data: Record<string, unknown>): void 
   // Get the current state to know if we're in the Main tab
   const nav = navigationRef.current;
 
-  // Navigate to the appropriate tab/screen
-  const state = (nav as any)?.getRootState?.();
-  const isMainScreen = state?.routes?.[0]?.name === 'Main';
+  // Switch selected pet if petId is provided in params
+  if (deepLink.params?.petId && selectedPetIdSetter) {
+    selectedPetIdSetter(deepLink.params.petId);
+  }
 
-  if (isMainScreen) {
-    // We're in Main, navigate within tabs
-    const mainState = state?.routes?.[0]?.state;
+  // Navigate according to the route
+  if (deepLink.route === 'Medications') {
     (nav as any)?.navigate?.('Main', {
-      screen: deepLink.route,
-      params: deepLink.params,
+      screen: 'Care',
+      params: {
+        screen: 'Medications',
+        medicationId: deepLink.params?.medicationId,
+      },
+    });
+  } else if (deepLink.route === 'Vaccinations') {
+    (nav as any)?.navigate?.('Main', {
+      screen: 'Care',
+      params: {
+        screen: 'Vaccinations',
+        vaccinationId: deepLink.params?.vaccinationId,
+      },
+    });
+  } else if (deepLink.route === 'Appointments') {
+    (nav as any)?.navigate?.('AppointmentDetail', {
+      appointmentId: deepLink.params?.appointmentId,
+      petId: deepLink.params?.petId,
+      appointmentTitle: data.title || data.body,
+      appointmentDate: data.date,
+    });
+  } else if (deepLink.route === 'Emergency') {
+    (nav as any)?.navigate?.('Main', {
+      screen: 'More',
+      params: {
+        screen: 'Emergency',
+        params: deepLink.params,
+      },
+    });
+  } else if (deepLink.route === 'PetDetail') {
+    (nav as any)?.navigate?.('Main', {
+      screen: 'PetList',
+      params: {
+        screen: 'PetDetail',
+        params: deepLink.params,
+      },
     });
   } else {
-    // App might be in cold start, navigate to Main first
+    // Fallback to Main screen navigation
     (nav as any)?.navigate?.('Main', {
       screen: deepLink.route,
       params: deepLink.params,
@@ -502,6 +544,15 @@ export const handleNotificationDeepLink = (data: Record<string, unknown>): void 
 
 // ─── Root Navigator ───────────────────────────────────────────────────────────
 export default function AppNavigator() {
+  const { setSelectedPetId } = usePetSelector();
+
+  React.useEffect(() => {
+    selectedPetIdSetter = setSelectedPetId;
+    return () => {
+      selectedPetIdSetter = null;
+    };
+  }, [setSelectedPetId]);
+
   const navRef = React.useRef<
     Parameters<typeof NavigationContainer>[0] & {
       getCurrentRoute?: () => { name?: string } | undefined;
@@ -538,12 +589,19 @@ export default function AppNavigator() {
     })();
   }, []);
 
-  // Set the ref for external use (e.g., from App.tsx)
+  // Set the ref for external use (e.g., from App.tsx) and process queued deep links
   React.useEffect(() => {
     if (navRef.current) {
       Object.assign(navigationRef, navRef);
+      if (pendingDeepLinkData) {
+        const data = pendingDeepLinkData;
+        pendingDeepLinkData = null;
+        setTimeout(() => {
+          handleNotificationDeepLink(data);
+        }, 100);
+      }
     }
-  }, []);
+  }, [initialRoute]);
 
   // Listen for notification responses (taps) with deep linking
   React.useEffect(() => {
@@ -640,6 +698,17 @@ export default function AppNavigator() {
               {() => (
                 <LazyScreen screenName="LostFound">
                   <LostFoundScreen />
+                </LazyScreen>
+              )}
+            </RootStack.Screen>
+
+            <RootStack.Screen
+              name="AppointmentDetail"
+              options={{ headerShown: true, title: 'Appointment Details' }}
+            >
+              {({ route }) => (
+                <LazyScreen screenName="AppointmentDetail">
+                  <AppointmentDetailScreen route={route as any} />
                 </LazyScreen>
               )}
             </RootStack.Screen>

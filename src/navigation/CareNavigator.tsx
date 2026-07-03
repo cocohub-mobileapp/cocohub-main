@@ -5,7 +5,8 @@
  * to avoid native dependency conflicts.
  */
 
-import React, { Suspense, useState } from 'react';
+import { useRoute } from '@react-navigation/native';
+import React, { Suspense, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import GlobalPetSelector from '../components/GlobalPetSelector';
@@ -33,7 +34,17 @@ function Loader() {
 
 export default function CareNavigator() {
   const { colors } = useTheme();
+  const route = useRoute<any>();
   const [active, setActive] = useState<CareTab>('Medications');
+
+  useEffect(() => {
+    if (route.params?.screen) {
+      const screenParam = route.params.screen;
+      if (screenParam === 'Medications' || screenParam === 'Vaccinations' || screenParam === 'Alerts') {
+        setActive(screenParam);
+      }
+    }
+  }, [route.params?.screen]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
