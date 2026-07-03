@@ -71,7 +71,7 @@ describe('backend appointmentService', () => {
   describe('getUpcomingAppointments', () => {
     it('should filter only upcoming scheduled appointments', async () => {
       const pastApt = { ...mockAppointment, id: 'apt-past', date: '2020-01-01' };
-      const upcomingApt = { ...mockAppointment, id: 'apt-future', date: '2026-01-01' };
+      const upcomingApt = { ...mockAppointment, id: 'apt-future', date: '2030-01-01' };
       const cancelledApt = {
         ...mockAppointment,
         id: 'apt-cancelled',

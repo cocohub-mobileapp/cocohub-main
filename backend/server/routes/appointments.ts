@@ -23,7 +23,8 @@ async function withVetLock<T>(vetId: string, fn: () => Promise<T>): Promise<T> {
   vetLocks.set(vetId, next);
   try {
     await prev;
-    return await fn();
+    const result = await fn();
+    return result;
   } finally {
     resolve();
     if (vetLocks.get(vetId) === next) vetLocks.delete(vetId);
@@ -356,7 +357,7 @@ router.post('/:id/cancel', async (req: AuthenticatedRequest, res) => {
   }
 
   const t = new Date().toISOString();
-  const { reason } = req.body as { reason?: string };
+  const reason = req.body?.reason as string | undefined;
   const cancelled: StoredAppointment = {
     ...row,
     status: AppointmentStatus.CANCELLED,

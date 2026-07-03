@@ -165,6 +165,15 @@ export interface Appointment {
   /** Previous appointment date/time when rescheduled */
   rescheduledFrom?: string;
 
+  /** Recurrence rule for repeating appointments */
+  recurrence?: 'none' | 'daily' | 'weekly' | 'monthly';
+
+  /** 
+   * Date until which the appointment repeats.
+   * ISO 8601 date string format: "YYYY-MM-DD"
+   */
+  recurrenceEndDate?: string;
+
   // ─── UI convenience fields ────────────────────────────────────────────────
   /** Human-readable title for the appointment (e.g. "Annual Checkup") */
   title?: string;
