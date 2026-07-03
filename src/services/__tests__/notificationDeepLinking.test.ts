@@ -8,7 +8,10 @@
  * - All notification types (medication, appointment, vaccination, SOS)
  */
 
-import { extractDeepLinkParams } from '../notificationService';
+import {
+  extractDeepLinkParams,
+  resolveNotificationNavigationTarget,
+} from '../notificationService';
 
 describe('Notification Deep Linking', () => {
   describe('extractDeepLinkParams', () => {
@@ -159,6 +162,21 @@ describe('Notification Deep Linking', () => {
     });
 
     describe('Pet-based fallback', () => {
+      it('routes birthday notifications to pet detail', () => {
+        const data = {
+          type: 'birthday',
+          petId: 'pet-birthday-001',
+          category: 'general',
+        };
+
+        const result = extractDeepLinkParams(data);
+
+        expect(result).toEqual({
+          route: 'PetDetail',
+          params: { petId: 'pet-birthday-001' },
+        });
+      });
+
       it('falls back to PetDetail with petId when available', () => {
         const data = {
           type: 'health',
@@ -399,6 +417,123 @@ describe('Notification Deep Linking', () => {
         expect(result).toEqual({
           route: 'Medications',
           params: { medicationId: 'med-001:special-chars-@-#' },
+        });
+      });
+    });
+
+    describe('Navigation target mapping', () => {
+      it('maps medication reminders to the Care medications tab', () => {
+        const result = resolveNotificationNavigationTarget({
+          type: 'medication',
+          medicationId: 'med-123',
+          petId: 'pet-001',
+        });
+
+        expect(result).toEqual({
+          route: 'Main',
+          params: {
+            screen: 'Care',
+            params: {
+              medicationId: 'med-123',
+              petId: 'pet-001',
+              initialTab: 'Medications',
+            },
+          },
+        });
+      });
+
+      it('maps appointments with pet context to AppointmentDetail', () => {
+        const result = resolveNotificationNavigationTarget({
+          type: 'appointment',
+          appointmentId: 'apt-456',
+          petId: 'pet-001',
+          appointmentTitle: 'Annual checkup',
+          appointmentDate: '2026-07-15T09:00:00.000Z',
+        });
+
+        expect(result).toEqual({
+          route: 'AppointmentDetail',
+          params: {
+            appointmentId: 'apt-456',
+            petId: 'pet-001',
+            appointmentTitle: 'Annual checkup',
+            appointmentDate: '2026-07-15T09:00:00.000Z',
+          },
+        });
+      });
+
+      it('maps appointment reminders without pet context to Schedule', () => {
+        const result = resolveNotificationNavigationTarget({
+          type: 'appointment',
+          appointmentId: 'apt-456',
+        });
+
+        expect(result).toEqual({
+          route: 'Main',
+          params: {
+            screen: 'Schedule',
+            params: {
+              appointmentId: 'apt-456',
+            },
+          },
+        });
+      });
+
+      it('maps vaccination reminders to the Care vaccinations tab', () => {
+        const result = resolveNotificationNavigationTarget({
+          type: 'vaccination',
+          vaccinationId: 'vac-789',
+          petId: 'pet-001',
+          dueDate: '2026-07-10',
+        });
+
+        expect(result).toEqual({
+          route: 'Main',
+          params: {
+            screen: 'Care',
+            params: {
+              vaccinationId: 'vac-789',
+              petId: 'pet-001',
+              dueDate: '2026-07-10',
+              initialTab: 'Vaccinations',
+            },
+          },
+        });
+      });
+
+      it('maps SOS alerts to the Emergency screen inside More', () => {
+        const result = resolveNotificationNavigationTarget({
+          type: 'sos',
+          sosId: 'sos-911',
+        });
+
+        expect(result).toEqual({
+          route: 'Main',
+          params: {
+            screen: 'More',
+            params: {
+              screen: 'Emergency',
+              params: { sosId: 'sos-911' },
+            },
+          },
+        });
+      });
+
+      it('maps birthday notifications to pet detail inside the PetList stack', () => {
+        const result = resolveNotificationNavigationTarget({
+          type: 'pet_birthday',
+          petId: 'pet-birthday-001',
+        });
+
+        expect(result).toEqual({
+          route: 'Main',
+          params: {
+            screen: 'PetList',
+            params: {
+              screen: 'PetDetail',
+              params: { petId: 'pet-birthday-001' },
+            },
+          },
         });
       });
     });
