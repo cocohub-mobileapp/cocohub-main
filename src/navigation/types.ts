@@ -20,12 +20,20 @@ export type RootStackParamList = {
 };
 
 // ─── Main Tab ─────────────────────────────────────────────────────────────────
+export type CareInitialTab = 'Medications' | 'Vaccinations' | 'Alerts';
+
 export type MainTabParamList = {
-  PetList: undefined;        // 🐾 Pets
-  Care: undefined;           // 💊 Care (Meds + Vaccines + Alerts)
-  Schedule: undefined;       // 📅 Schedule (Appointments)
+  PetList:
+    | { screen?: keyof PetStackParamList; params?: Record<string, unknown> }
+    | undefined; // 🐾 Pets
+  Care:
+    | ({ initialTab?: CareInitialTab } & Record<string, unknown>)
+    | undefined; // 💊 Care (Meds + Vaccines + Alerts)
+  Schedule: Record<string, unknown> | undefined; // 📅 Schedule (Appointments)
   Search: undefined;         // 🔍 Search
-  More: undefined;           // ☰  More (Profile, Community, etc.)
+  More:
+    | { screen?: string; params?: Record<string, unknown> }
+    | undefined; // ☰  More (Profile, Community, etc.)
 };
 
 // ─── Pet Stack (nested inside PetList tab) ────────────────────────────────────

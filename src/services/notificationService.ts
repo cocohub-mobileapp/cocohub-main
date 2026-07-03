@@ -65,6 +65,9 @@ export type NotificationGroup =
   | 'appointment'
   | 'vaccination'
   | 'alert'
+  | 'health_alert'
+  | 'community'
+  | 'community_reply'
   | 'scheduled'
   | 'sos';
 export type NotificationAction =
@@ -102,6 +105,9 @@ const CATEGORY_BY_GROUP: Record<NotificationGroup, NotificationCategory> = {
   appointment: 'appointments',
   vaccination: 'health',
   alert: 'health',
+  health_alert: 'health',
+  community: 'general',
+  community_reply: 'general',
   scheduled: 'general',
   sos: 'health',
 };
@@ -291,13 +297,49 @@ export const openApp = async (notification: Notifications.Notification): Promise
 
 // ─── Deep Link Builders ───────────────────────────────────────────────────────
 
+const hasNotificationParam = (value: unknown): boolean =>
+  value !== undefined && value !== null && value !== '';
+
+const pickNotificationParams = (
+  data: Record<string, unknown>,
+  keys: string[],
+): Record<string, unknown> => {
+  return keys.reduce<Record<string, unknown>>((params, key) => {
+    if (hasNotificationParam(data[key])) {
+      params[key] = data[key];
+    }
+    return params;
+  }, {});
+};
+
+const firstNotificationParam = (
+  data: Record<string, unknown>,
+  keys: string[],
+): unknown | undefined => keys.map((key) => data[key]).find(hasNotificationParam);
+
+const isHealthAlertPayload = (type: string | undefined, data: Record<string, unknown>): boolean =>
+  type === 'health_alert' ||
+  type === 'healthAlert' ||
+  type === 'health-alert' ||
+  (type === 'alert' &&
+    ['alertId', 'healthAlertId', 'riskLevel', 'predictedIssue'].some((key) =>
+      hasNotificationParam(data[key]),
+    ));
+
+const isCommunityPayload = (type: string | undefined, category: unknown): boolean =>
+  type === 'community' ||
+  type === 'community_reply' ||
+  type === 'comment_reply' ||
+  type === 'reply' ||
+  category === 'community';
+
 /**
  * Extract deep link parameters from notification data
  */
 export const extractDeepLinkParams = (
   data: Record<string, unknown>,
 ): { route: string; params: Record<string, any> } | null => {
-  const type = data.type as NotificationGroup | undefined;
+  const type = typeof data.type === 'string' ? data.type : undefined;
 
   if (type === 'medication' && data.medicationId) {
     return {
@@ -330,15 +372,31 @@ export const extractDeepLinkParams = (
     };
   }
 
-  // Fallback to petId if available
-  if (data.petId) {
+  if (isHealthAlertPayload(type, data)) {
+    const params = pickNotificationParams(data, [
+      'petId',
+      'alertId',
+      'riskLevel',
+      'predictedIssue',
+    ]);
+    const alertId = firstNotificationParam(data, ['alertId', 'healthAlertId']);
+    if (alertId) params.alertId = alertId;
+
     return {
-      route: 'PetDetail',
-      params: { petId: data.petId },
+      route: params.petId ? 'PetHealthDashboard' : 'HealthAlerts',
+      params,
     };
   }
 
-  // Type-based fallback without specific ID
+  if (isCommunityPayload(type, data.category)) {
+    return {
+      route: 'Community',
+      params: pickNotificationParams(data, ['postId', 'commentId', 'replyId', 'threadId']),
+    };
+  }
+
+  // Type-based fallback without specific ID. Keep this before pet fallback so
+  // known notification families still land on their feature screen.
   if (type === 'medication') {
     return { route: 'Medications', params: {} };
   }
@@ -346,10 +404,21 @@ export const extractDeepLinkParams = (
     return { route: 'Appointments', params: {} };
   }
   if (type === 'vaccination') {
-    return { route: 'Vaccinations', params: {} };
+    return {
+      route: 'Vaccinations',
+      params: pickNotificationParams(data, ['petId', 'dueDate']),
+    };
   }
   if (type === 'sos') {
     return { route: 'Emergency', params: {} };
+  }
+
+  // Fallback to petId if available
+  if (data.petId) {
+    return {
+      route: 'PetDetail',
+      params: { petId: data.petId },
+    };
   }
 
   return null;
