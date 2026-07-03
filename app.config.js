@@ -102,6 +102,7 @@ module.exports = {
           uploadSourceMaps: true,
         },
       ],
+      './plugins/withAndroidLockScreen.js',
       // Widget support plugin disabled for local web dev (native builds only)
       // [
       //   './expoWidgetPlugin.js',
