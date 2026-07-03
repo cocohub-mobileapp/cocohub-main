@@ -1,4 +1,4 @@
-﻿import apiClient from './apiClient';
+import apiClient from './apiClient';
 import { executeSql, getItem, setItem } from './localDB';
 import { sendAlertNotification } from './notificationService';
 import syncService, { type SyncAction, type SyncEntityType, type SyncStatus } from './syncService';
@@ -139,9 +139,6 @@ class OfflineQueue {
     // Persist to our own queue key for resilience
     await this.persistToQueue({ type, action, data });
 
-    // Also enqueue in syncService (which manages retries + conflicts)
-    await syncService.enqueue(type, action, data);
-
     if (this.isOnline) {
       await this.processQueue();
     } else {
@@ -173,8 +170,17 @@ class OfflineQueue {
         const headers: Record<string, string> = {};
         if (mutation.etag) headers['If-Match'] = mutation.etag;
 
-        const endpoint = `/${mutation.type}s/${String(mutation.data.id ?? '')}`;
-        const response = await apiClient.put(endpoint, mutation.data, { headers });
+        let response;
+        if (mutation.action === 'create') {
+          const endpoint = `/${mutation.type}s`;
+          response = await apiClient.post(endpoint, mutation.data, { headers });
+        } else if (mutation.action === 'delete') {
+          const endpoint = `/${mutation.type}s/${String(mutation.data.id ?? '')}`;
+          response = await apiClient.delete(endpoint, { headers });
+        } else {
+          const endpoint = `/${mutation.type}s/${String(mutation.data.id ?? '')}`;
+          response = await apiClient.put(endpoint, mutation.data, { headers });
+        }
 
         // Capture updated ETag for future mutations on this entity
         const newEtag = (response.headers as Record<string, string>)?.['etag'];
@@ -301,7 +307,7 @@ class OfflineQueue {
     const pendingConflicts = await this.getPendingConflicts();
     return {
       isOnline: this.isOnline,
-      pendingCount: Math.max(syncStatus.pendingCount, queue.length),
+      pendingCount: queue.length,
       isSyncing: syncStatus.isSyncing,
       lastSync: syncStatus.lastSync,
       failedCount: syncStatus.failedCount,
@@ -468,9 +474,10 @@ class OfflineQueue {
 
   private async emitStatusFromSync(syncStatus: SyncStatus): Promise<void> {
     const pendingConflicts = await this.getPendingConflicts();
+    const queue = await this.getPersistentQueue();
     const status: OfflineQueueStatus = {
       isOnline: this.isOnline,
-      pendingCount: syncStatus.pendingCount,
+      pendingCount: queue.length,
       isSyncing: syncStatus.isSyncing,
       lastSync: syncStatus.lastSync,
       failedCount: syncStatus.failedCount,
