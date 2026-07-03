@@ -84,5 +84,26 @@ describe('SOS Feature Logic', () => {
       // Verify phone call (after SMS in this implementation's logic)
       expect(Linking.openURL).toHaveBeenCalledWith('tel:111');
     });
+
+    it('should avoid foreground SMS and phone intents for lock-screen SOS actions', async () => {
+      const mockPosition = { coords: { latitude: 40, longitude: -70 } };
+      (Geolocation.getCurrentPosition as jest.Mock).mockImplementation((success) =>
+        success(mockPosition),
+      );
+
+      const contacts = [
+        { id: '1', name: 'Contact 1', phoneNumber: '111', type: 'emergency', available24h: true },
+      ];
+
+      const { getItem } = require('../localDB');
+      (getItem as jest.Mock).mockResolvedValue(JSON.stringify(contacts));
+
+      const payload = await emergencyService.triggerSOS('Help me!', {
+        allowForegroundActions: false,
+      });
+
+      expect(payload.location).toEqual({ latitude: 40, longitude: -70 });
+      expect(Linking.openURL).not.toHaveBeenCalled();
+    });
   });
 });

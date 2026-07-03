@@ -1,5 +1,5 @@
 ﻿import * as Notifications from 'expo-notifications';
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 
 import apiClient from './apiClient';
 import { getItem, setItem, removeItem } from './localDB';
@@ -73,7 +73,8 @@ export type NotificationAction =
   | 'mark_as_read'
   | 'mark_as_taken'
   | 'skip_dose'
-  | 'snooze_30min';
+  | 'snooze_30min'
+  | 'trigger_sos';
 
 // ─── Deep Link Navigation Types ───────────────────────────────────────────────
 export interface DeepLinkParams {
@@ -140,6 +141,10 @@ const ACTION_MARK_AS_READ = 'MARK_AS_READ';
 const ACTION_MARK_AS_TAKEN = 'MARK_AS_TAKEN';
 const ACTION_SNOOZE_30MIN = 'SNOOZE_30MIN';
 const ACTION_SKIP_DOSE = 'SKIP_DOSE';
+const ACTION_TRIGGER_SOS = 'TRIGGER_SOS';
+const SOS_NOTIFICATION_ENTITY_ID = 'sos-lock-screen';
+const SOS_NOTIFICATION_CATEGORY = 'sos';
+const SOS_NOTIFICATION_CHANNEL = 'sos-emergency';
 
 const DEFAULT_PREFS: NotificationPreferences = {
   medicationReminders: true,
@@ -240,11 +245,35 @@ export const registerNotificationActions = async (): Promise<void> => {
     },
   ];
 
+  const sosActions = [
+    {
+      identifier: ACTION_TRIGGER_SOS,
+      buttonTitle: 'Send SOS',
+      options: { opensAppToForeground: false, isAuthenticationRequired: false },
+    },
+    {
+      identifier: ACTION_OPEN,
+      buttonTitle: 'Open',
+      options: { opensAppToForeground: true },
+    },
+  ];
+
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync(SOS_NOTIFICATION_CHANNEL, {
+      name: 'Emergency SOS',
+      importance: Notifications.AndroidImportance.MAX,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      vibrationPattern: [0, 500, 200, 500],
+      lightColor: '#e53e3e',
+    });
+  }
+
   await Promise.all([
     Notifications.setNotificationCategoryAsync('medication', medicationActions),
     ...['appointment', 'vaccination', 'alert', 'scheduled'].map((category) =>
       Notifications.setNotificationCategoryAsync(category, defaultActions),
     ),
+    Notifications.setNotificationCategoryAsync(SOS_NOTIFICATION_CATEGORY, sosActions),
   ]);
 };
 
@@ -408,10 +437,27 @@ async function handleSkipDose(notification: Notifications.Notification): Promise
   }
 }
 
+async function handleTriggerSOSAction(notification: Notifications.Notification): Promise<void> {
+  try {
+    const emergencyService = (await import('./emergencyService')).default;
+    await emergencyService.triggerSOS('Pet emergency - need immediate help', {
+      allowForegroundActions: false,
+    });
+  } catch {
+    // The lock-screen action must not crash notification handling. The SOS
+    // button remains available inside the app if background execution fails.
+  }
+}
+
 export const handleNotificationAction = async (
   response: Notifications.NotificationResponse,
 ): Promise<void> => {
   const { actionIdentifier, notification } = response;
+
+  if (actionIdentifier === ACTION_TRIGGER_SOS) {
+    await handleTriggerSOSAction(notification);
+    return;
+  }
 
   if (actionIdentifier === ACTION_MARK_AS_TAKEN) {
     await handleMarkAsTaken(notification);
@@ -435,6 +481,14 @@ export const handleNotificationAction = async (
 
   if (actionIdentifier === ACTION_MARK_AS_READ) {
     await markAsRead(notification.request.identifier);
+    return;
+  }
+
+  if (
+    actionIdentifier === ACTION_OPEN &&
+    notification.request.content.data?.type === 'sos'
+  ) {
+    await Linking.openURL(getNotificationUrl(notification.request.content.data));
     return;
   }
 
@@ -690,6 +744,36 @@ export const sendAlertNotification = async (
     trigger: null, // fire immediately
   });
   return notificationId;
+};
+
+export const scheduleSOSLockScreenNotification = async (): Promise<string> => {
+  await cancelEntityNotification(SOS_NOTIFICATION_ENTITY_ID);
+
+  const prefs = await getPreferences();
+  const notificationId = await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'Emergency SOS ready',
+      body: 'Tap Send SOS from the lock screen to alert your emergency contacts.',
+      sound: prefs.soundEnabled ? 'default' : undefined,
+      data: {
+        type: 'sos' as NotificationGroup,
+        category: resolveNotificationCategory('sos'),
+        notificationId: SOS_NOTIFICATION_ENTITY_ID,
+      },
+      categoryIdentifier: SOS_NOTIFICATION_CATEGORY,
+      sticky: true,
+      autoDismiss: false,
+      priority: Notifications.AndroidNotificationPriority.MAX,
+    },
+    trigger: Platform.OS === 'android' ? { channelId: SOS_NOTIFICATION_CHANNEL } : null,
+  } as Parameters<typeof Notifications.scheduleNotificationAsync>[0]);
+
+  await saveNotificationIds(SOS_NOTIFICATION_ENTITY_ID, [notificationId]);
+  return notificationId;
+};
+
+export const cancelSOSLockScreenNotification = async (): Promise<void> => {
+  await cancelEntityNotification(SOS_NOTIFICATION_ENTITY_ID);
 };
 
 // ─── Cancel helpers ───────────────────────────────────────────────────────────

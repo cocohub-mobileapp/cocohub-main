@@ -20,6 +20,7 @@ import {
   getLockTimeoutMs,
 } from './src/services/appLockService';
 import { registerBackgroundMedicationTask } from './src/services/backgroundTaskService';
+import emergencyService from './src/services/emergencyService';
 import errorTracking from './src/services/errorTracking';
 import {
   registerNotificationActions,
@@ -113,6 +114,7 @@ function App() {
 
   useEffect(() => {
     void registerNotificationActions();
+    void emergencyService.syncSOSLockScreenNotification();
     const subscription = watchNotificationActions();
     void registerBackgroundMedicationTask();
 
