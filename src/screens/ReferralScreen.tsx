@@ -160,7 +160,7 @@ const ReferralScreen: React.FC = () => {
         </View>
         <Text style={styles.milestoneDesc}>
           {milestoneReached
-            ? 'You've unlocked the annual plan discount!'
+            ? "You've unlocked the annual plan discount!"
             : `${milestoneProgress} of ${MILESTONE_TARGET} referrals to unlock annual plan discount`}
         </Text>
         <View style={styles.progressTrack}>
@@ -178,7 +178,8 @@ const ReferralScreen: React.FC = () => {
         <Text style={styles.code}>{stats?.code ?? 'Unavailable'}</Text>
         {stats?.code && (
           <Text style={styles.referralLink} numberOfLines={1}>
-            {REFERRAL_LINK_BASE}{stats.code}
+            {REFERRAL_LINK_BASE}
+            {stats.code}
           </Text>
         )}
         <TouchableOpacity style={styles.primaryButton} onPress={() => void shareCode()}>
@@ -200,12 +201,8 @@ const ReferralScreen: React.FC = () => {
                 </Text>
               </View>
               <View style={styles.referralInfo}>
-                <Text style={styles.referralName}>
-                  User {referral.referredUserId.slice(-6)}
-                </Text>
-                <Text style={styles.referralDate}>
-                  joined {formatJoinedAgo(referral.signupAt)}
-                </Text>
+                <Text style={styles.referralName}>User {referral.referredUserId.slice(-6)}</Text>
+                <Text style={styles.referralDate}>joined {formatJoinedAgo(referral.signupAt)}</Text>
               </View>
               <View style={styles.rewardBadge}>
                 <Text style={styles.rewardBadgeText}>+1 month Premium</Text>
@@ -222,12 +219,14 @@ const ReferralScreen: React.FC = () => {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>⏳ Pending Referrals</Text>
           <Text style={styles.pendingDesc}>
-            {pendingCount} {pendingCount === 1 ? 'person has' : 'people have'} clicked your link
-            but not signed up yet.
+            {pendingCount} {pendingCount === 1 ? 'person has' : 'people have'} clicked your link but
+            not signed up yet.
           </Text>
           {pendingReferrals.slice(0, 5).map((referral) => (
             <View key={referral.id} style={styles.pendingRow}>
-              <Text style={styles.pendingId}>Pending user · {formatJoinedAgo(referral.signupAt)}</Text>
+              <Text style={styles.pendingId}>
+                Pending user · {formatJoinedAgo(referral.signupAt)}
+              </Text>
             </View>
           ))}
         </View>
