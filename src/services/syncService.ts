@@ -1,4 +1,4 @@
-import apiClient from './apiClient';
+﻿import apiClient from './apiClient';
 import { getItem, setItem } from './localDB';
 import { networkMonitor } from '../utils/networkMonitor';
 
@@ -67,7 +67,7 @@ export class SyncService {
     };
   }
 
-  // ── Queue management ──
+  // ─── Queue management ───
   async enqueue(
     type: SyncEntityType,
     action: SyncAction,
@@ -97,8 +97,7 @@ export class SyncService {
     await this.patchStatus({ pendingCount: queue.length });
   }
 
-  // ── Pull from server ─────────────────────────────────────────────────────────
-
+  // ─── Pull from server ───
   async pull(
     types: SyncEntityType[] = ['pet', 'appointment', 'medication', 'medicalRecord'],
   ): Promise<void> {
@@ -106,16 +105,11 @@ export class SyncService {
       try {
         let endpoint = `/${type}s`;
         if (type === 'medicalRecord') {
-          // For medical records, we might need a different pull strategy if they are nested.
-          // Assuming there's a user-level endpoint or we pull per pet.
-          // For now, let's try top-level /medical-records if available,
-          // or skip if the API only supports nested.
           endpoint = '/medical-records';
         }
 
         const response = await apiClient.get<Record<string, unknown>[]>(endpoint);
         const serverItems = response.data;
-        // Persist each item locally
         for (const item of serverItems) {
           const key = `@${type}_${item.id}`;
           const localRaw = await getItem(key);
@@ -133,8 +127,7 @@ export class SyncService {
     }
   }
 
-  // ── Push local changes ───────────────────────────────────────────────────────
-
+  // ─── Push local changes ───
   async push(): Promise<void> {
     const online = await networkMonitor.isOnline();
     if (!online) return;
@@ -149,13 +142,19 @@ export class SyncService {
 
     for (const item of queue) {
       try {
-        await this.syncItem(item);
+        const result = await this.syncItem(item);
+        // Only remove from queue after server confirms success
+        if (!result?.confirmed) {
+          item.retries += 1;
+          if (item.retries < MAX_RETRIES) failed.push(item);
+        }
       } catch {
         item.retries += 1;
         if (item.retries < MAX_RETRIES) failed.push(item);
       }
     }
 
+    // Save only failed items — successful ones are cleared from queue
     await setItem(SYNC_QUEUE_KEY, JSON.stringify(failed));
 
     await this.patchStatus({
@@ -166,7 +165,7 @@ export class SyncService {
     });
   }
 
-  // ── Sync ──
+  // ─── Sync ───
   async sync(): Promise<void> {
     const online = await networkMonitor.isOnline();
     if (!online) return;
@@ -175,7 +174,7 @@ export class SyncService {
     await this.push();
   }
 
-  // ── Conflict resolution ──
+  // ─── Conflict resolution ───
   async resolveConflict(
     type: SyncEntityType,
     localData: Record<string, unknown>,
@@ -192,8 +191,8 @@ export class SyncService {
     return serverData;
   }
 
-  // ── Helpers ──
-  private async syncItem(item: SyncItem): Promise<void> {
+  // ─── Helpers ───
+  async syncItem(item: SyncItem): Promise<{ confirmed: boolean }> {
     let endpoint = `/${item.type}s`;
 
     // Handle nested medical record endpoints
@@ -206,22 +205,27 @@ export class SyncService {
       }
     }
 
+    let response;
     switch (item.action) {
       case 'create': {
-        await apiClient.post(endpoint, item.data);
+        response = await apiClient.post(endpoint, item.data);
         break;
       }
       case 'update': {
         const id = item.data.id as string;
-        await apiClient.put(`${endpoint}/${id}`, item.data);
+        response = await apiClient.put(`${endpoint}/${id}`, item.data);
         break;
       }
       case 'delete': {
         const delId = item.data.id as string;
-        await apiClient.delete(`${endpoint}/${delId}`);
+        response = await apiClient.delete(`${endpoint}/${delId}`);
         break;
       }
     }
+
+    // Only confirm after server returns success status (2xx)
+    const status = (response as any)?.status;
+    return { confirmed: status >= 200 && status < 300 };
   }
 
   private async getQueue(): Promise<SyncItem[]> {
@@ -246,9 +250,6 @@ export class SyncService {
 // ==============================
 // FIX FOR TESTS (IMPORTANT)
 // ==============================
-
-// 👉 THIS is what fixes:
-// "SyncService is not a constructor"
 
 export const createSyncService = () => new SyncService();
 
