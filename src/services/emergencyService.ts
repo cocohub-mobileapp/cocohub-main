@@ -1,10 +1,11 @@
-﻿import Geolocation from '@react-native-community/geolocation';
+import Geolocation from '@react-native-community/geolocation';
 import { Linking, Platform } from 'react-native';
 
 import apiClient from './apiClient';
 import config from '../config';
 import { getItem, setItem, removeItem as _removeItem } from './localDB';
 import { requestAndroidPermission } from './permissionService';
+import { setupSOSNotification, teardownSOSNotification } from './sosNotificationService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -91,10 +92,24 @@ class EmergencyService {
 
   // ── Contacts CRUD ────────────────────────────────────────────────────────────
 
+  private async updateSOSNotificationState(contacts: EmergencyContact[]): Promise<void> {
+    if (Platform.OS !== 'android') return;
+    if (contacts.length > 0) {
+      await setupSOSNotification();
+    } else {
+      await teardownSOSNotification();
+    }
+  }
+
   async getEmergencyContacts(): Promise<EmergencyContact[]> {
     const stored = await getItem(CONTACTS_KEY);
-    if (stored) return JSON.parse(stored);
+    if (stored) {
+      const contacts = JSON.parse(stored);
+      await this.updateSOSNotificationState(contacts);
+      return contacts;
+    }
     await setItem(CONTACTS_KEY, JSON.stringify(DEFAULT_CONTACTS));
+    await this.updateSOSNotificationState(DEFAULT_CONTACTS);
     return DEFAULT_CONTACTS;
   }
 
@@ -106,6 +121,7 @@ class EmergencyService {
     };
     contacts.push(newContact);
     await setItem(CONTACTS_KEY, JSON.stringify(contacts));
+    await this.updateSOSNotificationState(contacts);
     return newContact;
   }
 
@@ -125,6 +141,7 @@ class EmergencyService {
     const contacts = await this.getEmergencyContacts();
     const filtered = contacts.filter((c) => c.id !== id);
     await setItem(CONTACTS_KEY, JSON.stringify(filtered));
+    await this.updateSOSNotificationState(filtered);
     // Also remove from favorites if present
     await this.removeFavoriteContact(id);
   }

@@ -85,14 +85,14 @@ jobs:
             
             const comment = `## 🔒 npm audit Results
             
-| Severity | Count |
-|----------|-------|
-| 🔴 Critical | ${critical} |
-| 🟠 High | ${high} |
-| 🟡 Moderate | ${moderate} |
-| 🔵 Low | ${low} |
-
-${critical > 0 || high > 0 ? '⚠️ **This PR has unresolved vulnerabilities and cannot be merged.**' : '✅ No critical or high vulnerabilities detected.'}`;
+            | Severity | Count |
+            |----------|-------|
+            | 🔴 Critical | ${critical} |
+            | 🟠 High | ${high} |
+            | 🟡 Moderate | ${moderate} |
+            | 🔵 Low | ${low} |
+            
+            ${critical > 0 || high > 0 ? '⚠️ **This PR has unresolved vulnerabilities and cannot be merged.**' : '✅ No critical or high vulnerabilities detected.'}`;
             
             github.rest.issues.createComment({
               issue_number: context.issue.number,
@@ -165,12 +165,12 @@ ${critical > 0 || high > 0 ? '⚠️ **This PR has unresolved vulnerabilities an
             
             const comment = `## 🔍 Snyk Scan Results
             
-| Severity | Count |
-|----------|-------|
-| 🔴 Critical | ${critical} |
-| 🟠 High | ${high} |
-
-${critical > 0 || high > 0 ? '⚠️ **Snyk detected vulnerabilities.**' : '✅ No critical or high vulnerabilities detected by Snyk.'}`;
+            | Severity | Count |
+            |----------|-------|
+            | 🔴 Critical | ${critical} |
+            | 🟠 High | ${high} |
+            
+            ${critical > 0 || high > 0 ? '⚠️ **Snyk detected vulnerabilities.**' : '✅ No critical or high vulnerabilities detected by Snyk.'}`;
             
             github.rest.issues.createComment({
               issue_number: context.issue.number,
