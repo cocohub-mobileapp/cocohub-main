@@ -4,13 +4,13 @@ import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, AppState, type AppStateStatus, I18nManager } from 'react-native';
 
 import ErrorBoundary from './src/components/ErrorBoundary';
+import { PetSelectorProvider } from './src/components/GlobalPetSelector';
 import OfflineIndicator from './src/components/OfflineIndicator';
 import SessionTimeoutModal from './src/components/SessionTimeoutModal';
 import { useSplashGuard } from './src/components/SplashGuard';
 import ThemeTransitionView from './src/components/ThemeTransitionView';
 import UpdatePrompt from './src/components/UpdatePrompt';
 import { PetProvider } from './src/context/PetContext';
-import { PetSelectorProvider } from './src/components/GlobalPetSelector';
 import { ThemeProvider } from './src/context/ThemeContext';
 import { ToastProvider } from './src/context/ToastContext';
 import i18n, { isRTL } from './src/i18n';
@@ -23,13 +23,14 @@ import {
 } from './src/services/appLockService';
 import { registerBackgroundMedicationTask } from './src/services/backgroundTaskService';
 import errorTracking from './src/services/errorTracking';
-import { scheduleAllPetBirthdays } from './src/services/petBirthdayService';
 import {
   registerNotificationActions,
   watchNotificationActions,
 } from './src/services/notificationService';
+import { scheduleAllPetBirthdays } from './src/services/petBirthdayService';
 import updateService from './src/services/updateService';
 import { checkAppVersion } from './src/services/versionCheckService';
+import { initializeWatchConnectivityService } from './src/services/watchConnectivityService';
 import { initializeWidgetService } from './src/services/widgetService';
 
 const isStorybookEnabled = process.env.STORYBOOK_ENABLED === 'true';
@@ -122,10 +123,12 @@ function App() {
 
     // Initialize widget service and update widgets
     const unsubscribeWidget = initializeWidgetService();
+    const unsubscribeWatch = initializeWatchConnectivityService();
 
     return () => {
       subscription.remove();
       unsubscribeWidget();
+      unsubscribeWatch();
     };
   }, []);
 

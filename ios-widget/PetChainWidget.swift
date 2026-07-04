@@ -1,14 +1,19 @@
 //
-//  PetChainWidget.swift
-//  PetChainWidget
+//  CocohubWidget.swift
+//  CocohubWidget
 //
-//  iOS WidgetKit implementation for PetChain home screen widgets
+//  iOS WidgetKit implementation for Cocohub home screen widgets
 //  Shows today's medication schedule, upcoming appointments, and pet health scores
 //
 
 import WidgetKit
 import SwiftUI
 import Foundation
+
+private enum CocohubWidgetConfig {
+    static let appGroupId = "group.app.cocohub.mobile"
+    static let dataKey = "cocohub_widget_data"
+}
 
 // MARK: - Data Models
 
@@ -76,11 +81,11 @@ struct PetChainWidgetProvider: TimelineProvider {
     }
     
     private func loadWidgetData() -> WidgetDataModel? {
-        guard let appGroupDefaults = UserDefaults(suiteName: "group.app.petchain.mobile") else {
+        guard let appGroupDefaults = UserDefaults(suiteName: CocohubWidgetConfig.appGroupId) else {
             return nil
         }
         
-        guard let data = appGroupDefaults.data(forKey: "petchain_widget_data") else {
+        guard let data = appGroupDefaults.data(forKey: CocohubWidgetConfig.dataKey) else {
             return nil
         }
         
@@ -106,7 +111,7 @@ struct PetChainSmallWidget: View {
             Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor.black : UIColor.white })
             
             VStack(alignment: .leading, spacing: 8) {
-                Text("PetChain")
+                Text("Cocohub")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(.blue)
                 
@@ -167,7 +172,7 @@ struct PetChainMediumWidget: View {
             Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor.black : UIColor.white })
             
             VStack(alignment: .leading, spacing: 12) {
-                Text("PetChain Daily")
+                Text("Cocohub Daily")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.blue)
                 
@@ -232,7 +237,7 @@ struct PetChainLargeWidget: View {
             Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor.black : UIColor.white })
             
             VStack(alignment: .leading, spacing: 12) {
-                Text("PetChain Health Overview")
+                Text("Cocohub Health Overview")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.blue)
                 
@@ -310,21 +315,21 @@ struct PetChainLargeWidget: View {
 // MARK: - Widget Bundle
 
 @main
-struct PetChainWidgetBundle: WidgetBundle {
+struct CocohubWidgetBundle: WidgetBundle {
     var body: some Widget {
-        PetChainWidget()
+        CocohubWidget()
     }
 }
 
-struct PetChainWidget: Widget {
-    let kind: String = "com.petchain.widget"
+struct CocohubWidget: Widget {
+    let kind: String = "com.cocohub.widget"
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: PetChainWidgetProvider()) { entry in
             PetChainWidgetEntryView(entry: entry)
                 .containerBackground(.fill, for: .widget)
         }
-        .configurationDisplayName("PetChain Health")
+        .configurationDisplayName("Cocohub Health")
         .description("View your pet's health, medications, and appointments.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
@@ -352,7 +357,7 @@ struct PetChainWidgetEntryView: View {
 // MARK: - Preview
 
 #Preview(as: .systemMedium) {
-    PetChainWidget()
+    CocohubWidget()
 } timeline: {
     PetChainWidgetEntry(date: .now, widgetData: nil, error: nil)
 }

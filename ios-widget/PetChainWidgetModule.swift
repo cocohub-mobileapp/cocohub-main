@@ -1,6 +1,6 @@
 //
-//  PetChainWidgetModule.swift
-//  PetChain
+//  CocohubWidgetModule.swift
+//  Cocohub
 //
 //  Native bridge to communicate widget data between React Native app and WidgetKit
 //
@@ -9,13 +9,13 @@ import Foundation
 import WidgetKit
 import React
 
-@objc(PetChainWidget)
-class PetChainWidget: NSObject {
+@objc(CocohubWidget)
+class CocohubWidget: NSObject {
     
     // MARK: - Properties
     
-    private let appGroupId = "group.app.petchain.mobile"
-    private let dataKey = "petchain_widget_data"
+    private let appGroupId = "group.app.cocohub.mobile"
+    private let dataKey = "cocohub_widget_data"
     
     // MARK: - React Native Module Setup
     
