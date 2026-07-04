@@ -1,6 +1,7 @@
 ﻿import type { BarCodeScannerResult } from 'expo-barcode-scanner';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import type { CameraView as CameraViewType } from 'expo-camera';
 import {
   Alert,
   Linking,
@@ -33,6 +34,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
   const [torchEnabled, setTorchEnabled] = useState(false);
+  const cameraRef = useRef<CameraViewType>(null);
   const [showRationale, setShowRationale] = useState(false);
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastScanRef = useRef<number>(0);
@@ -100,7 +102,19 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
     })();
   };
 
-  const toggleTorch = () => setTorchEnabled(!torchEnabled);
+  const toggleTorch = async () => {
+    const newState = !torchEnabled;
+    setTorchEnabled(newState);
+    
+    // On iOS, we need to explicitly call toggleTorch on the camera ref
+    if (Platform.OS === 'ios' && cameraRef.current) {
+      try {
+        await cameraRef.current.toggleTorch();
+      } catch (err) {
+        console.warn('Failed to toggle torch:', err);
+      }
+    }
+  };
 
   const handlePermissionDenied = () => {
     Alert.alert(
@@ -137,6 +151,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
     return (
       <View style={styles.cameraContainer}>
         <CameraView
+          ref={cameraRef}
           style={styles.camera}
           facing="back"
           enableTorch={torchEnabled}
