@@ -35,6 +35,18 @@ export interface GeneratedCertificate {
   generatedAt: string;
 }
 
+export interface ClaimSummaryInfo {
+  id: string;
+  policyId: string;
+  petId?: string;
+  amount: number;
+  description: string;
+  status: string;
+  attachmentUrls?: string[];
+  submittedAt: string;
+  updatedAt: string;
+}
+
 // ─── QR code helper ───────────────────────────────────────────────────────────
 
 async function generateQRDataUrl(content: string): Promise<string> {
@@ -52,6 +64,14 @@ async function sha256(text: string): Promise<string> {
     hash = hash >>> 0; // convert to unsigned 32-bit
   }
   return hash.toString(16).padStart(8, '0');
+}
+
+function getWritableDirectory(): string {
+  const legacyFileSystem = FileSystem as typeof FileSystem & {
+    documentDirectory?: string | null;
+    cacheDirectory?: string | null;
+  };
+  return legacyFileSystem.documentDirectory ?? legacyFileSystem.cacheDirectory ?? '';
 }
 
 // ─── PDF content builder ──────────────────────────────────────────────────────
@@ -144,11 +164,73 @@ export async function generateVaccinationCertificate(
 
   const content = buildCertificateText(pet, vaccinations, qrDataUrl, hash, generatedAt);
 
-  const dir = FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? '';
+  const dir = getWritableDirectory();
   const fileName = `vaccination-certificate-${pet.petId}-${hash}.txt`;
   const filePath = `${dir}${fileName}`;
 
   await FileSystem.writeAsStringAsync(filePath, content, {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+
+  return { filePath, hash, generatedAt };
+}
+
+/**
+ * Generate a portable claim-summary document for insurance submissions.
+ * The app stores it as a text-backed PDF summary so native sharing/export works
+ * consistently in Expo without adding another renderer dependency.
+ */
+export async function generateInsuranceClaimSummary(
+  claim: ClaimSummaryInfo,
+): Promise<GeneratedCertificate> {
+  const generatedAt = new Date().toISOString();
+  const claimReference = claim.id.slice(0, 8).toUpperCase();
+  const hash = await sha256(`${claim.id}-${claim.status}-${claim.updatedAt}-${generatedAt}`);
+  const attachments = claim.attachmentUrls?.length
+    ? claim.attachmentUrls.map((url, index) => `${index + 1}. ${url}`).join('\n')
+    : 'No attachments supplied';
+  const content = [
+    '='.repeat(60),
+    '             INSURANCE CLAIM SUMMARY',
+    '='.repeat(60),
+    '',
+    `Claim Reference : ${claimReference}`,
+    `Claim ID        : ${claim.id}`,
+    `Policy ID       : ${claim.policyId}`,
+    claim.petId ? `Pet ID          : ${claim.petId}` : '',
+    `Status          : ${claim.status.replace('_', ' ')}`,
+    `Amount          : $${claim.amount.toFixed(2)}`,
+    `Submitted       : ${new Date(claim.submittedAt).toLocaleString()}`,
+    `Updated         : ${new Date(claim.updatedAt).toLocaleString()}`,
+    `Generated       : ${generatedAt}`,
+    '',
+    '-'.repeat(60),
+    'DESCRIPTION',
+    '-'.repeat(60),
+    claim.description,
+    '',
+    '-'.repeat(60),
+    'ATTACHMENTS',
+    '-'.repeat(60),
+    attachments,
+    '',
+    '-'.repeat(60),
+    'TIMELINE',
+    '-'.repeat(60),
+    `Submitted       : ${new Date(claim.submittedAt).toLocaleDateString()}`,
+    `Current status  : ${claim.status.replace('_', ' ')}`,
+    `Last updated    : ${new Date(claim.updatedAt).toLocaleDateString()}`,
+    '',
+    '='.repeat(60),
+    `Summary Hash    : ${hash}`,
+    '='.repeat(60),
+  ].filter(Boolean);
+
+  const dir = getWritableDirectory();
+  const fileName = `insurance-claim-${claimReference}-${hash}.txt`;
+  const filePath = `${dir}${fileName}`;
+
+  await FileSystem.writeAsStringAsync(filePath, content.join('\n'), {
     encoding: FileSystem.EncodingType.UTF8,
   });
 
