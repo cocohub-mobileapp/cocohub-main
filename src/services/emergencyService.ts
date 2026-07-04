@@ -1,5 +1,6 @@
 ﻿import Geolocation from '@react-native-community/geolocation';
-import { Linking, Platform } from 'react-native';
+import { Linking, Platform, AppState } from 'react-native';
+import * as Notifications from 'expo-notifications';
 
 import apiClient from './apiClient';
 import config from '../config';
@@ -55,6 +56,7 @@ interface LiveSOSSession {
 
 const CONTACTS_KEY = '@emergency_contacts';
 const FAVORITES_KEY = '@emergency_favorites';
+const SOS_NOTIFICATION_CHANNEL_ID = 'cocohub-sos';
 
 // ─── Default contacts ─────────────────────────────────────────────────────────
 
@@ -81,6 +83,7 @@ const DEFAULT_CONTACTS: EmergencyContact[] = [
 
 class EmergencyService {
   private static instance: EmergencyService;
+  private sosNotificationSubscription: any = null;
 
   static getInstance(): EmergencyService {
     if (!EmergencyService.instance) {
@@ -106,6 +109,8 @@ class EmergencyService {
     };
     contacts.push(newContact);
     await setItem(CONTACTS_KEY, JSON.stringify(contacts));
+    // After adding a contact, ensure SOS notification is active
+    await this.ensureSOSNotification(contacts);
     return newContact;
   }
 
@@ -118,6 +123,8 @@ class EmergencyService {
     if (idx === -1) throw new Error('Contact not found');
     contacts[idx] = { ...contacts[idx], ...updates };
     await setItem(CONTACTS_KEY, JSON.stringify(contacts));
+    // After updating contacts, ensure SOS notification is active
+    await this.ensureSOSNotification(contacts);
     return contacts[idx];
   }
 
@@ -127,6 +134,10 @@ class EmergencyService {
     await setItem(CONTACTS_KEY, JSON.stringify(filtered));
     // Also remove from favorites if present
     await this.removeFavoriteContact(id);
+    // If no contacts left, cancel SOS notification
+    if (filtered.length === 0) {
+      await this.cancelSOSNotification();
+    }
   }
 
   // ── Favorites ────────────────────────────────────────────────────────────────
@@ -379,6 +390,84 @@ class EmergencyService {
   // NOTE: getMockClinics removed — never show fake clinic data in an emergency
 
   // ── SOS ──────────────────────────────────────────────────────────────────────
+
+  /**
+   * Schedule a persistent SOS notification on Android that is visible on the lock screen.
+   * The notification includes an action button that triggers SOS when tapped.
+   */
+  private async ensureSOSNotification(contacts: EmergencyContact[]): Promise<void> {
+    if (contacts.length === 0) return;
+
+    // Only set up on Android
+    if (Platform.OS !== 'android') return;
+
+    // Cancel any existing subscription to avoid duplicates
+    if (this.sosNotificationSubscription) {
+      this.sosNotificationSubscription.remove();
+    }
+
+    // Configure notification handling for SOS action
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      }),
+    });
+
+    // Schedule a persistent SOS notification with action button
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: '🚨 SOS Emergency Ready',
+        body: 'Tap to send SOS to your emergency contacts',
+        sound: true,
+        // Android notification channel for SOS
+        android: {
+          channelId: SOS_NOTIFICATION_CHANNEL_ID,
+          importance: Notifications.AndroidImportance.MAX,
+          priority: Notifications.AndroidPriority.MAX,
+          category: Notifications.AndroidCategory.ALARM,
+          // Action button that triggers SOS
+          actions: [
+            {
+              identifier: 'trigger-sos',
+              buttonTitle: 'SEND SOS',
+              isDestructive: true,
+              isAuthenticationRequired: false,
+            },
+          ],
+        },
+        data: { type: 'sos-notification' },
+      },
+      trigger: null, // Persistent notification (stays until dismissed)
+    });
+
+    // Listen for notification responses (when user taps the SOS action button)
+    this.sosNotificationSubscription = Notifications.addNotificationResponseReceivedListener(
+      async (response) => {
+        const actionId = response.actionIdentifier;
+        if (actionId === 'trigger-sos') {
+          // User tapped SOS action button from notification — trigger SOS
+          try {
+            await this.triggerSOS('SOS triggered from lock screen notification');
+          } catch (error) {
+            console.error('Failed to trigger SOS from notification:', error);
+          }
+        }
+      },
+    );
+  }
+
+  /**
+   * Cancel the persistent SOS notification.
+   */
+  private async cancelSOSNotification(): Promise<void> {
+    if (this.sosNotificationSubscription) {
+      this.sosNotificationSubscription.remove();
+      this.sosNotificationSubscription = null;
+    }
+    await Notifications.cancelAllScheduledNotificationsAsync();
+  }
 
   /**
    * One-tap SOS: gets current location (with fail-safe fallback),
