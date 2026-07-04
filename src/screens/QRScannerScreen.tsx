@@ -1,4 +1,4 @@
-﻿import type { BarCodeScannerResult } from 'expo-barcode-scanner';
+import type { BarCodeScannerResult } from 'expo-barcode-scanner';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -100,7 +100,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
     })();
   };
 
-  const toggleTorch = () => setTorchEnabled(!torchEnabled);
+  const toggleTorch = useCallback(() => setTorchEnabled(prev => !prev), []);
 
   const handlePermissionDenied = () => {
     Alert.alert(
