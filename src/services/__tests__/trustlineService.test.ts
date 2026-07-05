@@ -20,6 +20,7 @@ import {
   addTrustline,
   removeTrustline,
   loadTrustlineState,
+  buildCocohubAssetStatuses,
   COCOHUB_ASSETS,
   XLM_RESERVE_PER_TRUSTLINE,
   TrustlineError,
@@ -82,6 +83,56 @@ describe('COCOHUB_ASSETS', () => {
     for (const asset of COCOHUB_ASSETS) {
       expect(asset.assetCode).toBe(asset.assetCode.toUpperCase());
     }
+  });
+});
+
+describe('buildCocohubAssetStatuses', () => {
+  const baseState = {
+    accountPublicKey: COCOHUB_ASSETS[0].issuerPublicKey,
+    xlmBalance: '10',
+    xlmReservePerTrustline: XLM_RESERVE_PER_TRUSTLINE,
+    totalReservedXlm: 2,
+    availableXlm: '8',
+    trustlines: [],
+  };
+
+  it('returns PETC, VETH, and PAWP even when no trustlines exist', () => {
+    const statuses = buildCocohubAssetStatuses(baseState);
+
+    expect(statuses.map((asset) => asset.assetCode)).toEqual(['PETC', 'VETH', 'PAWP']);
+    expect(statuses.every((asset) => asset.hasTrustline === false)).toBe(true);
+    expect(statuses.every((asset) => asset.balance === '0')).toBe(true);
+  });
+
+  it('marks matching Cocohub trustlines and includes backend earned balances', () => {
+    const petc = COCOHUB_ASSETS.find((asset) => asset.assetCode === 'PETC');
+    expect(petc).toBeDefined();
+    if (!petc) return;
+
+    const statuses = buildCocohubAssetStatuses(
+      {
+        ...baseState,
+        trustlines: [
+          {
+            assetCode: petc.assetCode,
+            issuerPublicKey: petc.issuerPublicKey,
+            issuerLabel: petc.name,
+            balance: '12.5000000',
+            limit: '922337203685.4775807',
+            isCocohubAsset: true,
+          },
+        ],
+      },
+      { PETC: '7.2500000' },
+    );
+
+    const petcStatus = statuses.find((asset) => asset.assetCode === 'PETC');
+    expect(petcStatus).toBeDefined();
+    if (!petcStatus) return;
+
+    expect(petcStatus.hasTrustline).toBe(true);
+    expect(petcStatus.balance).toBe('12.5000000');
+    expect(petcStatus.earnedBalance).toBe('7.2500000');
   });
 });
 

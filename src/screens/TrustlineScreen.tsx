@@ -27,9 +27,13 @@ import type {
   TrustlineAsset,
   TrustlineTransaction,
   CocohubAssetDefinition,
+  CocohubAssetTrustlineStatus,
+  TrustlineActionStatus,
 } from '../models/Trustline';
 import {
   loadTrustlineState,
+  loadEarnedTokenBalances,
+  buildCocohubAssetStatuses,
   addTrustline,
   removeTrustline,
   loadTrustlineHistory,
@@ -56,9 +60,13 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
   const [secretKey, setSecretKey] = useState('');
   const [publicKey, setPublicKey] = useState('');
   const [state, setState] = useState<TrustlineState | null>(null);
+  const [cocohubAssets, setCocohubAssets] = useState<CocohubAssetTrustlineStatus[]>([]);
   const [history, setHistory] = useState<TrustlineTransaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [assetActionStatus, setAssetActionStatus] = useState<Record<string, TrustlineActionStatus>>(
+    {},
+  );
 
   // Add form
   const [addMode, setAddMode] = useState<'cocohub' | 'custom'>('cocohub');
@@ -76,8 +84,12 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
   const loadAccount = useCallback(async (pk: string) => {
     setLoading(true);
     try {
-      const s = await loadTrustlineState(pk);
+      const [s, earnedBalances] = await Promise.all([
+        loadTrustlineState(pk),
+        loadEarnedTokenBalances(pk),
+      ]);
       setState(s);
+      setCocohubAssets(buildCocohubAssetStatuses(s, earnedBalances));
     } catch (err) {
       Alert.alert('Error', err instanceof TrustlineError ? err.message : 'Failed to load account.');
     } finally {
@@ -185,6 +197,48 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
     );
   };
 
+  const handleAddCocohubAsset = (asset: CocohubAssetTrustlineStatus) => {
+    if (!secretKey) {
+      setKeyModalVisible(true);
+      return;
+    }
+    Alert.alert(
+      'XLM Reserve Required',
+      `Adding ${asset.assetCode} will lock ${XLM_RESERVE_PER_TRUSTLINE} XLM as a Stellar reserve. Continue?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Add Trustline',
+          onPress: async () => {
+            setActionLoading(true);
+            setAssetActionStatus((prev) => ({ ...prev, [asset.assetCode]: 'pending' }));
+            try {
+              const txHash = await addTrustline({
+                accountSecretKey: secretKey,
+                assetCode: asset.assetCode,
+                issuerPublicKey: asset.issuerPublicKey,
+              });
+              setAssetActionStatus((prev) => ({ ...prev, [asset.assetCode]: 'confirmed' }));
+              Alert.alert(
+                'Confirmed',
+                `${asset.assetCode} trustline added.\nTX: ${txHash.slice(0, 16)}…`,
+              );
+              await loadAccount(publicKey);
+            } catch (err) {
+              setAssetActionStatus((prev) => ({ ...prev, [asset.assetCode]: 'failed' }));
+              Alert.alert(
+                'Failed',
+                err instanceof TrustlineError ? err.message : `Could not add ${asset.assetCode}.`,
+              );
+            } finally {
+              setActionLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   // ── Remove trustline ────────────────────────────────────────────────────────
 
   const handleRemove = (tl: TrustlineAsset) => {
@@ -228,6 +282,59 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
     );
   };
 
+  const handleRemoveCocohubAsset = (asset: CocohubAssetTrustlineStatus) => {
+    if (!asset.trustline) return;
+    if (!secretKey) {
+      setKeyModalVisible(true);
+      return;
+    }
+    if (parseFloat(asset.trustline.balance) > 0) {
+      Alert.alert(
+        'Cannot Remove',
+        `Balance is ${asset.trustline.balance} ${asset.assetCode}. Transfer or burn it before removing the trustline.`,
+      );
+      return;
+    }
+    Alert.alert(
+      'Remove Trustline',
+      `Remove ${asset.assetCode}? This releases ${XLM_RESERVE_PER_TRUSTLINE} XLM from reserve.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            setActionLoading(true);
+            setAssetActionStatus((prev) => ({ ...prev, [asset.assetCode]: 'pending' }));
+            try {
+              const txHash = await removeTrustline({
+                accountSecretKey: secretKey,
+                assetCode: asset.assetCode,
+                issuerPublicKey: asset.issuerPublicKey,
+              });
+              setAssetActionStatus((prev) => ({ ...prev, [asset.assetCode]: 'confirmed' }));
+              Alert.alert(
+                'Confirmed',
+                `${asset.assetCode} trustline removed.\nTX: ${txHash.slice(0, 16)}…`,
+              );
+              await loadAccount(publicKey);
+            } catch (err) {
+              setAssetActionStatus((prev) => ({ ...prev, [asset.assetCode]: 'failed' }));
+              Alert.alert(
+                'Failed',
+                err instanceof TrustlineError
+                  ? err.message
+                  : `Could not remove ${asset.assetCode}.`,
+              );
+            } finally {
+              setActionLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   // ── Render helpers ──────────────────────────────────────────────────────────
 
   const renderTrustline = ({ item }: { item: TrustlineAsset }) => (
@@ -259,6 +366,77 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
       </TouchableOpacity>
     </View>
   );
+
+  const renderCocohubAsset = (asset: CocohubAssetTrustlineStatus) => {
+    const actionStatus = assetActionStatus[asset.assetCode] ?? 'idle';
+    const canRemove = asset.hasTrustline && parseFloat(asset.balance) === 0;
+
+    return (
+      <View key={asset.assetCode} style={styles.tokenCard}>
+        <View style={styles.tokenHeader}>
+          <Text style={styles.assetIcon}>{asset.iconEmoji}</Text>
+          <View style={styles.tokenTitleWrap}>
+            <Text style={styles.tokenCode}>{asset.assetCode}</Text>
+            <Text style={styles.assetName}>{asset.name}</Text>
+            <Text style={styles.tlIssuer} numberOfLines={1}>
+              Issuer: {asset.issuerPublicKey.slice(0, 8)}…{asset.issuerPublicKey.slice(-6)}
+            </Text>
+          </View>
+          <View
+            style={[styles.statusPill, asset.hasTrustline ? styles.statusOn : styles.statusOff]}
+          >
+            <Text
+              style={[
+                styles.statusPillText,
+                asset.hasTrustline ? styles.statusOnText : styles.statusOffText,
+              ]}
+            >
+              {asset.hasTrustline ? 'Enabled' : 'Not enabled'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.tokenBalances}>
+          <View style={styles.tokenBalanceItem}>
+            <Text style={styles.tokenBalanceValue}>{parseFloat(asset.balance).toFixed(2)}</Text>
+            <Text style={styles.balanceLabel}>Wallet balance</Text>
+          </View>
+          <View style={styles.tokenBalanceItem}>
+            <Text style={styles.tokenBalanceValue}>
+              {parseFloat(asset.earnedBalance).toFixed(2)}
+            </Text>
+            <Text style={styles.balanceLabel}>Earned backend</Text>
+          </View>
+        </View>
+
+        <Text style={styles.txStatusText}>Transaction: {txStatusLabel(actionStatus)}</Text>
+
+        {asset.hasTrustline ? (
+          <TouchableOpacity
+            style={[styles.removeBtn, (!canRemove || actionLoading) && styles.removeBtnDisabled]}
+            onPress={() => handleRemoveCocohubAsset(asset)}
+            disabled={!canRemove || actionLoading}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove trustline for ${asset.assetCode}`}
+          >
+            <Text style={styles.removeBtnText}>
+              {canRemove ? 'Remove Trustline' : 'Remove unavailable while balance > 0'}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.addBtnInline, actionLoading && styles.btnDisabled]}
+            onPress={() => handleAddCocohubAsset(asset)}
+            disabled={actionLoading}
+            accessibilityRole="button"
+            accessibilityLabel={`Add trustline for ${asset.assetCode}`}
+          >
+            <Text style={styles.addBtnInlineText}>Add Trustline</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
 
   const renderHistoryItem = ({ item }: { item: TrustlineTransaction }) => (
     <View style={[styles.histCard, !item.successful && styles.histCardFailed]}>
@@ -333,9 +511,7 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
               style={[styles.modeBtn, addMode === 'cocohub' && styles.modeBtnActive]}
               onPress={() => setAddMode('cocohub')}
             >
-              <Text
-                style={[styles.modeBtnText, addMode === 'cocohub' && styles.modeBtnTextActive]}
-              >
+              <Text style={[styles.modeBtnText, addMode === 'cocohub' && styles.modeBtnTextActive]}>
                 Cocohub Assets
               </Text>
             </TouchableOpacity>
@@ -490,28 +666,31 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
             </Text>
           </View>
 
-          {/* Trustlines list */}
+          {/* Cocohub token management */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Active Trustlines</Text>
+            <View>
+              <Text style={styles.sectionTitle}>Cocohub Tokens</Text>
+              <Text style={styles.sectionSubtitle}>Stellar testnet mode</Text>
+            </View>
             <TouchableOpacity onPress={() => setView('history')}>
               <Text style={styles.historyLink}>History →</Text>
             </TouchableOpacity>
           </View>
 
-          {state.trustlines.length === 0 ? (
-            <View style={styles.emptyTl}>
-              <Text style={styles.emptyTlText}>No trustlines yet.</Text>
-              <TouchableOpacity style={styles.addBtn} onPress={() => setView('add')}>
-                <Text style={styles.addBtnText}>Add Your First Trustline</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <FlatList
-              data={state.trustlines}
-              keyExtractor={(t) => `${t.assetCode}-${t.issuerPublicKey}`}
-              renderItem={renderTrustline}
-              scrollEnabled={false}
-            />
+          {cocohubAssets.map(renderCocohubAsset)}
+
+          {state.trustlines.some((tl) => !tl.isCocohubAsset) && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Other Trustlines</Text>
+              </View>
+              <FlatList
+                data={state.trustlines.filter((tl) => !tl.isCocohubAsset)}
+                keyExtractor={(t) => `${t.assetCode}-${t.issuerPublicKey}`}
+                renderItem={renderTrustline}
+                scrollEnabled={false}
+              />
+            </>
           )}
 
           <TouchableOpacity
@@ -577,6 +756,17 @@ function histLabel(type: TrustlineTransaction['type']): string {
     { add_trustline: 'Add Trustline', remove_trustline: 'Remove Trustline', payment: 'Payment' }[
       type
     ] ?? type
+  );
+}
+
+function txStatusLabel(status: TrustlineActionStatus): string {
+  return (
+    {
+      idle: 'Ready',
+      pending: 'Pending confirmation',
+      confirmed: 'Confirmed',
+      failed: 'Failed',
+    }[status] ?? 'Ready'
   );
 }
 
@@ -661,6 +851,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: '#374151' },
+  sectionSubtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
   historyLink: { fontSize: 13, color: '#10B981', fontWeight: '600' },
 
   emptyTl: { alignItems: 'center', paddingVertical: 24 },
@@ -703,6 +894,53 @@ const styles = StyleSheet.create({
   },
   removeBtnDisabled: { backgroundColor: '#F3F4F6' },
   removeBtnText: { color: '#DC2626', fontWeight: '600', fontSize: 13 },
+
+  // Cocohub token card
+  tokenCard: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  tokenHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  tokenTitleWrap: { flex: 1 },
+  tokenCode: { fontSize: 16, fontWeight: '800', color: '#111827' },
+  statusPill: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    minWidth: 82,
+    alignItems: 'center',
+  },
+  statusOn: { backgroundColor: '#D1FAE5' },
+  statusOff: { backgroundColor: '#F3F4F6' },
+  statusPillText: { fontSize: 11, fontWeight: '700' },
+  statusOnText: { color: '#065F46' },
+  statusOffText: { color: '#4B5563' },
+  tokenBalances: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+    marginBottom: 10,
+  },
+  tokenBalanceItem: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  tokenBalanceValue: { fontSize: 18, fontWeight: '800', color: '#111827' },
+  txStatusText: { fontSize: 12, color: '#6B7280', marginBottom: 10 },
+  addBtnInline: {
+    backgroundColor: '#10B981',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  addBtnInlineText: { color: '#fff', fontWeight: '700', fontSize: 13 },
 
   // History card
   histCard: {

@@ -8,6 +8,7 @@
 
 import * as StellarSdk from '@stellar/stellar-sdk';
 
+import api from './api';
 import type {
   TrustlineAsset,
   TrustlineState,
@@ -15,6 +16,7 @@ import type {
   AddTrustlineParams,
   RemoveTrustlineParams,
   CocohubAssetDefinition,
+  CocohubAssetTrustlineStatus,
 } from '../models/Trustline';
 
 // ─── Network config ───────────────────────────────────────────────────────────
@@ -65,7 +67,7 @@ export const COCOHUB_ASSETS: CocohubAssetDefinition[] = [
   },
 ];
 
-const COCOHUB_ASSET_CODES = new Set(COCOHUB_ASSETS.map((a) => a.assetCode));
+export type EarnedTokenBalances = Record<string, string>;
 
 // ─── Error class ──────────────────────────────────────────────────────────────
 
@@ -102,13 +104,16 @@ function parseBalance(balances: StellarSdk.Horizon.HorizonApi.BalanceLine[]): {
     } else if (b.asset_type === 'credit_alphanum4' || b.asset_type === 'credit_alphanum12') {
       const code = b.asset_code;
       const issuer = b.asset_issuer;
+      const cocohubAsset = COCOHUB_ASSETS.find(
+        (a) => a.assetCode === code && a.issuerPublicKey === issuer,
+      );
       trustlines.push({
         assetCode: code,
         issuerPublicKey: issuer,
-        issuerLabel: COCOHUB_ASSETS.find((a) => a.assetCode === code)?.name,
+        issuerLabel: cocohubAsset?.name,
         balance: b.balance,
         limit: b.limit,
-        isCocohubAsset: COCOHUB_ASSET_CODES.has(code),
+        isCocohubAsset: Boolean(cocohubAsset),
       });
     }
   }
@@ -146,6 +151,40 @@ export async function loadTrustlineState(publicKey: string): Promise<TrustlineSt
       'LOAD_FAILED',
     );
   }
+}
+
+export async function loadEarnedTokenBalances(publicKey: string): Promise<EarnedTokenBalances> {
+  try {
+    const response = await api.get<{
+      balances?: EarnedTokenBalances;
+      earnedBalances?: EarnedTokenBalances;
+    }>('/stellar/earned-balances', {
+      params: { publicKey },
+    });
+
+    return response.data.earnedBalances ?? response.data.balances ?? {};
+  } catch {
+    return {};
+  }
+}
+
+export function buildCocohubAssetStatuses(
+  state: TrustlineState,
+  earnedBalances: EarnedTokenBalances = {},
+): CocohubAssetTrustlineStatus[] {
+  return COCOHUB_ASSETS.map((asset) => {
+    const trustline = state.trustlines.find(
+      (tl) => tl.assetCode === asset.assetCode && tl.issuerPublicKey === asset.issuerPublicKey,
+    );
+
+    return {
+      ...asset,
+      balance: trustline?.balance ?? '0',
+      earnedBalance: earnedBalances[asset.assetCode] ?? '0',
+      hasTrustline: Boolean(trustline),
+      trustline,
+    };
+  });
 }
 
 /** Add a trustline for an asset */
