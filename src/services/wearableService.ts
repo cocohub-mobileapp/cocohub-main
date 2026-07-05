@@ -4,6 +4,7 @@
  * metric retrieval used by the wearable dashboard in PetHealthMetricsScreen.
  */
 import apiClient from './apiClient';
+import { getItem, setItem } from './localDB';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -14,6 +15,21 @@ export interface WearableStatus {
   providerKey?: string;
   /** ISO date string of last successful sync */
   lastSync?: string;
+}
+
+export type WearableProviderKey = 'fitbark' | 'whistle' | 'mockfit';
+
+export interface WearableProvider {
+  key: WearableProviderKey;
+  name: string;
+  scopes: string[];
+  configured: boolean;
+}
+
+export interface ConnectedWearable {
+  petId: string;
+  providerKey: WearableProviderKey;
+  connectedAt: string;
 }
 
 export interface ActivitySummaryRow {
@@ -29,10 +45,13 @@ export interface HistoricalPoint {
 
 export type MetricType =
   | 'steps'
+  | 'calories'
   | 'heart_rate'
   | 'sleep_duration'
   | 'sleep_quality'
   | 'activity_score';
+
+const CONNECTED_WEARABLES_KEY = '@connected_wearables_v1';
 
 // ---------------------------------------------------------------------------
 // API helpers
@@ -62,15 +81,45 @@ export async function getWearableStatus(petId: string): Promise<WearableStatus> 
   }
 }
 
+export async function getWearableProviders(): Promise<WearableProvider[]> {
+  try {
+    const res = await apiClient.get<{ data: WearableProvider[] }>('/activity/providers');
+    return unwrap(res.data) ?? [];
+  } catch {
+    return [
+      { key: 'fitbark', name: 'FitBark', scopes: ['activity', 'sleep'], configured: false },
+      { key: 'whistle', name: 'Whistle', scopes: ['activity', 'sleep'], configured: false },
+    ];
+  }
+}
+
+export async function startWearableOAuth(
+  petId: string,
+  providerKey: WearableProviderKey,
+  redirectUri?: string,
+): Promise<string | null> {
+  try {
+    const res = await apiClient.get<{ data: { authUrl: string } }>(
+      `/activity/oauth/${providerKey}/start`,
+      { params: { petId, redirectUri } },
+    );
+    return unwrap(res.data)?.authUrl ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Trigger an on-demand sync for the given pet + provider.
  * Defaults to the 'mockfit' mock provider used in development.
  */
 export async function syncWearable(
   petId: string,
-  providerKey = 'mockfit',
-): Promise<{ imported: number }> {
-  const res = await apiClient.post<{ data: { imported: number } }>('/activity/sync', {
+  providerKey: WearableProviderKey = 'mockfit',
+): Promise<{ imported: number; unavailable?: boolean; reason?: string }> {
+  const res = await apiClient.post<{
+    data: { imported: number; unavailable?: boolean; reason?: string };
+  }>('/activity/sync', {
     petId,
     providerKey,
   });
@@ -82,10 +131,48 @@ export async function syncWearable(
  */
 export async function connectWearable(
   petId: string,
-  providerKey: string,
+  providerKey: WearableProviderKey,
   accessToken: string,
 ): Promise<void> {
   await apiClient.post('/activity/connect', { petId, providerKey, accessToken });
+  await rememberConnectedWearable(petId, providerKey);
+}
+
+export async function rememberConnectedWearable(
+  petId: string,
+  providerKey: WearableProviderKey,
+): Promise<void> {
+  const existing = await getConnectedWearables();
+  const next = [
+    ...existing.filter((entry) => !(entry.petId === petId && entry.providerKey === providerKey)),
+    { petId, providerKey, connectedAt: new Date().toISOString() },
+  ];
+  await setItem(CONNECTED_WEARABLES_KEY, JSON.stringify(next));
+}
+
+export async function getConnectedWearables(): Promise<ConnectedWearable[]> {
+  const raw = await getItem(CONNECTED_WEARABLES_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function syncConnectedWearables(): Promise<number> {
+  const connected = await getConnectedWearables();
+  let imported = 0;
+  for (const entry of connected) {
+    try {
+      const result = await syncWearable(entry.petId, entry.providerKey);
+      imported += result.imported;
+    } catch {
+      // Individual provider failures are non-fatal; background fetch will retry later.
+    }
+  }
+  return imported;
 }
 
 /**
@@ -122,8 +209,13 @@ export async function getActivitySummary(petId: string): Promise<ActivitySummary
 
 const wearableService = {
   getWearableStatus,
+  getWearableProviders,
+  startWearableOAuth,
   syncWearable,
   connectWearable,
+  rememberConnectedWearable,
+  getConnectedWearables,
+  syncConnectedWearables,
   getHistoricalMetrics,
   getActivitySummary,
 };

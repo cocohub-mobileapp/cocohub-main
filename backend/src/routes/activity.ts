@@ -8,6 +8,32 @@ import { query } from '../db';
 const router = express.Router();
 router.use(authenticateJWT);
 
+router.get('/providers', async (_req: AuthenticatedRequest, res) => {
+  return res.json(ok(wearableService.getSupportedProviders()));
+});
+
+router.get('/oauth/:providerKey/start', async (req: AuthenticatedRequest, res) => {
+  const providerKey = req.params.providerKey;
+  const petId = String(req.query.petId ?? '');
+  const redirectUri = String(
+    req.query.redirectUri ?? `${req.protocol}://${req.get('host')}/api/activity/oauth/callback`,
+  );
+
+  if (!petId) return sendError(res, 400, 'VALIDATION_ERROR', 'petId required');
+
+  const authUrl = wearableService.buildOAuthAuthorizationUrl(providerKey, petId, redirectUri);
+  if (!authUrl) {
+    return sendError(
+      res,
+      503,
+      'WEARABLE_PROVIDER_UNAVAILABLE',
+      'Wearable provider OAuth is not configured',
+    );
+  }
+
+  return res.json(ok({ authUrl }));
+});
+
 // Link a wearable provider to a pet (OAuth callback handler or direct token exchange)
 router.post('/connect', async (req: AuthenticatedRequest, res) => {
   const { petId, providerKey, accessToken, refreshToken, expiresAt } = req.body as Record<

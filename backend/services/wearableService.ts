@@ -3,6 +3,90 @@ import { query } from '../src/db';
 
 type ProviderKey = string;
 
+interface WearableProviderDefinition {
+  key: ProviderKey;
+  name: string;
+  scopes: string[];
+  authUrl: string;
+  tokenUrl?: string;
+  apiBaseUrl: string;
+  clientId?: string;
+}
+
+const PROVIDERS: Record<ProviderKey, WearableProviderDefinition> = {
+  fitbark: {
+    key: 'fitbark',
+    name: 'FitBark',
+    scopes: ['activity', 'sleep'],
+    authUrl: process.env.FITBARK_AUTH_URL ?? 'https://app.fitbark.com/oauth/authorize',
+    tokenUrl: process.env.FITBARK_TOKEN_URL ?? 'https://app.fitbark.com/oauth/token',
+    apiBaseUrl: process.env.FITBARK_API_BASE_URL ?? 'https://app.fitbark.com/api/v2',
+    clientId: process.env.FITBARK_CLIENT_ID,
+  },
+  whistle: {
+    key: 'whistle',
+    name: 'Whistle',
+    scopes: ['activity', 'sleep'],
+    authUrl: process.env.WHISTLE_AUTH_URL ?? 'https://app.whistle.com/oauth/authorize',
+    tokenUrl: process.env.WHISTLE_TOKEN_URL,
+    apiBaseUrl: process.env.WHISTLE_API_BASE_URL ?? 'https://app.whistle.com/api/v1',
+    clientId: process.env.WHISTLE_CLIENT_ID,
+  },
+};
+
+export function getSupportedProviders() {
+  return Object.values(PROVIDERS).map((provider) => ({
+    key: provider.key,
+    name: provider.name,
+    scopes: provider.scopes,
+    configured: Boolean(provider.clientId),
+  }));
+}
+
+export function buildOAuthAuthorizationUrl(
+  providerKey: ProviderKey,
+  petId: string,
+  redirectUri: string,
+): string | null {
+  const provider = PROVIDERS[providerKey];
+  const clientId =
+    provider?.clientId ??
+    (providerKey === 'fitbark' ? process.env.FITBARK_CLIENT_ID : undefined) ??
+    (providerKey === 'whistle' ? process.env.WHISTLE_CLIENT_ID : undefined);
+  if (!provider || !clientId) return null;
+
+  const url = new URL(provider.authUrl);
+  url.searchParams.set('client_id', clientId);
+  url.searchParams.set('redirect_uri', redirectUri);
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('scope', provider.scopes.join(' '));
+  url.searchParams.set(
+    'state',
+    Buffer.from(JSON.stringify({ petId, providerKey })).toString('base64url'),
+  );
+  return url.toString();
+}
+
+async function fetchProviderJson(url: string, accessToken: string): Promise<any[]> {
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Wearable provider unavailable (${response.status})`);
+  }
+
+  const payload = await response.json();
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload.data)) return payload.data;
+  if (Array.isArray(payload.activities)) return payload.activities;
+  if (Array.isArray(payload.records)) return payload.records;
+  return [];
+}
+
 interface ProviderTokenRecord {
   id?: number;
   pet_id: string;
@@ -30,6 +114,24 @@ const PROVIDER_CLIENTS: Record<
   ProviderKey,
   { sync: (token: string, petId: string) => Promise<any[]> }
 > = {
+  fitbark: {
+    async sync(token: string, petId: string) {
+      const provider = PROVIDERS.fitbark;
+      const today = new Date().toISOString().slice(0, 10);
+      const baseUrl = provider.apiBaseUrl.replace(/\/$/, '');
+      return fetchProviderJson(
+        `${baseUrl}/pets/${encodeURIComponent(petId)}/activity?date=${today}`,
+        token,
+      );
+    },
+  },
+  whistle: {
+    async sync(token: string, petId: string) {
+      const provider = PROVIDERS.whistle;
+      const baseUrl = provider.apiBaseUrl.replace(/\/$/, '');
+      return fetchProviderJson(`${baseUrl}/pets/${encodeURIComponent(petId)}/metrics`, token);
+    },
+  },
   mockfit: {
     async sync(_token: string, petId: string) {
       const events = [];
@@ -41,6 +143,7 @@ const PROVIDER_CLIENTS: Record<
           id: `mf_evt_${d.getTime()}`,
           ts: d.toISOString(),
           steps: Math.floor(4000 + Math.random() * 6000), // 4,000 to 10,000 steps
+          calories: Math.floor(180 + Math.random() * 220),
           sleep_minutes: Math.floor(360 + Math.random() * 180), // 6 to 9 hours of sleep
           sleep_quality: parseFloat((0.65 + Math.random() * 0.3).toFixed(2)),
           activity_score: Math.floor(30 + Math.random() * 70),
@@ -77,9 +180,16 @@ export async function refreshTokenIfNeeded(
   return record;
 }
 
-function normalizeProviderEvent(providerKey: ProviderKey, event: any): NormalizedMetric[] {
+export function normalizeProviderEvent(providerKey: ProviderKey, event: any): NormalizedMetric[] {
   // For each provider, map provider-specific fields to our normalized metrics.
-  if (providerKey === 'mockfit') {
+  if (providerKey === 'mockfit' || providerKey === 'fitbark' || providerKey === 'whistle') {
+    const recordedAt =
+      event.ts ??
+      event.timestamp ??
+      event.recorded_at ??
+      event.date ??
+      event.start_time ??
+      new Date().toISOString();
     const base = {
       petId: String(event.petId ?? event.pet_id ?? 'unknown'),
       providerKey,
@@ -92,9 +202,18 @@ function normalizeProviderEvent(providerKey: ProviderKey, event: any): Normalize
       metrics.push({
         ...base,
         metricType: 'steps',
-        value: event.steps,
+        value: Number(event.steps),
         unit: 'count',
-        recordedAt: event.ts,
+        recordedAt,
+      });
+    }
+    if (typeof event.calories === 'number' || typeof event.calories_burned === 'number') {
+      metrics.push({
+        ...base,
+        metricType: 'calories',
+        value: Number(event.calories ?? event.calories_burned),
+        unit: 'kcal',
+        recordedAt,
       });
     }
     if (typeof event.sleep_minutes === 'number') {
@@ -103,7 +222,16 @@ function normalizeProviderEvent(providerKey: ProviderKey, event: any): Normalize
         metricType: 'sleep_duration',
         value: event.sleep_minutes,
         unit: 'minutes',
-        recordedAt: event.ts,
+        recordedAt,
+      });
+    }
+    if (typeof event.sleep === 'number') {
+      metrics.push({
+        ...base,
+        metricType: 'sleep_duration',
+        value: event.sleep,
+        unit: 'minutes',
+        recordedAt,
       });
     }
     if (typeof event.sleep_quality === 'number') {
@@ -112,7 +240,7 @@ function normalizeProviderEvent(providerKey: ProviderKey, event: any): Normalize
         metricType: 'sleep_quality',
         value: event.sleep_quality,
         unit: 'ratio',
-        recordedAt: event.ts,
+        recordedAt,
       });
     }
     if (typeof event.activity_score === 'number') {
@@ -121,7 +249,7 @@ function normalizeProviderEvent(providerKey: ProviderKey, event: any): Normalize
         metricType: 'activity_score',
         value: event.activity_score,
         unit: 'score',
-        recordedAt: event.ts,
+        recordedAt,
       });
     }
     if (typeof event.heart_rate === 'number') {
@@ -130,7 +258,7 @@ function normalizeProviderEvent(providerKey: ProviderKey, event: any): Normalize
         metricType: 'heart_rate',
         value: event.heart_rate,
         unit: 'bpm',
-        recordedAt: event.ts,
+        recordedAt,
       });
     }
     return metrics;
@@ -156,7 +284,7 @@ function normalizeProviderEvent(providerKey: ProviderKey, event: any): Normalize
 export async function syncProviderForPet(
   providerKey: ProviderKey,
   petId: string,
-): Promise<{ imported: number }> {
+): Promise<{ imported: number; unavailable?: boolean; reason?: string }> {
   // Load token
   const res = await query('SELECT * FROM wearable_tokens WHERE provider_key = $1 AND pet_id = $2', [
     providerKey,
@@ -169,9 +297,15 @@ export async function syncProviderForPet(
   const refreshed = await refreshTokenIfNeeded(tokenRecord as ProviderTokenRecord);
 
   const client = PROVIDER_CLIENTS[providerKey];
-  if (!client) return { imported: 0 };
+  if (!client) return { imported: 0, unavailable: true, reason: 'unsupported_provider' };
 
-  const events = await client.sync(refreshed.access_token, petId);
+  let events: any[] = [];
+  try {
+    events = await client.sync(refreshed.access_token, petId);
+  } catch (err) {
+    console.warn('wearable provider sync unavailable', { providerKey, petId, err });
+    return { imported: 0, unavailable: true, reason: 'provider_unavailable' };
+  }
 
   const metrics: NormalizedMetric[] = [];
   for (const ev of events) {
@@ -273,6 +407,8 @@ export async function syncAllPetsDaily(): Promise<void> {
 }
 
 export default {
+  getSupportedProviders,
+  buildOAuthAuthorizationUrl,
   connectProviderOAuth,
   syncProviderForPet,
   getActivitySummary,
