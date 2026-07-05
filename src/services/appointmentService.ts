@@ -8,6 +8,7 @@ import {
   upsertAppointment,
   deleteAppointmentById,
 } from './localDB';
+import { getScheduleForRange } from './medicationService';
 import { AppointmentStatus } from '../models/Appointment';
 import type { Appointment } from '../models/Appointment';
 import type { Medication } from '../models/Medication';
@@ -46,6 +47,11 @@ export interface AvailabilityResult {
   availableSlots: string[];
 }
 
+interface AppointmentInterval {
+  startMs: number;
+  endMs: number;
+}
+
 // ─── Availability ─────────────────────────────────────────────────────────────
 
 export async function getAvailability(vetId: string, date: string): Promise<AvailabilityResult> {
@@ -63,6 +69,7 @@ export async function detectConflicts(
   proposedTime: Date,
   medications: Medication[] = [],
   excludeId?: string,
+  includeSuggestedTime = true,
 ): Promise<ConflictDetectionResult> {
   const conflicts: AppointmentConflict[] = [];
 
@@ -70,20 +77,28 @@ export async function detectConflicts(
   const windowEnd = new Date(proposedTime.getTime() + CONFLICT_BUFFER_MS).toISOString();
 
   const nearby = await getAppointmentsInWindow<Appointment>(petId, windowStart, windowEnd);
-  for (const appt of nearby) {
+  const allLocalAppointments = await getAllAppointmentsByPetId<Appointment>(petId).catch(() => []);
+  const appointmentCandidates = mergeAppointmentsById(nearby, allLocalAppointments);
+  const proposedInterval = {
+    startMs: proposedTime.getTime(),
+    endMs: proposedTime.getTime() + 30 * 60_000,
+  };
+
+  for (const appt of appointmentCandidates) {
     if (excludeId && appt.id === excludeId) continue;
-    const apptTime = new Date(appt.date);
-    const diffMs = Math.abs(apptTime.getTime() - proposedTime.getTime());
-    if (diffMs <= CONFLICT_BUFFER_MS) {
+    if (appt.status === AppointmentStatus.CANCELLED) continue;
+
+    const apptInterval = getAppointmentInterval(appt);
+    const gapMs = getIntervalGapMs(apptInterval, proposedInterval);
+    if (gapMs <= CONFLICT_BUFFER_MS) {
       conflicts.push({
         type: 'appointment',
-        description: `"${appt.title ?? 'Appointment'}" is scheduled ${_formatTimeDiff(diffMs)} from the proposed time.`,
+        description: `"${appt.title ?? 'Appointment'}" is scheduled ${_formatTimeDiff(gapMs)} from the proposed time.`,
         conflictingAppointment: appt,
       });
     }
   }
 
-  const { getScheduleForRange } = await import('./medicationService');
   const windowStartDate = new Date(proposedTime.getTime() - CONFLICT_BUFFER_MS);
   const windowEndDate = new Date(proposedTime.getTime() + CONFLICT_BUFFER_MS);
 
@@ -104,9 +119,10 @@ export async function detectConflicts(
   }
 
   const hasConflicts = conflicts.length > 0;
-  const suggestedTime = hasConflicts
-    ? await findNextAvailableSlot(petId, proposedTime, medications)
-    : undefined;
+  const suggestedTime =
+    hasConflicts && includeSuggestedTime
+      ? await findNextAvailableSlot(petId, proposedTime, medications)
+      : undefined;
 
   return { hasConflicts, conflicts, suggestedTime };
 }
@@ -131,7 +147,7 @@ export async function findNextAvailableSlot(
   let candidate = new Date(from.getTime() + CONFLICT_BUFFER_MS);
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
-    const result = await detectConflicts(petId, candidate, medications);
+    const result = await detectConflicts(petId, candidate, medications, undefined, false);
     if (!result.hasConflicts) return candidate;
     candidate = new Date(candidate.getTime() + CONFLICT_BUFFER_MS);
   }
@@ -365,6 +381,32 @@ function _formatTimeDiff(ms: number): string {
   if (mins < 60) return `${mins} min`;
   const hrs = Math.round(ms / 3_600_000);
   return `${hrs} hr`;
+}
+
+function getAppointmentInterval(appt: Appointment): AppointmentInterval {
+  const start = appt.date.includes('T')
+    ? new Date(appt.date)
+    : new Date(`${appt.date}T${appt.time ?? '00:00'}:00`);
+  const durationMinutes = appt.durationMinutes ?? 30;
+  return {
+    startMs: start.getTime(),
+    endMs: start.getTime() + durationMinutes * 60_000,
+  };
+}
+
+function getIntervalGapMs(a: AppointmentInterval, b: AppointmentInterval): number {
+  if (a.startMs <= b.endMs && b.startMs <= a.endMs) {
+    return 0;
+  }
+  return Math.min(Math.abs(a.startMs - b.endMs), Math.abs(b.startMs - a.endMs));
+}
+
+function mergeAppointmentsById(primary: Appointment[], secondary: Appointment[]): Appointment[] {
+  const byId = new Map<string, Appointment>();
+  [...primary, ...secondary].forEach((appointment) => {
+    byId.set(appointment.id, appointment);
+  });
+  return Array.from(byId.values());
 }
 
 function _formatTime(d: Date): string {
