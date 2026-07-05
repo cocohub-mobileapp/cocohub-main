@@ -20,6 +20,7 @@ import { getHealthMetrics } from './healthMetricService';
 import { getItem, setItem } from './localDB';
 import { getMedications } from './medicationService';
 import petService from './petService';
+import { syncWatchCompanionData } from './watchCompanionService';
 import type { Appointment } from '../models/Appointment';
 import type { HealthMetricEntry } from '../models/HealthMetric';
 import type { Medication } from '../models/Medication';
@@ -298,6 +299,8 @@ async function updateWidgetDisplay(data: WidgetData): Promise<void> {
       // Android: Use App Widget manager to update
       await CocohubWidgetModule.updateWidget(data);
     }
+
+    await syncWatchCompanionData(data);
 
     console.log('[WidgetService] Widget display updated successfully');
   } catch (error) {
