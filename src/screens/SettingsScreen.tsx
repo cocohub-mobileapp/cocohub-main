@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 
 import LanguageSelector from '../components/LanguageSelector';
+import { usePetContext } from '../context/PetContext';
 import type { NotificationPreferences, User } from '../models/User';
 import {
   disableBiometricAuthentication,
@@ -26,15 +27,17 @@ import {
   requestPasswordReset,
   promptForBiometricSetup,
 } from '../services/authService';
-import {
-  getEntitySyncStatuses,
-  type EntitySyncRecord,
-} from '../services/cloudSyncService';
+import { getEntitySyncStatuses, type EntitySyncRecord } from '../services/cloudSyncService';
+import { type SyncEntityType } from '../services/syncService';
 import { getUserProfile, saveUserProfile, updateUserProfile } from '../services/userService';
+import { registerBackgroundWearableSyncTask } from '../services/wearableBackgroundSyncService';
+import wearableService, {
+  type WearableProvider,
+  type WearableProviderKey,
+} from '../services/wearableService';
 import { useAppTheme } from '../theme';
 import { formatAddress } from '../utils/localeValues';
 import { useTheme, type ThemeMode } from '../utils/useTheme';
-import { type SyncEntityType } from '../services/syncService';
 
 // ─── App version info ─────────────────────────────────────────────────────────
 // Pulled from expo-constants at runtime; fallback to package values.
@@ -126,6 +129,7 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ visible, emai
 
 const SettingsScreen: React.FC<Props> = ({ onLogout }) => {
   const { t } = useTranslation();
+  const { activePet } = usePetContext();
   const { mode: themeMode, setMode: setThemeMode } = useTheme();
   const colors = useAppTheme();
   const [_profile, setProfile] = useState<User | null>(null);
@@ -161,9 +165,13 @@ const SettingsScreen: React.FC<Props> = ({ onLogout }) => {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [exportRequesting, setExportRequesting] = useState(false);
-  const [entitySyncStatuses, setEntitySyncStatuses] = useState<
-    Record<SyncEntityType, EntitySyncRecord> | null
-  >(null);
+  const [entitySyncStatuses, setEntitySyncStatuses] = useState<Record<
+    SyncEntityType,
+    EntitySyncRecord
+  > | null>(null);
+  const [wearableProviders, setWearableProviders] = useState<WearableProvider[]>([]);
+  const [wearableConnecting, setWearableConnecting] = useState<WearableProviderKey | null>(null);
+  const [wearableMessage, setWearableMessage] = useState('');
 
   // ── Load profile on mount ──────────────────────────────────────────────────
 
@@ -201,6 +209,9 @@ const SettingsScreen: React.FC<Props> = ({ onLogout }) => {
       } catch {
         // Non-critical — sync status display degrades gracefully
       }
+
+      const providers = await wearableService.getWearableProviders();
+      setWearableProviders(providers);
     })();
   }, []);
 
@@ -359,6 +370,42 @@ const SettingsScreen: React.FC<Props> = ({ onLogout }) => {
       ],
     );
   }, [t]);
+
+  const handleStartWearableOAuth = useCallback(
+    async (providerKey: WearableProviderKey) => {
+      if (!activePet) {
+        Alert.alert('Select a pet first', 'Choose a pet before connecting a wearable account.');
+        return;
+      }
+
+      setWearableConnecting(providerKey);
+      setWearableMessage('');
+      try {
+        const authUrl = await wearableService.startWearableOAuth(activePet.id, providerKey);
+        if (!authUrl) {
+          setWearableMessage(
+            'This wearable provider is not configured yet. MockFit remains available from the pet health metrics screen for local testing.',
+          );
+          return;
+        }
+
+        await wearableService.rememberConnectedWearable(activePet.id, providerKey);
+        await registerBackgroundWearableSyncTask();
+        await Linking.openURL(authUrl);
+        setWearableMessage(
+          'Wearable authorization opened. Sync will run in the background once the provider callback stores tokens.',
+        );
+      } catch (err) {
+        Alert.alert(
+          t('common.error'),
+          err instanceof Error ? err.message : 'Could not start wearable connection.',
+        );
+      } finally {
+        setWearableConnecting(null);
+      }
+    },
+    [activePet, t],
+  );
 
   // ── Logout ─────────────────────────────────────────────────────────────────
 
@@ -732,6 +779,51 @@ const SettingsScreen: React.FC<Props> = ({ onLogout }) => {
         )}
       </View>
 
+      {/* ── Wearable Integrations ── */}
+      <SectionHeader title="Wearables" />
+      <View style={cardStyle}>
+        <Text style={[styles.helperText, { color: colors.secondaryText }]}>
+          {activePet
+            ? `Connect activity and sleep data for ${activePet.name}.`
+            : 'Select a pet before connecting a wearable account.'}
+        </Text>
+        {(wearableProviders.length
+          ? wearableProviders
+          : ([
+              { key: 'fitbark', name: 'FitBark', scopes: ['activity', 'sleep'], configured: false },
+              { key: 'whistle', name: 'Whistle', scopes: ['activity', 'sleep'], configured: false },
+            ] as WearableProvider[])
+        ).map((provider, idx, arr) => (
+          <React.Fragment key={provider.key}>
+            <TouchableOpacity
+              style={styles.row}
+              onPress={() => void handleStartWearableOAuth(provider.key)}
+              disabled={wearableConnecting !== null}
+              accessibilityRole="button"
+              accessibilityLabel={`Connect ${provider.name}`}
+            >
+              <View style={styles.rowTextBlock}>
+                <Text style={[styles.rowLabel, { color: colors.text }]}>{provider.name}</Text>
+                <Text style={[styles.providerSubtext, { color: colors.secondaryText }]}>
+                  {provider.configured ? 'OAuth ready' : 'OAuth credentials required on backend'}
+                </Text>
+              </View>
+              {wearableConnecting === provider.key ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Text style={[styles.chevron, { color: colors.placeholder }]}>›</Text>
+              )}
+            </TouchableOpacity>
+            {idx < arr.length - 1 && <RowSeparator />}
+          </React.Fragment>
+        ))}
+        {wearableMessage ? (
+          <Text style={[styles.helperText, { color: colors.secondaryText }]}>
+            {wearableMessage}
+          </Text>
+        ) : null}
+      </View>
+
       {/* ── App Information ── */}
       <SectionHeader title={t('settings.appInfo')} />
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -845,8 +937,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 14,
   },
+  rowTextBlock: { flex: 1, paddingRight: 12 },
   rowLabel: { fontSize: 15 },
   rowValue: { fontSize: 15 },
+  providerSubtext: { fontSize: 12, marginTop: 2 },
   chevron: { fontSize: 20 },
   checkmark: { fontSize: 16, color: '#4CAF50', fontWeight: '700' },
   separator: { height: 1, backgroundColor: '#f0f0f0' },

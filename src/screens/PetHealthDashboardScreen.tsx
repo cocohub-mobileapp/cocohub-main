@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   View,
   Share,
-  Platform,
 } from 'react-native';
 
 import HealthScoreChart, {
@@ -29,6 +28,10 @@ import type { MedicalRecord } from '../services/medicalRecordService';
 import { getMedicalRecords } from '../services/medicalRecordService';
 import { getMedications, isMedicationActive } from '../services/medicationService';
 import petService from '../services/petService';
+import wearableService, {
+  type ActivitySummaryRow,
+  type WearableStatus,
+} from '../services/wearableService';
 import { useSecureScreen } from '../utils/secureScreen';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -51,6 +54,8 @@ interface DashboardData {
   medicalEvents: MedicalEvent[];
   /** Dynamic vet-recommended weight range from breed data, null if unknown */
   vetWeightRange: { min: number; max: number } | null;
+  wearableStatus: WearableStatus;
+  wearableSummary: ActivitySummaryRow[];
 }
 
 // ─── Health Score Calculation ──────────────────────────────────────────────
@@ -120,10 +125,26 @@ function appointmentTypeLabel(type: string): string {
   return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function summaryValue(rows: ActivitySummaryRow[], metricType: string): number {
+  const row = rows.find((item) => item.metric_type === metricType);
+  return row ? Math.round(Number(row.sum || row.avg || 0)) : 0;
+}
+
+function formatMetric(value: number, unit: string): string {
+  if (!value) return '--';
+  return `${value.toLocaleString()} ${unit}`.trim();
+}
+
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
 // Memoized because it receives simple scalar props
-const SectionHeader = React.memo(function SectionHeader({ title, icon }: { title: string; icon: string }) {
+const SectionHeader = React.memo(function SectionHeader({
+  title,
+  icon,
+}: {
+  title: string;
+  icon: string;
+}) {
   const { colors } = useTheme();
   return (
     <View style={styles.sectionHeader}>
@@ -136,11 +157,7 @@ const SectionHeader = React.memo(function SectionHeader({ title, icon }: { title
 // Note: Card is not memoized because it accepts React.ReactNode children
 function Card({ children, style }: { children: React.ReactNode; style?: object }) {
   const { colors } = useTheme();
-  return (
-    <View style={[styles.card, { backgroundColor: colors.surface }, style]}>
-      {children}
-    </View>
-  );
+  return <View style={[styles.card, { backgroundColor: colors.surface }, style]}>{children}</View>;
 }
 
 // Memoized to avoid re-rendering when parent re-renders
@@ -165,13 +182,24 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
     healthScoreHistory: [],
     medicalEvents: [],
     vetWeightRange: null,
+    wearableStatus: { connected: false },
+    wearableSummary: [],
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [recordsResp, medications, appointments, metrics, scoreHistory, pet] = await Promise.all([
+      const [
+        recordsResp,
+        medications,
+        appointments,
+        metrics,
+        scoreHistory,
+        pet,
+        wearableStatus,
+        wearableSummary,
+      ] = await Promise.all([
         getMedicalRecords(petId, { limit: 100 }).catch(() => ({
           data: [] as MedicalRecord[],
           total: 0,
@@ -186,6 +214,8 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
           .getScoreHistory(petId, 365)
           .catch(() => [] as HealthScoreDataPoint[]),
         petService.getPetById(petId).catch(() => null),
+        wearableService.getWearableStatus(petId).catch(() => ({ connected: false })),
+        wearableService.getActivitySummary(petId).catch(() => [] as ActivitySummaryRow[]),
       ]);
 
       // Fetch breed-specific weight range if we have breed info
@@ -210,12 +240,8 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
 
       // Build weight history from metrics
       const weightHistory: WeightDataPoint[] = sortedMetrics
-        .filter((m) => m.weightKg !== undefined)
-        .map((m) => ({
-          date: m.recordedAt,
-          weightKg: m.weightKg!,
-          note: m.notes,
-        }));
+        .filter((m): m is HealthMetricEntry & { weightKg: number } => m.weightKg !== undefined)
+        .map((m) => ({ date: m.recordedAt, weightKg: m.weightKg, note: m.notes }));
 
       // Build medical events from records for chart annotations
       const medicalEvents: MedicalEvent[] = sortedRecords
@@ -246,6 +272,8 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
         healthScoreHistory: scoreHistory,
         medicalEvents,
         vetWeightRange,
+        wearableStatus,
+        wearableSummary,
       });
     } finally {
       setLoading(false);
@@ -278,15 +306,24 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <View
+          style={[
+            styles.header,
+            { backgroundColor: colors.surface, borderBottomColor: colors.border },
+          ]}
+        >
           <TouchableOpacity onPress={onBack} style={styles.backBtn}>
             <Text style={[styles.backText, { color: colors.primary }]}>‹ Back</Text>
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{petName} · Dashboard</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
+            {petName} · Dashboard
+          </Text>
           <View style={styles.metricsBtn} />
         </View>
         <View style={{ padding: 16 }}>
-          {Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} height={80} />)}
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonCard key={i} height={80} />
+          ))}
         </View>
       </View>
     );
@@ -298,18 +335,38 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
     upcomingAppointments,
     latestMetric,
     healthScore,
-    weightHistory,
     healthScoreHistory,
     medicalEvents,
   } = data;
+  const wearableSteps = summaryValue(data.wearableSummary, 'steps');
+  const wearableSleep = summaryValue(data.wearableSummary, 'sleep_duration');
+  const wearableCalories = summaryValue(data.wearableSummary, 'calories');
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={onBack} style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Back">
+      <View
+        style={[
+          styles.header,
+          { backgroundColor: colors.surface, borderBottomColor: colors.border },
+        ]}
+      >
+        <TouchableOpacity
+          onPress={onBack}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
           <Text style={[styles.backText, { color: colors.primary }]}>‹ Back</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{petName} · Dashboard</Text>
-        <TouchableOpacity onPress={onOpenMetrics} style={[styles.metricsBtn, { backgroundColor: colors.primaryMuted }]} accessibilityRole="button" accessibilityLabel="Open health metrics">
+        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
+          {petName} · Dashboard
+        </Text>
+        <TouchableOpacity
+          onPress={onOpenMetrics}
+          style={[styles.metricsBtn, { backgroundColor: colors.primaryMuted }]}
+          accessibilityRole="button"
+          accessibilityLabel="Open health metrics"
+        >
           <Text style={[styles.metricsBtnText, { color: colors.primary }]}>Metrics</Text>
         </TouchableOpacity>
       </View>
@@ -353,6 +410,36 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
             </View>
           ) : (
             <EmptyState message="No health metrics recorded yet. Tap 'Metrics' to log data." />
+          )}
+        </Card>
+
+        {/* ── Wearable Activity ─────────────────────────────────── */}
+        <SectionHeader title="Wearable Activity" icon="⌚" />
+        <Card>
+          {data.wearableStatus.connected ? (
+            <>
+              <Text style={styles.listRowSub}>
+                Connected to {data.wearableStatus.providerKey ?? 'wearable'}.
+              </Text>
+              <View style={styles.metricsGrid}>
+                <View style={styles.metricTile}>
+                  <Text style={styles.metricTileValue}>{formatMetric(wearableSteps, '')}</Text>
+                  <Text style={styles.metricTileLabel}>Steps</Text>
+                </View>
+                <View style={styles.metricTile}>
+                  <Text style={styles.metricTileValue}>{formatMetric(wearableSleep, 'min')}</Text>
+                  <Text style={styles.metricTileLabel}>Sleep</Text>
+                </View>
+                <View style={styles.metricTile}>
+                  <Text style={styles.metricTileValue}>
+                    {formatMetric(wearableCalories, 'kcal')}
+                  </Text>
+                  <Text style={styles.metricTileLabel}>Calories</Text>
+                </View>
+              </View>
+            </>
+          ) : (
+            <EmptyState message="No wearable connected. Connect FitBark or Whistle from Settings to sync activity and sleep." />
           )}
         </Card>
 
@@ -510,12 +597,21 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, fontSize: 14 },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: 16, borderBottomWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
   },
   backBtn: { padding: 4 },
   backText: { fontSize: 17 },
-  headerTitle: { flex: 1, fontSize: 16, fontWeight: '700', textAlign: 'center', marginHorizontal: 8 },
+  headerTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginHorizontal: 8,
+  },
   metricsBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   metricsBtnText: { fontWeight: '700', fontSize: 13 },
   scroll: { flex: 1 },
@@ -524,13 +620,24 @@ const styles = StyleSheet.create({
   sectionIcon: { fontSize: 18, marginRight: 8 },
   sectionTitle: { fontSize: 15, fontWeight: '700' },
   card: {
-    borderRadius: 12, padding: 16,
-    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
     backgroundColor: 'transparent', // set inline via colors.surface
   },
   emptyText: { fontSize: 14, textAlign: 'center', paddingVertical: 8 },
   scoreRow: { flexDirection: 'row', alignItems: 'center' },
-  scoreBadge: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  scoreBadge: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
   scoreNumber: { fontSize: 28, fontWeight: '800', color: '#fff' },
   scoreMax: { fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: -4 },
   scoreDetails: { flex: 1 },
@@ -548,10 +655,37 @@ const styles = StyleSheet.create({
   listRowTitle: { fontSize: 14, fontWeight: '600' },
   listRowSub: { fontSize: 13, marginTop: 2 },
   listRowDate: { fontSize: 12, marginTop: 4 },
-  apptDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#1565c0', marginTop: 4, marginRight: 12 },
-  medDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#6a1b9a', marginTop: 4, marginRight: 12 },
-  recDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#2e7d32', marginTop: 4, marginRight: 12 },
-  statusBadge: { alignSelf: 'flex-start', marginTop: 4, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  apptDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#1565c0',
+    marginTop: 4,
+    marginRight: 12,
+  },
+  medDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#6a1b9a',
+    marginTop: 4,
+    marginRight: 12,
+  },
+  recDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#2e7d32',
+    marginTop: 4,
+    marginRight: 12,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
   statusConfirmed: { backgroundColor: '#e8f5e9' },
   statusBadgeText: { fontSize: 11, fontWeight: '600' },
 });
