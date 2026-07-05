@@ -3,8 +3,9 @@
 import { createApp, setReadiness } from './app';
 import { checkDatabaseConnection, runMigrations } from '../config/database';
 import apiKeyService from '../services/apiKeyService';
-import { startPaymentIdempotencyCleanupJob } from '../services/stellarPaymentService';
 import { startReceiptCheckJob, startScheduledProcessor } from '../services/pushService';
+import { startPaymentIdempotencyCleanupJob } from '../services/stellarPaymentService';
+import { createSignalingServer } from '../services/webrtcService';
 import logger from '../utils/logger';
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -42,6 +43,7 @@ async function start(): Promise<void> {
 
   const app = createApp();
   const server = http.createServer(app);
+  createSignalingServer(server);
 
   process.on('SIGTERM', () => shutdown('SIGTERM', server));
   process.on('SIGINT', () => shutdown('SIGINT', server));

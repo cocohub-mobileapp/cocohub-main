@@ -86,6 +86,7 @@ export interface StoredAppointment {
   isTelemedicine?: boolean;
   videoCallUrl?: string;
   videoProvider?: 'jitsi' | 'zoom';
+  consultationId?: string;
   timeZone?: string;
   questionnaireDueAt?: string;
   questionnaireSentAt?: string;

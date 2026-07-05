@@ -18,7 +18,6 @@ import {
   getWaitingPosition,
   estimatedWaitMinutes,
   listConsultationsForUser,
-  joinWaitingRoom,
   recordConsent,
 } from '../../services/webrtcService';
 import { ok, sendError } from '../response';
@@ -95,22 +94,12 @@ router.post('/:id/join', (req: AuthenticatedRequest, res) => {
 
   const isOwner = consultation.ownerId === userId;
 
-  // Owner joining triggers the waiting room entry
-  if (isOwner && consultation.status === 'scheduled') {
-    try {
-      joinWaitingRoom(consultation.id, userId);
-    } catch (err) {
-      return sendError(
-        res,
-        503,
-        'WAITING_ROOM_FULL',
-        err instanceof Error ? err.message : 'Waiting room is full',
-      );
-    }
-  }
-
-  const position = isOwner ? getWaitingPosition(consultation.id) : undefined;
-  const waitMins = isOwner ? estimatedWaitMinutes(consultation.id) : undefined;
+  const position =
+    isOwner && consultation.status === 'waiting' ? getWaitingPosition(consultation.id) : undefined;
+  const waitMins =
+    isOwner && consultation.status === 'waiting'
+      ? estimatedWaitMinutes(consultation.id)
+      : undefined;
 
   (req as AuditableRequest).audit?.('consultation.joined', 'pet', consultation.petId, {
     consultationId: consultation.id,
@@ -122,6 +111,8 @@ router.post('/:id/join', (req: AuthenticatedRequest, res) => {
       consultationId: consultation.id,
       roomToken: consultation.roomToken,
       iceServers: getIceServers(),
+      userId,
+      userRole: req.user!.role,
       ...(position != null ? { waitingRoomPosition: position } : {}),
       ...(waitMins != null ? { estimatedWaitMinutes: waitMins } : {}),
     }),
@@ -172,6 +163,7 @@ function toResponse(c: ReturnType<typeof getConsultationById>) {
     waitingRoomJoinedAt: c.waitingRoomJoinedAt,
     startedAt: c.startedAt,
     endedAt: c.endedAt,
+    medicalRecordId: c.medicalRecordId,
     recordingConsent: c.recordingConsent,
     createdAt: c.createdAt,
     updatedAt: c.updatedAt,

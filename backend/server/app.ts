@@ -20,6 +20,7 @@ import authRouter from './routes/auth';
 import backupsRouter from './routes/backups';
 import breedsRouter from './routes/breeds';
 import communityRouter from './routes/community';
+import consultationsRouter from './routes/consultations';
 import docsRouter from './routes/docs';
 import emergencyRouter from './routes/emergency';
 import familySharingRouter from './routes/familySharing';
@@ -44,6 +45,7 @@ import usersRouter from './routes/users';
 import vaccinationsRouter from './routes/vaccinations';
 import vetsRouter from './routes/vets';
 import vitalsRouter from './routes/vitals';
+import { getPoolStats } from '../config/database';
 import { attachAudit } from '../middleware/auditLog';
 import { authRateLimiter, dataRateLimiter, publicRateLimiter } from '../middleware/rateLimiter';
 import activityRouter from '../src/routes/activity';
@@ -60,8 +62,6 @@ import notificationsRouter from '../src/routes/notifications';
 import notificationTemplatesRouter from '../src/routes/notificationTemplates';
 import oauthRouter from '../src/routes/oauth';
 import shelterRouter from '../src/routes/shelter';
-
-import { getPoolStats } from '../config/database';
 
 // Readiness probe state — set to false while the process is draining
 let isReady = true;
@@ -170,6 +170,7 @@ export function createApp(): Express {
   api.use('/pets', dataRateLimiter, petsRouter);
   api.use('/medical-records', dataRateLimiter, medicalRecordsRouter);
   api.use('/appointments', dataRateLimiter, appointmentsRouter);
+  api.use('/consultations', dataRateLimiter, consultationsRouter);
   api.use('/telemedicine', telemedicineRouter);
   api.use('/medications', dataRateLimiter, medicationsRouter);
   api.use('/vaccinations', vaccinationsRouter);

@@ -144,6 +144,9 @@ export interface Appointment {
   /** Provider used to generate the video call link */
   videoProvider?: 'jitsi' | 'zoom';
 
+  /** In-app WebRTC consultation room id for telemedicine appointments */
+  consultationId?: string;
+
   /** Timezone where the appointment is scheduled */
   timeZone?: string;
 

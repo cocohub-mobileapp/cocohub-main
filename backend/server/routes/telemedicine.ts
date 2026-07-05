@@ -5,6 +5,7 @@ import { AppointmentStatus, AppointmentType } from '../../models/Appointment';
 import { UserRole } from '../../models/UserRole';
 import { getVetAvailability } from '../../services/telemedicineService';
 import { generateVideoCallLink } from '../../services/videoCallService';
+import { createConsultation } from '../../services/webrtcService';
 import { addMinutes, getCurrentDateInTimezone, parseZonedDateTime } from '../../utils/dateUtils';
 import { ok, sendError } from '../response';
 import { store, type StoredAppointment } from '../store';
@@ -81,6 +82,13 @@ router.post('/appointments', (req: AuthenticatedRequest, res) => {
 
   const appointmentId = store.newId();
   const videoCallLink = generateVideoCallLink(appointmentId);
+  const consultation = createConsultation(
+    body.petId.trim(),
+    pet.ownerId,
+    body.vetId.trim(),
+    scheduledAt.toISOString(),
+    body.durationMinutes ?? 30,
+  );
 
   const row: StoredAppointment = {
     id: appointmentId,
@@ -96,6 +104,7 @@ router.post('/appointments', (req: AuthenticatedRequest, res) => {
     isTelemedicine: true,
     videoCallUrl: videoCallLink.url,
     videoProvider: videoCallLink.provider,
+    consultationId: consultation.id,
     questionnaireDueAt: addMinutes(scheduledAt, -24 * 60).toISOString(),
     questionnaireSentAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
