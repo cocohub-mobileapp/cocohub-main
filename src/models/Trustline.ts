@@ -43,6 +43,15 @@ export interface TrustlineState {
   availableXlm: string;
 }
 
+export type TrustlineActionStatus = 'idle' | 'pending' | 'confirmed' | 'failed';
+
+export interface CocohubAssetTrustlineStatus extends CocohubAssetDefinition {
+  balance: string;
+  earnedBalance: string;
+  hasTrustline: boolean;
+  trustline?: TrustlineAsset;
+}
+
 export interface AddTrustlineParams {
   accountSecretKey: string;
   assetCode: string;
