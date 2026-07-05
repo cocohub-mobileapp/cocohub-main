@@ -7,8 +7,11 @@ import * as Sharing from 'expo-sharing';
 import QRCode from 'qrcode';
 
 import {
+  generateHealthDashboardReport,
   generateVaccinationCertificate,
+  shareHealthReport,
   shareCertificate,
+  type HealthDashboardReportData,
   type PetCertificateInfo,
 } from '../../services/pdfService';
 import type { VaccinationReminder } from '../../services/vaccinationService';
@@ -77,6 +80,55 @@ const mockVaccinations: VaccinationReminder[] = [
     },
   },
 ];
+
+const mockHealthReport: HealthDashboardReportData = {
+  pet: {
+    petId: 'pet-123',
+    petName: 'Buddy',
+  },
+  healthScore: 86,
+  latestMetric: {
+    recordedAt: '2026-06-20T12:00:00Z',
+    weightKg: 27.4,
+    temperatureC: 38.4,
+    activityLevel: 'high',
+    notes: 'Normal energy',
+  },
+  weightHistory: [
+    {
+      recordedAt: '2026-06-20T12:00:00Z',
+      weightKg: 27.4,
+    },
+    {
+      recordedAt: '2026-06-01T12:00:00Z',
+      weightKg: 27.1,
+    },
+  ],
+  activeMedications: [
+    {
+      name: 'Carprofen',
+      dosage: '25mg',
+      endDate: '2026-07-01',
+    },
+  ],
+  upcomingAppointments: [
+    {
+      date: '2026-07-10',
+      time: '09:30',
+      type: 'wellness_check',
+      status: 'scheduled',
+      vetName: 'Dr. Smith',
+    },
+  ],
+  recentRecords: [
+    {
+      type: 'treatment',
+      createdAt: '2026-06-15T09:00:00Z',
+      notes: 'Follow-up complete',
+    },
+  ],
+  generatedAt: '2026-06-21T08:00:00Z',
+};
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -160,6 +212,40 @@ describe('pdfService — Vaccination Certificate PDF Generator (Issue #417)', ()
       mockIsAvailable.mockResolvedValue(false);
       await expect(shareCertificate('/mock/cert.txt')).rejects.toThrow(
         'Sharing is not available on this device.',
+      );
+    });
+  });
+
+  describe('generateHealthDashboardReport', () => {
+    it('generates a PDF health dashboard report and writes it to the filesystem', async () => {
+      const report = await generateHealthDashboardReport(mockHealthReport);
+
+      expect(report.filePath).toContain('health-report-pet-123');
+      expect(report.filePath).toContain('.pdf');
+      expect(report.hash).toBeDefined();
+      expect(report.generatedAt).toBe('2026-06-21T08:00:00Z');
+      expect(mockWriteFile).toHaveBeenCalledTimes(1);
+    });
+
+    it('writes valid PDF content with health dashboard sections', async () => {
+      await generateHealthDashboardReport(mockHealthReport);
+
+      const content: string = mockWriteFile.mock.calls[0][1];
+      expect(content.startsWith('%PDF-1.4')).toBe(true);
+      expect(content).toContain('Buddy Health Report');
+      expect(content).toContain('Health Summary');
+      expect(content).toContain('Weight History');
+      expect(content).toContain('Active Medications');
+      expect(content).toContain('Upcoming Appointments');
+      expect(content).toContain('Recent Medical Records');
+    });
+
+    it('shares health reports as application/pdf', async () => {
+      await shareHealthReport('/mock/documents/health-report.pdf');
+
+      expect(mockShare).toHaveBeenCalledWith(
+        '/mock/documents/health-report.pdf',
+        expect.objectContaining({ mimeType: 'application/pdf' }),
       );
     });
   });
