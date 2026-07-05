@@ -19,14 +19,17 @@ import {
   View,
 } from 'react-native';
 
+import VideoConsultationScreen from './VideoConsultationScreen';
 import type { Appointment } from '../models/Appointment';
-import { pickDocument, uploadDocument, type DocumentMeta } from '../services/documentService';
+import { pickDocument, uploadDocument } from '../services/documentService';
 import petService, { type Pet } from '../services/petService';
 import {
   getTelemedicineAvailability,
+  joinTelemedicineConsultation,
   reportTelemedicineNoShow,
   scheduleTelemedicineAppointment,
   submitTelemedicineQuestionnaire,
+  type ConsultationJoinInfo,
   type TelemedicineAvailabilitySlot,
 } from '../services/telemedicineService';
 import { searchVets, type VetProfile } from '../services/vetService';
@@ -82,6 +85,10 @@ const TelemedicineScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [localTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+  const [joiningCall, setJoiningCall] = useState(false);
+  const [activeCall, setActiveCall] = useState<(ConsultationJoinInfo & { petName: string }) | null>(
+    null,
+  );
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -207,6 +214,27 @@ const TelemedicineScreen: React.FC = () => {
       Alert.alert('Unable to update appointment', String(err));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleJoinVideoConsultation = async () => {
+    if (!appointment) return;
+    if (!appointment.consultationId) {
+      Alert.alert('Video room unavailable', 'This appointment does not have a video room yet.');
+      return;
+    }
+
+    try {
+      setJoiningCall(true);
+      const room = await joinTelemedicineConsultation(appointment.consultationId);
+      setActiveCall({
+        ...room,
+        petName: selectedPet?.name ?? appointment.petName ?? appointment.pet?.name ?? 'Pet',
+      });
+    } catch (err) {
+      Alert.alert('Unable to join call', String(err));
+    } finally {
+      setJoiningCall(false);
     }
   };
 
@@ -371,6 +399,19 @@ const TelemedicineScreen: React.FC = () => {
     );
   };
 
+  if (activeCall) {
+    return (
+      <VideoConsultationScreen
+        consultationId={activeCall.consultationId}
+        roomToken={activeCall.roomToken}
+        userId={activeCall.userId}
+        userRole={activeCall.userRole}
+        petName={activeCall.petName}
+        onEnd={() => setActiveCall(null)}
+      />
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.outerContainer}
@@ -472,6 +513,20 @@ const TelemedicineScreen: React.FC = () => {
             </Text>
             <Text style={styles.detailText}>Video link:</Text>
             <Text style={styles.linkText}>{appointment.videoCallUrl}</Text>
+            <Pressable
+              style={[
+                styles.primaryBtn,
+                (!appointment.consultationId || joiningCall) && styles.primaryBtnDisabled,
+              ]}
+              onPress={handleJoinVideoConsultation}
+              disabled={!appointment.consultationId || joiningCall}
+            >
+              {joiningCall ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.primaryBtnText}>Start Video Consultation</Text>
+              )}
+            </Pressable>
 
             {!appointment.questionnaireRespondedAt ? (
               <>

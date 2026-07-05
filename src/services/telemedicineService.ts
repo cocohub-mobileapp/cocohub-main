@@ -2,6 +2,7 @@ import apiClient from './apiClient';
 import type { Appointment, AppointmentType } from '../models/Appointment';
 
 const TELEMEDICINE_ENDPOINT = '/telemedicine';
+const CONSULTATIONS_ENDPOINT = '/consultations';
 
 export interface TelemedicineAvailabilitySlot {
   date: string;
@@ -21,6 +22,36 @@ export interface ScheduleTelemedicineAppointmentInput {
   durationMinutes?: number;
   type?: AppointmentType;
   notes?: string;
+}
+
+export interface IceServer {
+  urls: string | string[];
+  username?: string;
+  credential?: string;
+}
+
+export type TelemedicineUserRole = 'owner' | 'vet';
+
+export interface ConsultationJoinInfo {
+  consultationId: string;
+  roomToken: string;
+  iceServers: IceServer[];
+  userId: string;
+  userRole: TelemedicineUserRole;
+  waitingRoomPosition?: number;
+  estimatedWaitMinutes?: number;
+}
+
+export interface RecordingConsentInfo {
+  consultationId: string;
+  recordingConsent: {
+    ownerId: string;
+    vetId: string;
+    ownerConsented: boolean;
+    vetConsented: boolean;
+    consentedAt?: string;
+  };
+  recordingEnabled: boolean;
 }
 
 export async function getTelemedicineAvailability(
@@ -47,6 +78,34 @@ export async function scheduleTelemedicineAppointment(
     const response = await apiClient.post<{ data: Appointment }>(
       `${TELEMEDICINE_ENDPOINT}/appointments`,
       input,
+    );
+    return response.data.data;
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : String(error));
+  }
+}
+
+export async function joinTelemedicineConsultation(
+  consultationId: string,
+): Promise<ConsultationJoinInfo> {
+  try {
+    const response = await apiClient.post<{ data: ConsultationJoinInfo }>(
+      `${CONSULTATIONS_ENDPOINT}/${encodeURIComponent(consultationId)}/join`,
+      {},
+    );
+    return response.data.data;
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : String(error));
+  }
+}
+
+export async function recordConsultationConsent(
+  consultationId: string,
+): Promise<RecordingConsentInfo> {
+  try {
+    const response = await apiClient.post<{ data: RecordingConsentInfo }>(
+      `${CONSULTATIONS_ENDPOINT}/${encodeURIComponent(consultationId)}/consent`,
+      {},
     );
     return response.data.data;
   } catch (error) {

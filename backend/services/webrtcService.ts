@@ -23,6 +23,7 @@ import type http from 'http';
 import { Server as SocketIOServer, type Socket } from 'socket.io';
 
 import { UserRole } from '../models/UserRole';
+import { store } from '../server/store';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIGURATION
@@ -82,6 +83,7 @@ export interface Consultation {
   roomToken: string;
   recordingConsent: RecordingConsent;
   recordingUrl?: string;
+  medicalRecordId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -370,12 +372,33 @@ function handleDisconnect(socket: Socket, consultationId: string): void {
   if (remaining.length === 0) {
     const c = consultations.get(consultationId);
     if (c && c.status === 'in_progress') {
+      const now = new Date().toISOString();
       c.status = 'completed';
-      c.endedAt = new Date().toISOString();
-      c.updatedAt = new Date().toISOString();
+      c.endedAt = now;
+      c.updatedAt = now;
+      if (!c.medicalRecordId) {
+        c.medicalRecordId = saveConsultationNote(c, now);
+      }
       leaveWaitingRoom(consultationId);
     }
   }
+}
+
+function saveConsultationNote(c: Consultation, timestamp: string): string {
+  const id = crypto.randomUUID();
+  store.medicalRecords.set(id, {
+    id,
+    petId: c.petId,
+    vetId: c.vetId,
+    type: 'telemedicine_consultation',
+    diagnosis: 'Telemedicine consultation completed',
+    treatment: 'Video consultation',
+    notes: `Telemedicine consultation ${c.id} completed.`,
+    visitDate: (c.startedAt ?? c.scheduledAt).slice(0, 10),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  });
+  return id;
 }
 
 // RTCIceServer and RTCSessionDescriptionInit are browser globals;
