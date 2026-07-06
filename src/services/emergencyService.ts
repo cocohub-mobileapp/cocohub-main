@@ -235,14 +235,23 @@ class EmergencyService {
     radiusKm = 10,
   ): Promise<VetClinic[]> {
     const apiKey = config.googlePlaces.apiKey;
+
+    // Try Google Places first (most complete data)
     if (apiKey) {
       try {
         return await this.fetchClinicsFromPlacesAPI(latitude, longitude, radiusKm, apiKey);
       } catch {
-        // fall through to mock data
+        // fall through to OpenStreetMap
       }
     }
-    return this.getMockClinics(latitude, longitude, radiusKm);
+
+    // Real fallback: OpenStreetMap Overpass API — always returns real clinics
+    try {
+      return await this.fetchClinicsFromOverpass(latitude, longitude, radiusKm);
+    } catch {
+      // If both real sources fail (no connectivity), return empty rather than fake data
+      return [];
+    }
   }
 
   private async fetchClinicsFromPlacesAPI(
@@ -298,48 +307,76 @@ class EmergencyService {
       .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
   }
 
-  private getMockClinics(latitude: number, longitude: number, radiusKm: number): VetClinic[] {
-    const mockClinics: VetClinic[] = [
-      {
-        id: 'clinic-1',
-        name: 'Emergency Vet Clinic',
-        address: '123 Main St',
-        phoneNumber: '555-0100',
-        latitude: latitude + 0.01,
-        longitude: longitude + 0.01,
-        available24h: true,
-        rating: 4.5,
-      },
-      {
-        id: 'clinic-2',
-        name: 'City Animal Hospital',
-        address: '456 Oak Ave',
-        phoneNumber: '555-0200',
-        latitude: latitude - 0.02,
-        longitude: longitude - 0.02,
-        available24h: false,
-        rating: 4.8,
-      },
-      {
-        id: 'clinic-3',
-        name: 'PetCare 24/7',
-        address: '789 Elm Rd',
-        phoneNumber: '555-0300',
-        latitude: latitude + 0.03,
-        longitude: longitude - 0.01,
-        available24h: true,
-        rating: 4.2,
-      },
-    ];
+  private async fetchClinicsFromOverpass(
+    latitude: number,
+    longitude: number,
+    radiusKm: number,
+  ): Promise<VetClinic[]> {
+    const radiusMeters = radiusKm * 1000;
+    // Overpass QL: find nodes and ways tagged as veterinary within radius
+    const query = `
+      [out:json][timeout:10];
+      (
+        node["amenity"="veterinary"](around:${radiusMeters},${latitude},${longitude});
+        way["amenity"="veterinary"](around:${radiusMeters},${latitude},${longitude});
+      );
+      out center qt;
+    `.trim();
 
-    return mockClinics
-      .map((clinic) => ({
-        ...clinic,
-        distance: this.calculateDistance(latitude, longitude, clinic.latitude, clinic.longitude),
-      }))
-      .filter((clinic) => (clinic.distance ?? Infinity) <= radiusKm)
+    const response = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `data=${encodeURIComponent(query)}`,
+    });
+
+    if (!response.ok) throw new Error(`Overpass API error: ${response.status}`);
+
+    const data = (await response.json()) as {
+      elements: Array<{
+        id: number;
+        lat?: number;
+        lon?: number;
+        center?: { lat: number; lon: number };
+        tags?: {
+          name?: string;
+          'addr:street'?: string;
+          'addr:city'?: string;
+          phone?: string;
+          'contact:phone'?: string;
+          opening_hours?: string;
+        };
+      }>;
+    };
+
+    return (data.elements ?? [])
+      .map((el) => {
+        const lat = el.lat ?? el.center?.lat;
+        const lon = el.lon ?? el.center?.lon;
+        if (lat === undefined || lon === undefined) return null;
+
+        const tags = el.tags ?? {};
+        const street = tags['addr:street'] ?? '';
+        const city = tags['addr:city'] ?? '';
+        const address = [street, city].filter(Boolean).join(', ') || 'Address unavailable';
+        const phone = tags['phone'] ?? tags['contact:phone'] ?? '';
+        const is24h = (tags['opening_hours'] ?? '').toLowerCase().includes('24/7');
+
+        return {
+          id: `osm-${el.id}`,
+          name: tags['name'] ?? 'Veterinary Clinic',
+          address,
+          phoneNumber: phone,
+          latitude: lat,
+          longitude: lon,
+          available24h: is24h,
+          distance: this.calculateDistance(latitude, longitude, lat, lon),
+        } as VetClinic;
+      })
+      .filter((c): c is VetClinic => c !== null)
       .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
   }
+
+  // NOTE: getMockClinics removed — never show fake clinic data in an emergency
 
   // ── SOS ──────────────────────────────────────────────────────────────────────
 

@@ -107,7 +107,53 @@
     "call_vet": "Call emergency vet",
     "nearest_clinic": "Find nearest clinic",
     "first_aid": "First aid guide",
-    "alert_sent": "Emergency alert sent"
+    "alert_sent": "Emergency alert sent",
+    "no_clinics_found": "No nearby clinics found. Check your internet connection.",
+    "location_denied": "Location permission is needed to find nearby clinics."
+  },
+  "emailVerification": {
+    "title": "Verify Your Email",
+    "subtitle": "We sent a 6-digit code to your email. Enter it below to activate your account.",
+    "placeholder": "Enter 6-digit code",
+    "verifyButton": "Verify Email",
+    "resendButton": "Resend code",
+    "resendCooldown": "Resend in {{seconds}}s",
+    "successTitle": "Email Verified!",
+    "successSubtitle": "Your account is now fully activated.",
+    "skipButton": "Skip for now"
+  },
+  "symptomChecker": {
+    "title": "AI Symptom Checker",
+    "inputPlaceholder": "Describe what you're observing…",
+    "analyseButton": "Analyse Symptoms →",
+    "selectPetFirst": "Please select which pet has these symptoms.",
+    "describeFirst": "Please describe what you are observing.",
+    "probableConditions": "Possible conditions",
+    "recommendedActions": "Recommended actions",
+    "disclaimer": "This is AI-assisted triage only and is not a medical diagnosis. Always consult a licensed veterinarian.",
+    "unavailable": "The AI symptom checker is temporarily offline. Please contact your vet directly."
+  },
+  "species": {
+    "dog": "Dog",
+    "cat": "Cat",
+    "bird": "Bird",
+    "rabbit": "Rabbit",
+    "hamster": "Hamster",
+    "guinea_pig": "Guinea Pig",
+    "fish": "Fish",
+    "reptile": "Reptile",
+    "horse": "Horse",
+    "ferret": "Ferret",
+    "turtle": "Turtle",
+    "other": "Other"
+  },
+  "birthday": {
+    "notification_title": "🎂 Happy Birthday, {{name}}!",
+    "notification_body": "Today is {{name}}'s special day. Give them some extra love! 🐾",
+    "milestone_title": "🩺 Health milestone",
+    "turns_one": "{{name}} turns 1! Great time to schedule a general wellness check.",
+    "senior": "{{name}} enters senior years at 7. Consider a senior wellness panel with your vet.",
+    "ten_years": "{{name}} is 10! Biannual vet visits are recommended for pets this age."
   },
   "error_boundary": {
     "title": "Something went wrong",

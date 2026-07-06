@@ -22,11 +22,13 @@ import { AppointmentStatus } from '../models/Appointment';
 import type { HealthMetricEntry } from '../models/HealthMetric';
 import type { Medication } from '../models/Medication';
 import { getUpcomingAppointments } from '../services/appointmentService';
+import breedInsightsService from '../services/breedInsightsService';
 import { getHealthMetrics, activityLevelToScore } from '../services/healthMetricService';
 import healthScoringServiceV2 from '../services/healthScoringServiceV2';
 import type { MedicalRecord } from '../services/medicalRecordService';
 import { getMedicalRecords } from '../services/medicalRecordService';
 import { getMedications, isMedicationActive } from '../services/medicationService';
+import petService from '../services/petService';
 import { useSecureScreen } from '../utils/secureScreen';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -47,6 +49,8 @@ interface DashboardData {
   weightHistory: WeightDataPoint[];
   healthScoreHistory: HealthScoreDataPoint[];
   medicalEvents: MedicalEvent[];
+  /** Dynamic vet-recommended weight range from breed data, null if unknown */
+  vetWeightRange: { min: number; max: number } | null;
 }
 
 // ─── Health Score Calculation ──────────────────────────────────────────────
@@ -160,13 +164,14 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
     weightHistory: [],
     healthScoreHistory: [],
     medicalEvents: [],
+    vetWeightRange: null,
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [recordsResp, medications, appointments, metrics, scoreHistory] = await Promise.all([
+      const [recordsResp, medications, appointments, metrics, scoreHistory, pet] = await Promise.all([
         getMedicalRecords(petId, { limit: 100 }).catch(() => ({
           data: [] as MedicalRecord[],
           total: 0,
@@ -180,7 +185,15 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
         healthScoringServiceV2
           .getScoreHistory(petId, 365)
           .catch(() => [] as HealthScoreDataPoint[]),
+        petService.getPetById(petId).catch(() => null),
       ]);
+
+      // Fetch breed-specific weight range if we have breed info
+      const vetWeightRange = pet?.breed
+        ? await breedInsightsService
+            .getPetWeightRange({ breed: pet.breed, species: pet.species })
+            .catch(() => null)
+        : null;
 
       const activeMeds = medications.filter((m) => isMedicationActive(m));
 
@@ -232,6 +245,7 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
         weightHistory,
         healthScoreHistory: scoreHistory,
         medicalEvents,
+        vetWeightRange,
       });
     } finally {
       setLoading(false);
@@ -288,7 +302,6 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
     healthScoreHistory,
     medicalEvents,
   } = data;
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
@@ -395,7 +408,7 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
             <WeightChart
               data={data.weightHistory}
               petName={petName}
-              vetRecommendedRange={{ min: 4.5, max: 5.5 }}
+              vetRecommendedRange={data.vetWeightRange ?? undefined}
               onExport={handleExportChart}
               height={300}
             />

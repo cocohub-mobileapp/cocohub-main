@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 
 import { EmptyState } from '../components/EmptyState';
+import DatePickerInput from '../components/DatePickerInput';
+import MultiStepFormHeader from '../components/MultiStepFormHeader';
 import { SkeletonCard } from '../components/SkeletonCard';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
@@ -43,6 +45,7 @@ import {
 } from '../services/medicationService';
 import { scheduleMedicationReminder } from '../services/notificationService';
 import { formatLocalDate, formatLocalTime } from '../utils/dateLocale';
+import haptics from '../utils/haptics';
 import { useSecureScreen } from '../utils/secureScreen';
 
 type Tab = 'list' | 'daily' | 'weekly';
@@ -301,6 +304,8 @@ const MedicationScreen: React.FC = () => {
         skipped,
       };
       await logDose(log);
+      // Haptic feedback: success for dose taken, warning for skipped
+      void (skipped ? haptics.warning() : haptics.success());
       const med = medications.find((m) => m.id === medicationId);
       if (med && !skipped) {
         // Decrement both supply fields, then resync run-out & notifications
@@ -568,28 +573,32 @@ const MedicationScreen: React.FC = () => {
           )}
           {formStep === 1 && (
             <>
-              {renderFormInput('startDate', 'Start date (YYYY-MM-DD)', {
-                value: form.startDate.slice(0, 10),
-                onChangeText: (v) =>
-                  setForm((f) => ({ ...f, startDate: new Date(v).toISOString() })),
-                isFirstInteractive: true,
-              })}
-              {renderFormInput('endDate', 'End date (YYYY-MM-DD)', {
-                value: form.endDate?.slice(0, 10) ?? '',
-                onChangeText: (v) =>
-                  setForm((f) => ({
-                    ...f,
-                    endDate: v ? new Date(v).toISOString() : '',
-                  })),
-              })}
-              {renderFormInput('refillDate', 'Refill date (YYYY-MM-DD)', {
-                value: form.refillDate?.slice(0, 10) ?? '',
-                onChangeText: (v) =>
-                  setForm((f) => ({
-                    ...f,
-                    refillDate: v ? new Date(v).toISOString() : '',
-                  })),
-              })}
+              <DatePickerInput
+                label="Start date *"
+                value={form.startDate.slice(0, 10)}
+                onChange={(v) =>
+                  setForm((f) => ({ ...f, startDate: v ? new Date(v).toISOString() : f.startDate }))
+                }
+                maxDate={new Date()}
+              />
+              <View style={{ height: 12 }} />
+              <DatePickerInput
+                label="End date"
+                value={form.endDate?.slice(0, 10) ?? ''}
+                onChange={(v) =>
+                  setForm((f) => ({ ...f, endDate: v ? new Date(v).toISOString() : '' }))
+                }
+                minDate={form.startDate ? new Date(form.startDate) : undefined}
+              />
+              <View style={{ height: 12 }} />
+              <DatePickerInput
+                label="Refill date"
+                value={form.refillDate?.slice(0, 10) ?? ''}
+                onChange={(v) =>
+                  setForm((f) => ({ ...f, refillDate: v ? new Date(v).toISOString() : '' }))
+                }
+              />
+              <View style={{ height: 12 }} />
               {renderFormInput('instructions', 'Instructions', {
                 value: form.instructions ?? '',
                 onChangeText: (v) => setForm((f) => ({ ...f, instructions: v })),

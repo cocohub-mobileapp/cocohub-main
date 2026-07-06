@@ -23,18 +23,18 @@
   font-size: 13px; color: var(--coco-sub);
   margin-bottom: 24px;
 }
-.breadcrumb a { color: var(--coco-accent); }
+.breadcrumbLink { color: var(--coco-accent); }
 
-h1 { font-size: 40px; font-weight: 800; margin-bottom: 8px; }
+.pageTitle { font-size: 40px; font-weight: 800; margin-bottom: 8px; color: var(--coco-text); }
 .updated { font-size: 13px; color: var(--coco-sub); margin-bottom: 48px; }
 
-section { margin-bottom: 40px; }
-h2 { font-size: 20px; font-weight: 700; margin-bottom: 12px; color: var(--coco-accent); }
-p { font-size: 15px; color: var(--coco-sub); line-height: 1.8; margin-bottom: 12px; }
-ul { padding-left: 20px; margin-bottom: 12px; }
-li { font-size: 15px; color: var(--coco-sub); line-height: 1.8; margin-bottom: 6px; }
-a { color: var(--coco-accent); }
-strong { color: var(--coco-text); }
+.section { margin-bottom: 40px; }
+.sectionTitle { font-size: 20px; font-weight: 700; margin-bottom: 12px; color: var(--coco-accent); }
+.body { font-size: 15px; color: var(--coco-sub); line-height: 1.8; margin-bottom: 12px; }
+.list { padding-left: 20px; margin-bottom: 12px; }
+.listItem { font-size: 15px; color: var(--coco-sub); line-height: 1.8; margin-bottom: 6px; }
+.link { color: var(--coco-accent); }
+.bold { color: var(--coco-text); font-weight: 600; }
 
 .footer {
   border-top: 1px solid var(--coco-border);
@@ -43,4 +43,4 @@ strong { color: var(--coco-text); }
   font-size: 13px;
   color: var(--coco-sub);
 }
-.footer a { color: var(--coco-accent); margin: 0 8px; }
+.footerLink { color: var(--coco-accent); margin: 0 8px; }

@@ -10,6 +10,8 @@ export interface BreedInsight {
   lifeExpectancyYears: number;
   commonHealthConditions: string[];
   careRecommendations: string[];
+  /** Typical healthy weight range in kg for an adult of this breed */
+  weightRangeKg?: { min: number; max: number };
 }
 
 export interface BreedSegment {
@@ -24,11 +26,14 @@ export interface PetBreedInsights {
   lifeExpectancyLabel: string;
   healthRisks: string[];
   careRecommendations: string[];
+  /** Blended healthy weight range across breed mix */
+  weightRangeKg?: { min: number; max: number };
   breakdown: Array<{
     name: string;
     percentage: number;
     lifeExpectancyYears?: number;
     healthConditions?: string[];
+    weightRangeKg?: { min: number; max: number };
   }>;
 }
 
@@ -307,6 +312,7 @@ export async function getBreedInsightsForPet(input: {
       percentage: segment.percentage,
       lifeExpectancyYears: found?.lifeExpectancyYears,
       healthConditions: found?.commonHealthConditions,
+      weightRangeKg: found?.weightRangeKg,
     };
   });
 
@@ -349,6 +355,21 @@ export async function getBreedInsightsForPet(input: {
       lifeExpectancyYears > 0 ? buildLifeExpectancyLabel(lifeExpectancyYears) : 'Unknown',
     healthRisks,
     careRecommendations,
+    weightRangeKg: (() => {
+      // Blend weight ranges weighted by breed percentage
+      const ranged = breakdown.filter((b) => b.weightRangeKg);
+      if (ranged.length === 0) return undefined;
+      const totalPct = ranged.reduce((s, b) => s + (b.percentage || 1), 0);
+      const min = ranged.reduce(
+        (s, b) => s + (b.weightRangeKg!.min * (b.percentage || 1)) / totalPct,
+        0,
+      );
+      const max = ranged.reduce(
+        (s, b) => s + (b.weightRangeKg!.max * (b.percentage || 1)) / totalPct,
+        0,
+      );
+      return { min: Math.round(min * 10) / 10, max: Math.round(max * 10) / 10 };
+    })(),
     breakdown,
   };
 }
@@ -363,6 +384,20 @@ export default {
   getBreedList,
   searchBreedSuggestions,
   getBreedInsightsForPet,
+  getPetBreedInsights: getBreedInsightsForPet,
   parseBreedBreakdown,
   generateCareRecommendations,
+  /** Returns blended healthy weight range for a pet, or null if unknown */
+  async getPetWeightRange(input: {
+    breed?: string;
+    species: Species;
+  }): Promise<{ min: number; max: number } | null> {
+    if (!input.breed) return null;
+    try {
+      const insights = await getBreedInsightsForPet(input);
+      return insights.weightRangeKg ?? null;
+    } catch {
+      return null;
+    }
+  },
 };

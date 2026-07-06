@@ -84,7 +84,7 @@ const RegisterScreen: React.FC<Props> = ({ onSuccess, onLogin }) => {
       <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
         <Text style={styles.logo}>🐾</Text>
         <Text style={styles.title}>Create Account</Text>
-        <Text style={styles.subtitle}>Join PetMedTracka</Text>
+        <Text style={styles.subtitle}>Join Cocohub</Text>
 
         <TextInput
           style={styles.input}

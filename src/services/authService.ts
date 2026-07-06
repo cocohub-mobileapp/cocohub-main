@@ -260,9 +260,31 @@ export async function logout(): Promise<void> {
   await clearSecureTokens();
 }
 
-export async function verifyEmail(_token: string): Promise<void> {
-  // Backend endpoint not yet available — silently succeed so the flow continues
-  return;
+export async function verifyEmail(token: string): Promise<void> {
+  try {
+    await authClient.post('/auth/verify-email', { token });
+  } catch (err) {
+    logError(err as Error, { service: 'authService', action: 'verify_email' });
+    if (axios.isAxiosError(err)) {
+      const msg = (err as AxiosLikeError).response?.data?.error?.message;
+      throw new AuthError(msg ?? 'Email verification failed', 'VERIFICATION_FAILED');
+    }
+    throw new AuthError('Email verification failed', 'VERIFICATION_FAILED');
+  }
+}
+
+export async function resendVerificationEmail(): Promise<void> {
+  try {
+    const token = await getSecureToken();
+    await authClient.post(
+      '/auth/resend-verification',
+      {},
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+    );
+  } catch (err) {
+    logError(err as Error, { service: 'authService', action: 'resend_verification' });
+    throw new AuthError('Failed to resend verification email', 'RESEND_FAILED');
+  }
 }
 
 export async function requestPasswordReset(email: string): Promise<void> {

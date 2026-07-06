@@ -5,10 +5,12 @@ import { View, StyleSheet, AppState, type AppStateStatus, I18nManager } from 're
 
 import ErrorBoundary from './src/components/ErrorBoundary';
 import OfflineIndicator from './src/components/OfflineIndicator';
+import SessionTimeoutModal from './src/components/SessionTimeoutModal';
 import { useSplashGuard } from './src/components/SplashGuard';
 import ThemeTransitionView from './src/components/ThemeTransitionView';
 import UpdatePrompt from './src/components/UpdatePrompt';
 import { PetProvider } from './src/context/PetContext';
+import { PetSelectorProvider } from './src/components/GlobalPetSelector';
 import { ThemeProvider } from './src/context/ThemeContext';
 import { ToastProvider } from './src/context/ToastContext';
 import i18n, { isRTL } from './src/i18n';
@@ -21,6 +23,7 @@ import {
 } from './src/services/appLockService';
 import { registerBackgroundMedicationTask } from './src/services/backgroundTaskService';
 import errorTracking from './src/services/errorTracking';
+import { scheduleAllPetBirthdays } from './src/services/petBirthdayService';
 import {
   registerNotificationActions,
   watchNotificationActions,
@@ -115,6 +118,7 @@ function App() {
     void registerNotificationActions();
     const subscription = watchNotificationActions();
     void registerBackgroundMedicationTask();
+    void scheduleAllPetBirthdays(); // Schedule birthday + health milestone reminders
 
     // Initialize widget service and update widgets
     const unsubscribeWidget = initializeWidgetService();
@@ -158,21 +162,24 @@ function App() {
     <ThemeProvider>
       <ToastProvider>
         <PetProvider>
-          <ErrorBoundary>
-            <ThemeTransitionView>
-              <View style={styles.root}>
-                <OfflineIndicator />
-                <AppNavigator />
-                <UpdatePrompt
-                  visible={updateStatus.visible}
-                  variant={updateStatus.visible ? updateStatus.variant : 'optional'}
-                  storeUrl={updateStatus.visible ? updateStatus.storeUrl : undefined}
-                  onUpdate={handleUpdate}
-                  onDismiss={handleDismiss}
-                />
-              </View>
-            </ThemeTransitionView>
-          </ErrorBoundary>
+          <PetSelectorProvider>
+            <ErrorBoundary>
+              <ThemeTransitionView>
+                <View style={styles.root}>
+                  <OfflineIndicator />
+                  <AppNavigator />
+                  <SessionTimeoutModal />
+                  <UpdatePrompt
+                    visible={updateStatus.visible}
+                    variant={updateStatus.visible ? updateStatus.variant : 'optional'}
+                    storeUrl={updateStatus.visible ? updateStatus.storeUrl : undefined}
+                    onUpdate={handleUpdate}
+                    onDismiss={handleDismiss}
+                  />
+                </View>
+              </ThemeTransitionView>
+            </ErrorBoundary>
+          </PetSelectorProvider>
         </PetProvider>
       </ToastProvider>
     </ThemeProvider>

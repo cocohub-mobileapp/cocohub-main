@@ -14,7 +14,10 @@ import {
 import MultiStepFormHeader from '../components/MultiStepFormHeader';
 import { useMultiStepFormFocus } from '../hooks/useMultiStepFormFocus';
 import type { Species } from '../models/Pet';
+import { SPECIES_OPTIONS } from '../models/Pet';
 import breedInsightsService, { type BreedInsight } from '../services/breedInsightsService';
+import { schedulePetBirthday } from '../services/petBirthdayService';
+import DatePickerInput from '../components/DatePickerInput';
 import petService, { type Pet } from '../services/petService';
 import { parseWeightToKg, weightUnit } from '../utils/localeValues';
 import { getPhoto, removePhoto, savePhoto } from '../utils/petPhotoStore';
@@ -272,6 +275,9 @@ const PetFormScreen: React.FC<Props> = ({ pet, ownerId = '', onBack, onSaved }) 
         await removePhoto(pet.id);
       }
 
+      // Reschedule birthday + health milestone notifications whenever pet DOB changes
+      void schedulePetBirthday(saved);
+
       onSaved(saved);
     } catch {
       Alert.alert('Error', 'Failed to save pet. Please try again.');
@@ -347,12 +353,30 @@ const PetFormScreen: React.FC<Props> = ({ pet, ownerId = '', onBack, onSaved }) 
               placeholder: 'e.g. Buddy',
               keyboardType: 'default',
             })}
-            {renderField({
-              key: 'species',
-              label: 'Species *',
-              placeholder: 'e.g. Dog, Cat',
-              keyboardType: 'default',
-            })}
+            {/* Species picker — grid of tappable chips */}
+            <View style={styles.fieldRow}>
+              <Text style={styles.fieldLabel}>Species *</Text>
+              <View style={styles.speciesGrid}>
+                {SPECIES_OPTIONS.map((opt) => {
+                  const isSelected = form.species === opt.value;
+                  return (
+                    <TouchableOpacity
+                      key={opt.value}
+                      style={[styles.speciesChip, isSelected && styles.speciesChipSelected]}
+                      onPress={() => setForm((f) => ({ ...f, species: opt.value }))}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: isSelected }}
+                      accessibilityLabel={opt.label}
+                    >
+                      <Text style={styles.speciesEmoji}>{opt.emoji}</Text>
+                      <Text style={[styles.speciesLabel, isSelected && styles.speciesLabelSelected]}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
             {renderField({
               key: 'breed',
               label: 'Breed',
@@ -389,12 +413,14 @@ const PetFormScreen: React.FC<Props> = ({ pet, ownerId = '', onBack, onSaved }) 
               keyboardType: 'decimal-pad',
               isFirstInteractive: true,
             })}
-            {renderField({
-              key: 'dateOfBirth',
-              label: 'Date of Birth',
-              placeholder: 'YYYY-MM-DD',
-              keyboardType: 'default',
-            })}
+            <View style={{ height: 14 }} />
+            <DatePickerInput
+              label="Date of Birth"
+              value={form.dateOfBirth}
+              onChange={(v) => setForm((f) => ({ ...f, dateOfBirth: v }))}
+              placeholder="Select date of birth"
+              maxDate={new Date()}
+            />
           </>
         );
       case 2:
@@ -450,6 +476,8 @@ const PetFormScreen: React.FC<Props> = ({ pet, ownerId = '', onBack, onSaved }) 
           totalSteps={totalSteps}
         />
         <View style={styles.formCard}>{renderStepContent()}</View>
+
+        {/* Step navigation */}
         <View style={styles.stepActions}>
           {!isFirstStep && (
             <TouchableOpacity
@@ -458,166 +486,19 @@ const PetFormScreen: React.FC<Props> = ({ pet, ownerId = '', onBack, onSaved }) 
               accessibilityRole="button"
               accessibilityLabel="Go to previous step"
             >
-              <Text style={styles.secondaryBtnText}>Back</Text>
+              <Text style={styles.secondaryBtnText}>← Back</Text>
             </TouchableOpacity>
           )}
-          <Text style={styles.photoHint}>{photoUri ? 'Change photo' : 'Add photo'}</Text>
-        </TouchableOpacity>
-
-        {/* Fields */}
-        <View style={styles.formCard}>
-          {(
-            [
-              { key: 'name', label: 'Name *', placeholder: 'e.g. Buddy', keyboardType: 'default' },
-              {
-                key: 'species',
-                label: 'Species *',
-                placeholder: 'e.g. Dog, Cat',
-                keyboardType: 'default',
-              },
-            ] as Array<{
-              key: keyof FormState;
-              label: string;
-              placeholder: string;
-              keyboardType: 'default' | 'decimal-pad';
-            }>
-          ).map(({ key, label, placeholder, keyboardType }) => (
-            <View key={key} style={styles.fieldRow}>
-              <Text style={styles.fieldLabel}>{label}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={placeholder}
-                value={form[key]}
-                onChangeText={set(key)}
-                keyboardType={keyboardType}
-                placeholderTextColor="#bbb"
-                accessibilityLabel={label.replace('*', '').trim()}
-                returnKeyType="next"
-                testID={`pet-${key}-input`}
-              />
-            </View>
-          ))}
-
-          {/* ── Breed autocomplete with image preview ── */}
-          <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>Breed</Text>
-
-            {/* Selected breed preview — shown after a breed is chosen */}
-            {selectedBreed && (
-              <View style={styles.selectedBreedRow} accessibilityLabel={`Selected breed: ${selectedBreed.name}`}>
-                {getBreedImageSource(selectedBreed) ? (
-                  <Image
-                    source={getBreedImageSource(selectedBreed)!}
-                    style={styles.selectedBreedImage}
-                    accessibilityLabel={`${selectedBreed.name} breed image`}
-                  />
-                ) : (
-                  <View style={[styles.selectedBreedImage, styles.breedImagePlaceholder]}>
-                    <Text style={styles.breedPlaceholderEmoji}>🐾</Text>
-                  </View>
-                )}
-                <Text style={styles.selectedBreedName}>{selectedBreed.name}</Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    setSelectedBreed(null);
-                    setForm((f) => ({ ...f, breed: '' }));
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Clear breed selection"
-                  style={styles.clearBreedBtn}
-                >
-                  <Text style={styles.clearBreedText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            <TextInput
-              style={styles.input}
-              placeholder="Search breed…"
-              value={form.breed}
-              onChangeText={updateBreedField}
-              placeholderTextColor="#bbb"
-              accessibilityLabel="Breed"
-              returnKeyType="next"
-              testID="pet-breed-input"
-            />
-          </View>
-
-          {/* Breed suggestion dropdown with thumbnails */}
-          {breedSuggestions.length > 0 && (
-            <View style={styles.suggestionsDropdown}>
-              <FlatList
-                data={breedSuggestions}
-                keyExtractor={(item) => item.id}
-                scrollEnabled={false}
-                ItemSeparatorComponent={() => <View style={styles.suggestionDivider} />}
-                renderItem={({ item: breed }) => (
-                  <TouchableOpacity
-                    onPress={() => selectBreed(breed)}
-                    style={styles.suggestionRow}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Select ${breed.name}`}
-                  >
-                    {breed.id !== 'mixed-breed' && breed.id !== 'unknown-breed' ? (
-                      <Image
-                        source={getBreedImageSource(breed)!}
-                        style={styles.suggestionThumbnail}
-                        accessibilityLabel={`${breed.name} thumbnail`}
-                      />
-                    ) : (
-                      <View style={[styles.suggestionThumbnail, styles.breedImagePlaceholder]}>
-                        <Text style={styles.breedPlaceholderEmoji}>🐾</Text>
-                      </View>
-                    )}
-                    <Text style={styles.suggestionRowText}>{breed.name}</Text>
-                  </TouchableOpacity>
-                )}
-              />
-            </View>
+          {!isLastStep && (
+            <TouchableOpacity
+              style={[styles.secondaryBtn, styles.nextBtn]}
+              onPress={handleNext}
+              accessibilityRole="button"
+              accessibilityLabel="Go to next step"
+            >
+              <Text style={styles.nextBtnText}>Next →</Text>
+            </TouchableOpacity>
           )}
-
-          {(
-            [
-              {
-                key: 'weight',
-                label: `Weight (${weightUnit()})`,
-                placeholder: `e.g. 12.5`,
-                keyboardType: 'decimal-pad',
-              },
-              {
-                key: 'dateOfBirth',
-                label: 'Date of Birth',
-                placeholder: 'YYYY-MM-DD',
-                keyboardType: 'default',
-              },
-              {
-                key: 'microchipId',
-                label: 'Microchip ID',
-                placeholder: 'Optional',
-                keyboardType: 'default',
-              },
-            ] as Array<{
-              key: keyof FormState;
-              label: string;
-              placeholder: string;
-              keyboardType: 'default' | 'decimal-pad';
-            }>
-          ).map(({ key, label, placeholder, keyboardType }) => (
-            <View key={key} style={styles.fieldRow}>
-              <Text style={styles.fieldLabel}>{label}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={placeholder}
-                value={form[key]}
-                onChangeText={set(key)}
-                keyboardType={keyboardType}
-                placeholderTextColor="#bbb"
-                accessibilityLabel={label.replace('*', '').trim()}
-                returnKeyType="next"
-                testID={`pet-${key}-input`}
-              />
-            </View>
-          ))}
         </View>
       </ScrollView>
     </View>
@@ -679,6 +560,70 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: '#f1f8e9',
     borderRadius: 10,
+  },
+  // ── Step navigation ──
+  stepActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    gap: 10,
+  },
+  secondaryBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  secondaryBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  nextBtn: {
+    backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
+  },
+  nextBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  // ── Species picker ──
+  speciesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 6,
+    marginHorizontal: -4,
+  },
+  speciesChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#ddd',
+    backgroundColor: '#fafafa',
+    margin: 4,
+    gap: 4,
+  },
+  speciesChipSelected: {
+    backgroundColor: '#e8f5e9',
+    borderColor: '#4CAF50',
+  },
+  speciesEmoji: {
+    fontSize: 15,
+  },
+  speciesLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+  },
+  speciesLabelSelected: {
+    color: '#2e7d32',
   },
   suggestionsTitle: {
     fontSize: 13,

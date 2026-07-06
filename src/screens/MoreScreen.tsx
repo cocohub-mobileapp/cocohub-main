@@ -28,6 +28,7 @@ const TelemedicineScreen = React.lazy(() => import('./TelemedicineScreen'));
 const EmergencyContactsScreen = React.lazy(() => import('./EmergencyContactsScreen'));
 const ReferralScreen = React.lazy(() => import('./ReferralScreen'));
 const SettingsScreen = React.lazy(() => import('./SettingsScreen'));
+const SymptomCheckerScreen = React.lazy(() => import('./SymptomCheckerScreen'));
 
 type MoreStackParamList = {
   MoreHub: undefined;
@@ -38,6 +39,7 @@ type MoreStackParamList = {
   Emergency: undefined;
   Referrals: undefined;
   Settings: undefined;
+  SymptomChecker: undefined;
 };
 
 const MoreStack = createNativeStackNavigator<MoreStackParamList>();
@@ -92,6 +94,7 @@ function MoreHub() {
     {
       title: 'Veterinary',
       items: [
+        { icon: 'pulse-outline', label: 'AI Symptom Checker', color: '#7B3FE4', onPress: () => navigation.navigate('SymptomChecker') },
         { icon: 'videocam-outline', label: 'Telemedicine', onPress: () => navigation.navigate('Telemedicine') },
         {
           icon: 'warning-outline', label: 'Emergency SOS',
@@ -178,6 +181,13 @@ export default function MoreScreen() {
       </MoreStack.Screen>
       <MoreStack.Screen name="Settings" options={{ title: 'Settings' }}>
         {() => <Lazy><SettingsScreen /></Lazy>}
+      </MoreStack.Screen>
+      <MoreStack.Screen name="SymptomChecker" options={{ title: 'AI Symptom Checker' }}>
+        {({ navigation }) => (
+          <Lazy>
+            <SymptomCheckerScreen onBack={() => navigation.goBack()} />
+          </Lazy>
+        )}
       </MoreStack.Screen>
     </MoreStack.Navigator>
   );

@@ -107,7 +107,53 @@
     "call_vet": "Llamar al veterinario de emergencias",
     "nearest_clinic": "Encontrar clínica más cercana",
     "first_aid": "Guía de primeros auxilios",
-    "alert_sent": "Alerta de emergencia enviada"
+    "alert_sent": "Alerta de emergencia enviada",
+    "no_clinics_found": "No se encontraron clínicas cercanas. Verifica tu conexión a internet.",
+    "location_denied": "Se necesita permiso de ubicación para encontrar clínicas cercanas."
+  },
+  "emailVerification": {
+    "title": "Verifica tu correo",
+    "subtitle": "Enviamos un código de 6 dígitos a tu correo. Ingrésalo para activar tu cuenta.",
+    "placeholder": "Ingresa el código de 6 dígitos",
+    "verifyButton": "Verificar correo",
+    "resendButton": "Reenviar código",
+    "resendCooldown": "Reenviar en {{seconds}}s",
+    "successTitle": "¡Correo verificado!",
+    "successSubtitle": "Tu cuenta ya está completamente activada.",
+    "skipButton": "Omitir por ahora"
+  },
+  "symptomChecker": {
+    "title": "Verificador de síntomas IA",
+    "inputPlaceholder": "Describe lo que estás observando…",
+    "analyseButton": "Analizar síntomas →",
+    "selectPetFirst": "Por favor selecciona qué mascota tiene estos síntomas.",
+    "describeFirst": "Por favor describe lo que estás observando.",
+    "probableConditions": "Posibles condiciones",
+    "recommendedActions": "Acciones recomendadas",
+    "disclaimer": "Este es un triaje asistido por IA y no es un diagnóstico médico. Consulta siempre a un veterinario.",
+    "unavailable": "El verificador de síntomas IA no está disponible. Contacta a tu veterinario."
+  },
+  "species": {
+    "dog": "Perro",
+    "cat": "Gato",
+    "bird": "Ave",
+    "rabbit": "Conejo",
+    "hamster": "Hámster",
+    "guinea_pig": "Cobayo",
+    "fish": "Pez",
+    "reptile": "Reptil",
+    "horse": "Caballo",
+    "ferret": "Hurón",
+    "turtle": "Tortuga",
+    "other": "Otro"
+  },
+  "birthday": {
+    "notification_title": "🎂 ¡Feliz cumpleaños, {{name}}!",
+    "notification_body": "¡Hoy es el día especial de {{name}}. Dale mucho amor! 🐾",
+    "milestone_title": "🩺 Hito de salud",
+    "turns_one": "¡{{name}} cumple 1 año! Buen momento para programar un chequeo general.",
+    "senior": "{{name}} entra en sus años senior a los 7. Considera un panel de salud senior con tu veterinario.",
+    "ten_years": "¡{{name}} tiene 10 años! Se recomiendan visitas veterinarias dos veces al año."
   },
   "error_boundary": {
     "title": "Algo salió mal",

@@ -8,6 +8,7 @@
 import React, { Suspense, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import GlobalPetSelector from '../components/GlobalPetSelector';
 import { useTheme } from '../context/ThemeContext';
 
 const MedicationScreen = React.lazy(() => import('../screens/MedicationScreen'));
@@ -36,6 +37,9 @@ export default function CareNavigator() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Pet selector — lets users switch pets without leaving Care tab */}
+      <GlobalPetSelector />
+
       {/* Top tab bar */}
       <View style={[styles.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         {TABS.map((tab) => {

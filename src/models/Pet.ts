@@ -2,7 +2,43 @@
  * Pet model for mobile app
  */
 
-export type Species = 'dog' | 'cat' | 'bird' | 'rabbit' | 'other';
+export type Species =
+  | 'dog'
+  | 'cat'
+  | 'bird'
+  | 'rabbit'
+  | 'hamster'
+  | 'guinea_pig'
+  | 'fish'
+  | 'reptile'
+  | 'horse'
+  | 'ferret'
+  | 'turtle'
+  | 'other';
+
+/** Human-readable label + emoji for each species, used in forms and UI */
+export const SPECIES_OPTIONS: { value: Species; label: string; emoji: string }[] = [
+  { value: 'dog', label: 'Dog', emoji: '🐕' },
+  { value: 'cat', label: 'Cat', emoji: '🐈' },
+  { value: 'bird', label: 'Bird', emoji: '🐦' },
+  { value: 'rabbit', label: 'Rabbit', emoji: '🐇' },
+  { value: 'hamster', label: 'Hamster', emoji: '🐹' },
+  { value: 'guinea_pig', label: 'Guinea Pig', emoji: '🐾' },
+  { value: 'fish', label: 'Fish', emoji: '🐠' },
+  { value: 'reptile', label: 'Reptile', emoji: '🦎' },
+  { value: 'horse', label: 'Horse', emoji: '🐴' },
+  { value: 'ferret', label: 'Ferret', emoji: '🦔' },
+  { value: 'turtle', label: 'Turtle', emoji: '🐢' },
+  { value: 'other', label: 'Other', emoji: '🐾' },
+];
+
+/** Returns the emoji for a given species */
+export const getSpeciesEmoji = (species: Species): string =>
+  SPECIES_OPTIONS.find((s) => s.value === species)?.emoji ?? '🐾';
+
+/** Returns the display label for a given species */
+export const getSpeciesLabel = (species: Species): string =>
+  SPECIES_OPTIONS.find((s) => s.value === species)?.label ?? 'Other';
 
 export interface Pet {
   id: string;

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import emergencyService from '../services/emergencyService';
+import haptics from '../utils/haptics';
 
 interface SOSButtonProps {
   onSOSSent?: () => void;
@@ -29,10 +30,13 @@ const SOSButton: React.FC<SOSButtonProps> = ({ onSOSSent, style }) => {
     setIsCountdown(false);
     setCountdown(3);
     Vibration.vibrate([0, 500, 200, 500]);
+    void haptics.heavy(); // strong haptic on SOS fire
     try {
       await emergencyService.triggerSOS('Pet emergency - need immediate help');
+      void haptics.success();
       if (onSOSSent) onSOSSent();
     } catch (error) {
+      void haptics.error();
       console.error('SOS failed', error);
     }
   }, [onSOSSent]);
@@ -81,6 +85,7 @@ const SOSButton: React.FC<SOSButtonProps> = ({ onSOSSent, style }) => {
   const handlePressIn = () => {
     setIsPressing(true);
     Vibration.vibrate(50);
+    void haptics.heavy();
     Animated.timing(pressAnim, {
       toValue: 1,
       duration: 1500, // Long press requirement: 1.5 seconds

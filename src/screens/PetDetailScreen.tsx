@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { SkeletonCard } from '../components/SkeletonCard';
+import BreedInsightCard from '../components/BreedInsightCard';
 import { useTheme } from '../context/ThemeContext';
 import type { Pet } from '../models/Pet';
 import breedInsightsService, { type PetBreedInsights } from '../services/breedInsightsService';
@@ -178,30 +179,13 @@ const PetDetailScreen: React.FC<Props> = ({
         </View>
 
         {breedInsights ? (
-          <View style={styles.insightsCard}>
-            <Text style={styles.insightsTitle}>Breed Insights</Text>
-            <Text style={styles.insightsLine}>{breedInsights.breedDisplay}</Text>
-            <Text style={styles.insightsSubtitle}>Estimated life expectancy</Text>
-            <Text style={styles.insightsValue}>{breedInsights.lifeExpectancyLabel}</Text>
-            <Text style={styles.insightsSubtitle}>Common health risks</Text>
-            {breedInsights.healthRisks.length > 0 ? (
-              breedInsights.healthRisks.map((risk) => (
-                <Text key={risk} style={styles.insightsBullet}>
-                  • {risk}
-                </Text>
-              ))
-            ) : (
-              <Text style={styles.insightsBullet}>• No breed-specific risks available.</Text>
-            )}
-            <Text style={[styles.insightsSubtitle, styles.sectionSpacing]}>
-              Care recommendations
-            </Text>
-            {breedInsights.careRecommendations.map((recommendation) => (
-              <Text key={recommendation} style={styles.insightsBullet}>
-                • {recommendation}
-              </Text>
-            ))}
-          </View>
+          <BreedInsightCard
+            petId={petId}
+            breed={pet.breed}
+            species={pet.species}
+            weightKg={pet.weightKg}
+            dateOfBirth={pet.dateOfBirth}
+          />
         ) : null}
 
         <TouchableOpacity

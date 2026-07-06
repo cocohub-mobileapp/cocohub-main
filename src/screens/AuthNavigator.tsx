@@ -23,9 +23,14 @@ const AuthNavigator: React.FC<Props> = ({ onAuthenticated }) => {
   const [pendingSession, setPendingSession] = useState<AuthSession | null>(null);
 
   const handleAuthSuccess = (session: AuthSession) => {
-    // Email verification is not yet implemented on the backend.
-    // Go straight to authenticated state.
-    onAuthenticated(session);
+    // After registration, require email verification before granting access.
+    // Login skips verification (already verified or legacy account).
+    if (screen === 'register') {
+      setPendingSession(session);
+      setScreen('verify');
+    } else {
+      onAuthenticated(session);
+    }
   };
 
   const handleVerified = () => {
