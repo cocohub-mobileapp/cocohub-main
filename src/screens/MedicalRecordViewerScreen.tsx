@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 
+import { EmptyState } from '../components/EmptyState';
 import MedicalRecordAttachments from '../components/MedicalRecordAttachments';
 import {
   getMedicalRecords,
@@ -308,6 +309,46 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
     return null;
   }, [loadingMore, hasMore, records.length, isSearchMode]);
 
+  const renderEmptyState = useCallback(() => {
+    if (isSearchMode) {
+      return (
+        <EmptyState
+          icon="search-outline"
+          title="No Matching Records"
+          description={`No medical records matched "${searchQuery}". Try a different search term or browse all records.`}
+          buttonText="Clear search"
+          onPress={clearSearch}
+          secondaryText="Adjust filters"
+          onSecondaryPress={() => setFiltersVisible(true)}
+        />
+      );
+    }
+
+    if (selectedType || startDate || endDate) {
+      return (
+        <EmptyState
+          icon="options-outline"
+          title="No Records Match Filters"
+          description="Try widening the date range or selecting a different record type."
+          buttonText="Adjust filters"
+          onPress={() => setFiltersVisible(true)}
+          secondaryText="Reset filters"
+          onSecondaryPress={resetFilters}
+        />
+      );
+    }
+
+    return (
+      <EmptyState
+        icon="document-text-outline"
+        title="No Medical Records Yet"
+        description="Vaccinations, treatments, checkups, and other pet health records will appear here once they are added."
+        buttonText="Browse filters"
+        onPress={() => setFiltersVisible(true)}
+      />
+    );
+  }, [clearSearch, endDate, isSearchMode, resetFilters, searchQuery, selectedType, startDate]);
+
   // ─── Render ───────────────────────────────────────────────────────────────
 
   // ── Auth gate: show authentication screen until verified ──
@@ -357,7 +398,7 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
             }}
             keyboardType="number-pad"
             secureTextEntry
-            maxLength= {10}
+            maxLength={10}
             accessibilityLabel="PIN input"
             onSubmitEditing={handlePinSubmit}
           />
@@ -467,11 +508,7 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
           removeClippedSubviews
           // Layout
           contentContainerStyle={records.length === 0 ? styles.emptyContainer : styles.list}
-          ListEmptyComponent={
-            <Text style={styles.emptyText}>
-              {isSearchMode ? `No results for "${searchQuery}".` : 'No records found.'}
-            </Text>
-          }
+          ListEmptyComponent={renderEmptyState}
         />
       )}
 
@@ -772,8 +809,7 @@ const styles = StyleSheet.create({
   chipClearText: { fontSize: 12, color: '#991B1B', fontWeight: '600' },
   loader: { marginTop: 40 },
   list: { padding: 12, paddingBottom: 24 },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 80 },
-  emptyText: { color: '#9CA3AF', fontSize: 15, textAlign: 'center' },
+  emptyContainer: { flexGrow: 1, justifyContent: 'center' },
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,
