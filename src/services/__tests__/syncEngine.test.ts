@@ -102,6 +102,36 @@ describe('SyncEngine', () => {
     engine.destroy();
   });
 
+  it('clears a queued record only after a confirmed server success', async () => {
+    (networkMonitor.isOnline as jest.Mock).mockResolvedValue(true);
+    (apiClient.post as jest.Mock).mockResolvedValue({
+      data: { results: [{ status: 'updated' }] },
+    });
+    const engine = new SyncEngine({ batchSize: 10 });
+
+    await engine.markDirty('pet', 'p1', 'update', { name: 'Buddy' });
+    const result = await engine.syncNow();
+
+    expect(result.type).toBe('completed');
+    expect(sqliteState['pet:p1']).toBeUndefined();
+    engine.destroy();
+  });
+
+  it('keeps queued records when the server response is not a success confirmation', async () => {
+    (networkMonitor.isOnline as jest.Mock).mockResolvedValue(true);
+    (apiClient.post as jest.Mock).mockResolvedValue({
+      data: { results: [{ status: 'conflict', serverRecord: { id: 'p1' } }] },
+    });
+    const engine = new SyncEngine({ batchSize: 10 });
+
+    await engine.markDirty('pet', 'p1', 'update', { name: 'Buddy' });
+    const result = await engine.syncNow();
+
+    expect(result.failed).toBe(1);
+    expect(sqliteState['pet:p1']).toBeDefined();
+    engine.destroy();
+  });
+
   it('supports configurable conflict strategies', () => {
     const engine = new SyncEngine();
     const client = { name: 'client', updatedAt: '2026-01-02T00:00:00.000Z' };

@@ -318,12 +318,18 @@ export class SyncEngine {
     });
     const result = response.data as {
       results?: Array<{ status: string; serverRecord?: Record<string, unknown> }>;
+      data?: {
+        results?: Array<{ status: string; serverRecord?: Record<string, unknown> }>;
+      };
     };
-    const first = result.results?.[0];
-    if (!first || first.status === 'failed') throw new Error('Server rejected sync record');
+    const results = result.results ?? result.data?.results;
+    const confirmedStatuses = new Set(['created', 'updated', 'deleted']);
+    const first = results?.[0];
+    if (!first) throw new Error('Server did not confirm sync record');
     if (first.status === 'conflict' && first.serverRecord) {
       this.emit({ type: 'conflict', total: 1, completed: 0, failed: 0, record });
     }
+    if (!confirmedStatuses.has(first.status)) throw new Error('Server rejected sync record');
   }
 
   private async clearRecord(id: string): Promise<void> {
