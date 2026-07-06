@@ -1,13 +1,12 @@
 ﻿import React, { useCallback, useEffect, useState } from 'react';
 import {
+  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  Share,
-  Platform,
 } from 'react-native';
 
 import HealthScoreChart, {
@@ -29,6 +28,8 @@ import type { MedicalRecord } from '../services/medicalRecordService';
 import { getMedicalRecords } from '../services/medicalRecordService';
 import { getMedications, isMedicationActive } from '../services/medicationService';
 import petService from '../services/petService';
+import type { Pet } from '../services/petService';
+import { generateHealthMetricsReport, shareHealthMetricsReport } from '../services/pdfService';
 import { useSecureScreen } from '../utils/secureScreen';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -51,6 +52,7 @@ interface DashboardData {
   medicalEvents: MedicalEvent[];
   /** Dynamic vet-recommended weight range from breed data, null if unknown */
   vetWeightRange: { min: number; max: number } | null;
+  petProfile: Pet | null;
 }
 
 // ─── Health Score Calculation ──────────────────────────────────────────────
@@ -123,7 +125,13 @@ function appointmentTypeLabel(type: string): string {
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
 // Memoized because it receives simple scalar props
-const SectionHeader = React.memo(function SectionHeader({ title, icon }: { title: string; icon: string }) {
+const SectionHeader = React.memo(function SectionHeader({
+  title,
+  icon,
+}: {
+  title: string;
+  icon: string;
+}) {
   const { colors } = useTheme();
   return (
     <View style={styles.sectionHeader}>
@@ -136,11 +144,7 @@ const SectionHeader = React.memo(function SectionHeader({ title, icon }: { title
 // Note: Card is not memoized because it accepts React.ReactNode children
 function Card({ children, style }: { children: React.ReactNode; style?: object }) {
   const { colors } = useTheme();
-  return (
-    <View style={[styles.card, { backgroundColor: colors.surface }, style]}>
-      {children}
-    </View>
-  );
+  return <View style={[styles.card, { backgroundColor: colors.surface }, style]}>{children}</View>;
 }
 
 // Memoized to avoid re-rendering when parent re-renders
@@ -165,28 +169,31 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
     healthScoreHistory: [],
     medicalEvents: [],
     vetWeightRange: null,
+    petProfile: null,
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [recordsResp, medications, appointments, metrics, scoreHistory, pet] = await Promise.all([
-        getMedicalRecords(petId, { limit: 100 }).catch(() => ({
-          data: [] as MedicalRecord[],
-          total: 0,
-          page: 1,
-          limit: 100,
-          totalPages: 1,
-        })),
-        getMedications().catch(() => [] as Medication[]),
-        getUpcomingAppointments(petId).catch(() => [] as Appointment[]),
-        getHealthMetrics(petId).catch(() => [] as HealthMetricEntry[]),
-        healthScoringServiceV2
-          .getScoreHistory(petId, 365)
-          .catch(() => [] as HealthScoreDataPoint[]),
-        petService.getPetById(petId).catch(() => null),
-      ]);
+      const [recordsResp, medications, appointments, metrics, scoreHistory, pet] =
+        await Promise.all([
+          getMedicalRecords(petId, { limit: 100 }).catch(() => ({
+            data: [] as MedicalRecord[],
+            total: 0,
+            page: 1,
+            limit: 100,
+            totalPages: 1,
+          })),
+          getMedications().catch(() => [] as Medication[]),
+          getUpcomingAppointments(petId).catch(() => [] as Appointment[]),
+          getHealthMetrics(petId).catch(() => [] as HealthMetricEntry[]),
+          healthScoringServiceV2
+            .getScoreHistory(petId, 365)
+            .catch(() => [] as HealthScoreDataPoint[]),
+          petService.getPetById(petId).catch(() => null),
+        ]);
 
       // Fetch breed-specific weight range if we have breed info
       const vetWeightRange = pet?.breed
@@ -246,6 +253,7 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
         healthScoreHistory: scoreHistory,
         medicalEvents,
         vetWeightRange,
+        petProfile: pet,
       });
     } finally {
       setLoading(false);
@@ -264,29 +272,53 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
     void load();
   }, [load]);
 
-  const handleExportChart = useCallback(async () => {
+  const handleExportReport = useCallback(async () => {
+    if (exporting) return;
     try {
-      await Share.share({
-        message: `${petName}'s weight chart - exported from Cocohub`,
-        title: `${petName} Weight Chart`,
+      setExporting(true);
+      const report = await generateHealthMetricsReport({
+        pet: data.petProfile ?? {
+          id: petId,
+          name: petName,
+          species: 'other',
+        },
+        healthScore: data.healthScore,
+        latestMetric: data.latestMetric,
+        weightHistory: data.weightHistory,
+        activeMedications: data.activeMedications,
+        upcomingAppointments: data.upcomingAppointments,
+        recentRecords: data.recentRecords,
       });
-    } catch (err) {
-      console.error('Failed to share chart:', err);
+      await shareHealthMetricsReport(report.filePath);
+    } catch (error) {
+      console.error('Failed to export health report:', error);
+      Alert.alert('Export failed', 'Unable to prepare the health report right now.');
+    } finally {
+      setExporting(false);
     }
-  }, [petName]);
+  }, [data, exporting, petId, petName]);
 
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <View
+          style={[
+            styles.header,
+            { backgroundColor: colors.surface, borderBottomColor: colors.border },
+          ]}
+        >
           <TouchableOpacity onPress={onBack} style={styles.backBtn}>
             <Text style={[styles.backText, { color: colors.primary }]}>‹ Back</Text>
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{petName} · Dashboard</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
+            {petName} · Dashboard
+          </Text>
           <View style={styles.metricsBtn} />
         </View>
         <View style={{ padding: 16 }}>
-          {Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} height={80} />)}
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonCard key={i} height={80} />
+          ))}
         </View>
       </View>
     );
@@ -304,12 +336,29 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
   } = data;
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={onBack} style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Back">
+      <View
+        style={[
+          styles.header,
+          { backgroundColor: colors.surface, borderBottomColor: colors.border },
+        ]}
+      >
+        <TouchableOpacity
+          onPress={onBack}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
           <Text style={[styles.backText, { color: colors.primary }]}>‹ Back</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{petName} · Dashboard</Text>
-        <TouchableOpacity onPress={onOpenMetrics} style={[styles.metricsBtn, { backgroundColor: colors.primaryMuted }]} accessibilityRole="button" accessibilityLabel="Open health metrics">
+        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
+          {petName} · Dashboard
+        </Text>
+        <TouchableOpacity
+          onPress={onOpenMetrics}
+          style={[styles.metricsBtn, { backgroundColor: colors.primaryMuted }]}
+          accessibilityRole="button"
+          accessibilityLabel="Open health metrics"
+        >
           <Text style={[styles.metricsBtnText, { color: colors.primary }]}>Metrics</Text>
         </TouchableOpacity>
       </View>
@@ -321,6 +370,21 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4CAF50" />
         }
       >
+        <TouchableOpacity
+          onPress={handleExportReport}
+          disabled={exporting}
+          style={[
+            styles.exportReportBtn,
+            { backgroundColor: exporting ? colors.border : colors.primary },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Export health report PDF"
+        >
+          <Text style={styles.exportReportBtnText}>
+            {exporting ? 'Preparing report...' : 'Export PDF'}
+          </Text>
+        </TouchableOpacity>
+
         <SectionHeader title="Health Score" icon="💚" />
         <Card>
           {healthScore !== null ? (
@@ -363,7 +427,7 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
             <HealthScoreChart
               data={healthScoreHistory}
               medicalEvents={medicalEvents}
-              onExport={handleExportChart}
+              onExport={handleExportReport}
               height={300}
             />
           </>
@@ -409,7 +473,7 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
               data={data.weightHistory}
               petName={petName}
               vetRecommendedRange={data.vetWeightRange ?? undefined}
-              onExport={handleExportChart}
+              onExport={handleExportReport}
               height={300}
             />
           </>
@@ -510,27 +574,54 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, fontSize: 14 },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: 16, borderBottomWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
   },
   backBtn: { padding: 4 },
   backText: { fontSize: 17 },
-  headerTitle: { flex: 1, fontSize: 16, fontWeight: '700', textAlign: 'center', marginHorizontal: 8 },
+  headerTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginHorizontal: 8,
+  },
   metricsBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   metricsBtnText: { fontWeight: '700', fontSize: 13 },
   scroll: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 32 },
+  exportReportBtn: {
+    alignItems: 'center',
+    borderRadius: 8,
+    marginBottom: 4,
+    paddingVertical: 12,
+  },
+  exportReportBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginTop: 16, marginBottom: 8 },
   sectionIcon: { fontSize: 18, marginRight: 8 },
   sectionTitle: { fontSize: 15, fontWeight: '700' },
   card: {
-    borderRadius: 12, padding: 16,
-    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
     backgroundColor: 'transparent', // set inline via colors.surface
   },
   emptyText: { fontSize: 14, textAlign: 'center', paddingVertical: 8 },
   scoreRow: { flexDirection: 'row', alignItems: 'center' },
-  scoreBadge: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  scoreBadge: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
   scoreNumber: { fontSize: 28, fontWeight: '800', color: '#fff' },
   scoreMax: { fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: -4 },
   scoreDetails: { flex: 1 },
@@ -548,10 +639,37 @@ const styles = StyleSheet.create({
   listRowTitle: { fontSize: 14, fontWeight: '600' },
   listRowSub: { fontSize: 13, marginTop: 2 },
   listRowDate: { fontSize: 12, marginTop: 4 },
-  apptDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#1565c0', marginTop: 4, marginRight: 12 },
-  medDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#6a1b9a', marginTop: 4, marginRight: 12 },
-  recDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#2e7d32', marginTop: 4, marginRight: 12 },
-  statusBadge: { alignSelf: 'flex-start', marginTop: 4, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  apptDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#1565c0',
+    marginTop: 4,
+    marginRight: 12,
+  },
+  medDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#6a1b9a',
+    marginTop: 4,
+    marginRight: 12,
+  },
+  recDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#2e7d32',
+    marginTop: 4,
+    marginRight: 12,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
   statusConfirmed: { backgroundColor: '#e8f5e9' },
   statusBadgeText: { fontSize: 11, fontWeight: '600' },
 });
