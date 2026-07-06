@@ -58,6 +58,14 @@ const MEDICATION_FORM_STEPS = [
   { title: 'Supply & notes' },
 ];
 
+function testIdPart(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
 const EMPTY_FORM: Omit<Medication, 'id'> = {
   petId: '',
   name: '',
@@ -378,7 +386,7 @@ const MedicationScreen: React.FC = () => {
       };
 
       return (
-        <View style={styles.card}>
+        <View style={styles.card} testID={`medication-card-${testIdPart(item.name)}`}>
           <View style={styles.cardHeader}>
             <Text style={styles.medName}>{item.name}</Text>
             <View style={styles.cardActions}>
@@ -392,12 +400,17 @@ const MedicationScreen: React.FC = () => {
                   <Text style={styles.refillBadgeText}>{refillBadgeLabel[refillStatus]}</Text>
                 </View>
               )}
-              <TouchableOpacity onPress={() => openEdit(item)} style={styles.actionBtn}>
+              <TouchableOpacity
+                onPress={() => openEdit(item)}
+                style={styles.actionBtn}
+                testID={`medication-edit-${testIdPart(item.name)}`}
+              >
                 <Text style={styles.actionBtnText}>Edit</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => handleDelete(item.id)}
                 style={[styles.actionBtn, styles.deleteBtn]}
+                testID={`medication-delete-${testIdPart(item.name)}`}
               >
                 <Text style={[styles.actionBtnText, styles.deleteBtnText]}>Delete</Text>
               </TouchableOpacity>
@@ -449,18 +462,21 @@ const MedicationScreen: React.FC = () => {
             <TouchableOpacity
               style={styles.logBtn}
               onPress={() => void handleLogDose(item.id, false)}
+              testID={`medication-log-dose-${testIdPart(item.name)}`}
             >
               <Text style={styles.logBtnText}>✓ Log Dose</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.logBtn, styles.skipBtn]}
               onPress={() => void handleLogDose(item.id, true)}
+              testID={`medication-skip-dose-${testIdPart(item.name)}`}
             >
               <Text style={styles.logBtnText}>✗ Skip</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.logBtn, styles.refillBtn]}
               onPress={() => openRefillModal(item)}
+              testID={`medication-refill-${testIdPart(item.name)}`}
             >
               <Text style={styles.logBtnText}>+ Refill</Text>
             </TouchableOpacity>
@@ -493,6 +509,7 @@ const MedicationScreen: React.FC = () => {
                   <View
                     key={`${med.id}-${time.toISOString()}`}
                     style={[styles.slotRow, taken && styles.slotTaken]}
+                    testID={`medication-schedule-row-${testIdPart(med.name)}`}
                   >
                     <Text style={styles.slotTime}>{formatLocalTime(time)}</Text>
                     <Text style={styles.slotName}>
@@ -535,13 +552,14 @@ const MedicationScreen: React.FC = () => {
       keyboardType={options?.keyboardType}
       multiline={options?.multiline}
       accessibilityLabel={placeholder.replace(' *', '')}
+      testID={`medication-${key}-input`}
     />
   );
 
   const renderModal = () => (
     <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={closeModal}>
       <View style={styles.modalOverlay}>
-        <ScrollView style={styles.modalContent}>
+        <ScrollView style={styles.modalContent} testID="medication-form-modal">
           <Text style={styles.modalTitle}>{editingMed ? 'Edit Medication' : 'Add Medication'}</Text>
           <MultiStepFormHeader
             stepHeadingRef={formHeadingRef}
@@ -694,7 +712,11 @@ const MedicationScreen: React.FC = () => {
             </>
           )}
           <View style={styles.modalActions}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={closeModal}>
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={closeModal}
+              testID="medication-form-cancel-button"
+            >
               <Text style={styles.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
             {!isFormFirstStep && (
@@ -703,6 +725,7 @@ const MedicationScreen: React.FC = () => {
                 onPress={goFormBack}
                 accessibilityRole="button"
                 accessibilityLabel="Go to previous step"
+                testID="medication-form-back-button"
               >
                 <Text style={styles.cancelBtnText}>Back</Text>
               </TouchableOpacity>
@@ -715,11 +738,16 @@ const MedicationScreen: React.FC = () => {
                 }}
                 accessibilityRole="button"
                 accessibilityLabel="Go to next step"
+                testID="medication-form-next-button"
               >
                 <Text style={styles.saveBtnText}>Next</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={styles.saveBtn} onPress={() => void handleSave()}>
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={() => void handleSave()}
+                testID="medication-form-save-button"
+              >
                 <Text style={styles.saveBtnText}>Save</Text>
               </TouchableOpacity>
             )}
@@ -727,7 +755,7 @@ const MedicationScreen: React.FC = () => {
 
           {/* Drug interaction warning */}
           {interactionResult?.hasInteractions && (
-            <View style={styles.interactionWarning}>
+            <View style={styles.interactionWarning} testID="medication-interaction-warning">
               <Text style={styles.interactionTitle}>⚠️ Drug Interaction Detected</Text>
               {(['contraindicated', 'severe', 'moderate', 'mild'] as InteractionSeverity[]).map(
                 (severity) => {
@@ -773,6 +801,7 @@ const MedicationScreen: React.FC = () => {
                     <TouchableOpacity
                       style={styles.acknowledgeBtn}
                       onPress={() => setContraindicatedAcknowledged(true)}
+                      testID="medication-interaction-acknowledge-button"
                     >
                       <Text style={styles.acknowledgeBtnText}>
                         I understand the risk — acknowledge
@@ -789,6 +818,7 @@ const MedicationScreen: React.FC = () => {
                     <TouchableOpacity
                       style={styles.overrideBtn}
                       onPress={() => setVetOverrideMode(true)}
+                      testID="medication-vet-override-button"
                     >
                       <Text style={styles.overrideBtnText}>Vet Override</Text>
                     </TouchableOpacity>
@@ -799,6 +829,7 @@ const MedicationScreen: React.FC = () => {
                         placeholder="Vet ID *"
                         value={vetId}
                         onChangeText={setVetId}
+                        testID="medication-vet-id-input"
                       />
                       <TextInput
                         style={[styles.input, styles.textArea]}
@@ -806,8 +837,13 @@ const MedicationScreen: React.FC = () => {
                         multiline
                         value={overrideJustification}
                         onChangeText={setOverrideJustification}
+                        testID="medication-override-justification-input"
                       />
-                      <TouchableOpacity style={styles.saveBtn} onPress={() => void handleSave()}>
+                      <TouchableOpacity
+                        style={styles.saveBtn}
+                        onPress={() => void handleSave()}
+                        testID="medication-save-with-override-button"
+                      >
                         <Text style={styles.saveBtnText}>Save with Override</Text>
                       </TouchableOpacity>
                     </View>
@@ -861,7 +897,7 @@ const MedicationScreen: React.FC = () => {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Medications</Text>
-        <TouchableOpacity style={styles.addBtn} onPress={openAdd}>
+        <TouchableOpacity style={styles.addBtn} onPress={openAdd} testID="add-medication-button">
           <Text style={styles.addBtnText}>+ Add</Text>
         </TouchableOpacity>
       </View>
@@ -871,6 +907,7 @@ const MedicationScreen: React.FC = () => {
             key={t}
             style={[styles.tab, tab === t && styles.activeTab]}
             onPress={() => setTab(t)}
+            testID={`medication-tab-${t}`}
           >
             <Text style={[styles.tabText, tab === t && styles.activeTabText]}>
               {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -890,6 +927,7 @@ const MedicationScreen: React.FC = () => {
           keyExtractor={(item) => item.id}
           renderItem={renderMedItem}
           contentContainerStyle={styles.listContent}
+          testID="medication-list"
           ListEmptyComponent={
             <EmptyState
               icon="medkit"
