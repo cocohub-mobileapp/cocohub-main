@@ -745,3 +745,197 @@ export async function getTransactionDetails(txHash: string): Promise<StellarTran
   }
   return match;
 }
+
+// ============================================================================
+// 🐾 PET RECORD REGISTRY - Soroban Smart Contract Integration
+// ============================================================================
+// Integrates with PetRegistry Soroban contract deployed on Stellar testnet.
+// Contract source: contracts/pet-registry/src/lib.rs
+// ============================================================================
+
+import {
+  Contract,
+  SorobanRpc,
+  xdr,
+  nativeToScVal,
+  scValToNative,
+  Keypair,
+  Networks,
+  TransactionBuilder,
+  BASE_FEE,
+  Account,
+} from '@stellar/stellar-sdk';
+
+// Pet Registry Contract ID (to be set after testnet deployment)
+// For now, use a placeholder that will be replaced with actual contract address
+const PET_REGISTRY_CONTRACT_ID = process.env.PET_REGISTRY_CONTRACT_ID || '';
+
+// Soroban RPC endpoint for testnet
+const SOROBAN_RPC_URL =
+  STELLAR_NETWORK === 'PUBLIC'
+    ? 'https://soroban-rpc.stellar.org'
+    : 'https://soroban-testnet.stellar.org';
+
+/**
+ * Initialize Soroban RPC server connection
+ */
+const getSorobanServer = (): SorobanRpc.Server => {
+  return new SorobanRpc.Server(SOROBAN_RPC_URL, {
+    allowHttp: SOROBAN_RPC_URL.startsWith('http://'),
+  });
+};
+
+// ==============================
+// TYPES
+// ==============================
+
+export interface PetRegistryEntry {
+  owner: string;
+  recordHash: string;
+  active: boolean;
+  updatedAt: number;
+}
+
+export interface PetRegistryResult {
+  success: boolean;
+  txHash?: string;
+  error?: string;
+}
+
+// ==============================
+// PET REGISTRY CONTRACT FUNCTIONS
+// ==============================
+
+/**
+ * Register a new pet record on the Soroban contract.
+ * Stores the hash of the medical record on-chain.
+ */
+export const registerPetOnChain = async (
+  sourceSecretKey: string,
+  recordHash: string,
+): Promise<PetRegistryResult> => {
+  const CONTRACT_ID = PET_REGISTRY_CONTRACT_ID;
+  if (!CONTRACT_ID) {
+    return { success: false, error: 'Pet Registry contract not deployed. Set PET_REGISTRY_CONTRACT_ID env var.' };
+  }
+
+  try {
+    const server = getSorobanServer();
+    const sourceKeypair = Keypair.fromSecret(sourceSecretKey);
+    const sourcePublicKey = sourceKeypair.publicKey();
+    
+    // Get current account state
+    const account = await server.getAccount(sourcePublicKey);
+    
+    // Build the contract invocation
+    const contract = new Contract(CONTRACT_ID);
+    const hashBytes = Buffer.from(recordHash, 'hex');
+    
+    // Encode the 32-byte hash as SCVal
+    const hashVal = xdr.ScVal.scvBytes(hashBytes);
+    
+    const tx = new TransactionBuilder(account, {
+      fee: BASE_FEE,
+      networkPassphrase: STELLAR_NETWORK === 'PUBLIC' ? Networks.PUBLIC : Networks.TESTNET,
+    })
+      .addOperation(contract.call('register_pet', hashVal))
+      .setTimeout(30)
+      .build();
+    
+    tx.sign(sourceKeypair);
+    
+    // Submit and wait for completion
+    const result = await server.sendTransaction(tx);
+    if (result.status === 'PENDING') {
+      const receipt = await server.getTransaction(result.hash);
+      // Wait a bit for the transaction to complete
+      for (let i = 0; i < 30; i++) {
+        if (receipt.status !== 'NOT_FOUND') break;
+        await new Promise(r => setTimeout(r, 1000));
+      }
+      return { success: receipt.status === 'SUCCESS', txHash: result.hash };
+    }
+    
+    return { success: false, error: `Transaction failed: ${result.errorResult?.result?.code}` };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, error: message };
+  }
+};
+
+/**
+ * Check if a vet has access to view a pet's records.
+ */
+export const checkVetAccess = async (
+  recordHash: string,
+  vetPublicKey: string,
+): Promise<boolean> => {
+  const CONTRACT_ID = PET_REGISTRY_CONTRACT_ID;
+  if (!CONTRACT_ID) return false;
+
+  try {
+    const server = getSorobanServer();
+    const contract = new Contract(CONTRACT_ID);
+    const hashBytes = Buffer.from(recordHash, 'hex');
+    const hashVal = xdr.ScVal.scvBytes(hashBytes);
+    const vetAddress = nativeToScVal(vetPublicKey, { type: 'address' });
+    
+    const result = await server.simulateTransaction(
+      new TransactionBuilder(await server.getAccount(''), {
+        fee: BASE_FEE,
+        networkPassphrase: STELLAR_NETWORK === 'PUBLIC' ? Networks.PUBLIC : Networks.TESTNET,
+      })
+        .addOperation(contract.call('has_vet_access', hashVal, vetAddress))
+        .setTimeout(30)
+        .build()
+    );
+    
+    // Parse the result
+    if (result.result) {
+      return scValToNative(result.result.retval);
+    }
+    return false;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Get all pet record hashes owned by a specific address.
+ */
+export const getOwnerPets = async (
+  ownerPublicKey: string,
+): Promise<string[]> => {
+  const CONTRACT_ID = PET_REGISTRY_CONTRACT_ID;
+  if (!CONTRACT_ID) return [];
+
+  try {
+    const server = getSorobanServer();
+    const contract = new Contract(CONTRACT_ID);
+    const ownerAddress = nativeToScVal(ownerPublicKey, { type: 'address' });
+    
+    const result = await server.simulateTransaction(
+      new TransactionBuilder(await server.getAccount(''), {
+        fee: BASE_FEE,
+        networkPassphrase: STELLAR_NETWORK === 'PUBLIC' ? Networks.PUBLIC : Networks.TESTNET,
+      })
+        .addOperation(contract.call('get_owner_pets', ownerAddress))
+        .setTimeout(30)
+        .build()
+    );
+    
+    if (result.result) {
+      const hashes = scValToNative(result.result.retval) as Buffer[];
+      return hashes.map(h => Buffer.from(h).toString('hex'));
+    }
+    return [];
+  } catch {
+    return [];
+  }
+};
+
+export const __petRegistryUtils = {
+  PET_REGISTRY_CONTRACT_ID,
+  SOROBAN_RPC_URL,
+  getSorobanServer,
+};
