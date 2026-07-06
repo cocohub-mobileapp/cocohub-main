@@ -13,6 +13,11 @@ interface ProviderTokenRecord {
   raw?: any;
 }
 
+interface ProviderClient {
+  sync: (token: string, petId: string) => Promise<any[]>;
+  requiresApiKey?: string;
+}
+
 export interface NormalizedMetric {
   petId: string;
   metricType: string; // e.g. steps, sleep_duration, sleep_quality, activity_score
@@ -26,10 +31,39 @@ export interface NormalizedMetric {
 
 // Minimal provider client interface — real integrations should be implemented
 // separately. We include a mock provider here for tests and local development.
-const PROVIDER_CLIENTS: Record<
-  ProviderKey,
-  { sync: (token: string, petId: string) => Promise<any[]> }
-> = {
+async function fetchProviderJson(url: string, token: string, apiKey?: string): Promise<any> {
+  const fetchFn = globalThis.fetch as
+    | ((
+        input: string,
+        init?: Record<string, unknown>,
+      ) => Promise<{ ok: boolean; status: number; json: () => Promise<any> }>)
+    | undefined;
+
+  if (!fetchFn) return [];
+
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    Authorization: `Bearer ${token}`,
+  };
+  if (apiKey) headers['X-API-Key'] = apiKey;
+
+  const response = await fetchFn(url, { headers });
+  if (!response.ok) {
+    throw new Error(`Wearable provider request failed with ${response.status}`);
+  }
+  return response.json();
+}
+
+function rowsFromProviderPayload(payload: any): any[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.activities)) return payload.activities;
+  if (Array.isArray(payload?.records)) return payload.records;
+  if (Array.isArray(payload?.daily_activity)) return payload.daily_activity;
+  return payload ? [payload] : [];
+}
+
+const PROVIDER_CLIENTS: Record<ProviderKey, ProviderClient> = {
   mockfit: {
     async sync(_token: string, petId: string) {
       const events = [];
@@ -49,6 +83,36 @@ const PROVIDER_CLIENTS: Record<
         });
       }
       return events;
+    },
+  },
+  fitbark: {
+    requiresApiKey: 'FITBARK_CLIENT_ID',
+    async sync(token: string, petId: string) {
+      const clientId = process.env.FITBARK_CLIENT_ID;
+      if (!clientId) return [];
+      const baseUrl = process.env.FITBARK_API_BASE_URL ?? 'https://app.fitbark.com/api/v2';
+      const to = new Date().toISOString().slice(0, 10);
+      const from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const payload = await fetchProviderJson(
+        `${baseUrl}/activity_series?from=${from}&to=${to}&pet_id=${encodeURIComponent(petId)}`,
+        token,
+        clientId,
+      );
+      return rowsFromProviderPayload(payload).map((row) => ({ ...row, petId }));
+    },
+  },
+  whistle: {
+    requiresApiKey: 'WHISTLE_API_KEY',
+    async sync(token: string, petId: string) {
+      const apiKey = process.env.WHISTLE_API_KEY;
+      if (!apiKey) return [];
+      const baseUrl = process.env.WHISTLE_API_BASE_URL ?? 'https://api.whistle.com/v1';
+      const payload = await fetchProviderJson(
+        `${baseUrl}/pets/${encodeURIComponent(petId)}/activity`,
+        token,
+        apiKey,
+      );
+      return rowsFromProviderPayload(payload).map((row) => ({ ...row, petId }));
     },
   },
 };
@@ -136,6 +200,102 @@ function normalizeProviderEvent(providerKey: ProviderKey, event: any): Normalize
     return metrics;
   }
 
+  if (providerKey === 'fitbark') {
+    const recordedAt =
+      event.date ??
+      event.recorded_at ??
+      event.recordedAt ??
+      event.timestamp ??
+      new Date().toISOString();
+    const base = {
+      petId: String(event.petId ?? event.pet_id ?? 'unknown'),
+      providerKey,
+      providerEventId: event.id ?? event.event_id ?? `fitbark_${recordedAt}`,
+      raw: event,
+    };
+    const metrics: NormalizedMetric[] = [];
+    const activityScore = event.activity_score ?? event.bark_points ?? event.points;
+    const steps = event.steps ?? event.step_count;
+    const sleepMinutes = event.sleep_minutes ?? event.sleep_duration_minutes;
+
+    if (activityScore != null) {
+      metrics.push({
+        ...base,
+        metricType: 'activity_score',
+        value: Number(activityScore),
+        unit: 'score',
+        recordedAt,
+      });
+    }
+    if (steps != null) {
+      metrics.push({
+        ...base,
+        metricType: 'steps',
+        value: Number(steps),
+        unit: 'count',
+        recordedAt,
+      });
+    }
+    if (sleepMinutes != null) {
+      metrics.push({
+        ...base,
+        metricType: 'sleep_duration',
+        value: Number(sleepMinutes),
+        unit: 'minutes',
+        recordedAt,
+      });
+    }
+    return metrics.filter((metric) => Number.isFinite(metric.value));
+  }
+
+  if (providerKey === 'whistle') {
+    const recordedAt =
+      event.recorded_at ??
+      event.recordedAt ??
+      event.timestamp ??
+      event.date ??
+      new Date().toISOString();
+    const base = {
+      petId: String(event.petId ?? event.pet_id ?? 'unknown'),
+      providerKey,
+      providerEventId: event.id ?? event.event_id ?? `whistle_${recordedAt}`,
+      raw: event,
+    };
+    const metrics: NormalizedMetric[] = [];
+    const activityMinutes = event.active_minutes ?? event.activity_minutes;
+    const steps = event.steps ?? event.step_count;
+    const distance = event.distance_meters ?? event.distance;
+
+    if (activityMinutes != null) {
+      metrics.push({
+        ...base,
+        metricType: 'activity_score',
+        value: Number(activityMinutes),
+        unit: 'minutes',
+        recordedAt,
+      });
+    }
+    if (steps != null) {
+      metrics.push({
+        ...base,
+        metricType: 'steps',
+        value: Number(steps),
+        unit: 'count',
+        recordedAt,
+      });
+    }
+    if (distance != null) {
+      metrics.push({
+        ...base,
+        metricType: 'gps_distance',
+        value: Number(distance),
+        unit: 'meters',
+        recordedAt,
+      });
+    }
+    return metrics.filter((metric) => Number.isFinite(metric.value));
+  }
+
   // Default: attempt best-effort mappings
   const recordedAt = event.timestamp ?? event.ts ?? new Date().toISOString();
   const entries: NormalizedMetric[] = [];
@@ -170,6 +330,8 @@ export async function syncProviderForPet(
 
   const client = PROVIDER_CLIENTS[providerKey];
   if (!client) return { imported: 0 };
+
+  if (client.requiresApiKey && !process.env[client.requiresApiKey]) return { imported: 0 };
 
   const events = await client.sync(refreshed.access_token, petId);
 

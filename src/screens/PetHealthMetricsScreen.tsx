@@ -23,7 +23,9 @@ import {
 } from '../services/healthMetricService';
 import { updatePet } from '../services/petService';
 import wearableService, {
+  WEARABLE_PROVIDERS,
   type HistoricalPoint,
+  type WearableProviderKey,
   type WearableStatus,
 } from '../services/wearableService';
 import { useSecureScreen } from '../utils/secureScreen';
@@ -122,7 +124,9 @@ function DeviceStatusBadge({
         <View style={badgeStyles.dot} />
         <View>
           <Text style={badgeStyles.providerName}>
-            {status.providerKey === 'mockfit' ? 'MockFit' : (status.providerKey ?? 'Device')}
+            {WEARABLE_PROVIDERS.find((provider) => provider.key === status.providerKey)?.name ??
+              status.providerKey ??
+              'Device'}
           </Text>
           <Text style={badgeStyles.syncTime}>Synced {formatSyncTime(status.lastSync)}</Text>
         </View>
@@ -322,18 +326,20 @@ const PetHealthMetricsScreen: React.FC<Props> = ({
     }
   }, [petId, loadWearableData]);
 
-  const handleConnect = useCallback(async () => {
-    // Connect with a mock access token for demonstration/development
-    try {
-      await wearableService.connectWearable(petId, 'mockfit', 'demo-token');
-      await wearableService.syncWearable(petId);
-      await loadWearableData();
-      setConnectModalVisible(false);
-      Alert.alert('Connected!', 'MockFit device linked and initial data synced.');
-    } catch (e) {
-      Alert.alert('Connection failed', 'Could not connect device. Please try again.');
-    }
-  }, [petId, loadWearableData]);
+  const handleConnect = useCallback(
+    async (providerKey: WearableProviderKey) => {
+      try {
+        await wearableService.connectWearable(petId, providerKey, `${providerKey}-token`);
+        await wearableService.syncWearable(petId, providerKey);
+        await loadWearableData();
+        setConnectModalVisible(false);
+        Alert.alert('Connected!', 'Wearable device linked and initial sync completed.');
+      } catch (e) {
+        Alert.alert('Connection failed', 'Could not connect device. Please try again.');
+      }
+    },
+    [petId, loadWearableData],
+  );
 
   // ---------------------------------------------------------------------------
   // Step goal
@@ -706,19 +712,22 @@ const PetHealthMetricsScreen: React.FC<Props> = ({
               Link a wearable device to automatically track activity, heart rate and sleep.
             </Text>
             <View style={connectStyles.providerList}>
-              <TouchableOpacity
-                style={connectStyles.providerRow}
-                onPress={() => void handleConnect()}
-                accessibilityRole="button"
-                accessibilityLabel="Connect MockFit device"
-              >
-                <Text style={connectStyles.providerIcon}>⌚</Text>
-                <View>
-                  <Text style={connectStyles.providerName}>MockFit</Text>
-                  <Text style={connectStyles.providerSub}>Demo wearable provider</Text>
-                </View>
-                <Text style={connectStyles.providerArrow}>›</Text>
-              </TouchableOpacity>
+              {WEARABLE_PROVIDERS.map((provider) => (
+                <TouchableOpacity
+                  key={provider.key}
+                  style={connectStyles.providerRow}
+                  onPress={() => void handleConnect(provider.key)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Connect ${provider.name} device`}
+                >
+                  <Text style={connectStyles.providerIcon}>⌚</Text>
+                  <View style={connectStyles.providerText}>
+                    <Text style={connectStyles.providerName}>{provider.name}</Text>
+                    <Text style={connectStyles.providerSub}>{provider.description}</Text>
+                  </View>
+                  <Text style={connectStyles.providerArrow}>›</Text>
+                </TouchableOpacity>
+              ))}
             </View>
             <TouchableOpacity
               style={styles.cancelBtn}
@@ -989,6 +998,7 @@ const connectStyles = StyleSheet.create({
     gap: 12,
   },
   providerIcon: { fontSize: 28 },
+  providerText: { flex: 1 },
   providerName: { fontSize: 15, fontWeight: '700', color: '#1a1a1a' },
   providerSub: { fontSize: 12, color: '#888', marginTop: 2 },
   providerArrow: { marginLeft: 'auto', fontSize: 20, color: '#ccc' },

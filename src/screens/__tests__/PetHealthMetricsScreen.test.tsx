@@ -18,6 +18,26 @@ import { act, render, waitFor, fireEvent } from '@testing-library/react-native';
 
 jest.mock('../../services/wearableService', () => ({
   __esModule: true,
+  WEARABLE_PROVIDERS: [
+    {
+      key: 'fitbark',
+      name: 'FitBark',
+      description: 'Daily activity and sleep sync',
+      supportsOAuth: true,
+    },
+    {
+      key: 'whistle',
+      name: 'Whistle',
+      description: 'GPS distance and activity sync',
+      supportsOAuth: false,
+    },
+    {
+      key: 'mockfit',
+      name: 'MockFit',
+      description: 'Demo wearable provider',
+      supportsOAuth: false,
+    },
+  ],
   default: {
     getWearableStatus: jest.fn(),
     syncWearable: jest.fn(),
@@ -280,8 +300,8 @@ describe('PetHealthMetricsScreen — Wearable Dashboard', () => {
       await Promise.resolve();
     });
 
-    expect(ws.connectWearable).toHaveBeenCalledWith('pet-123', 'mockfit', 'demo-token');
-    expect(ws.syncWearable).toHaveBeenCalledWith('pet-123');
+    expect(ws.connectWearable).toHaveBeenCalledWith('pet-123', 'mockfit', 'mockfit-token');
+    expect(ws.syncWearable).toHaveBeenCalledWith('pet-123', 'mockfit');
   });
 
   // ── 4.6 Steps progress card ─────────────────────────────────────────────────

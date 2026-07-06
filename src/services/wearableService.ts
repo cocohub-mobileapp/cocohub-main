@@ -16,6 +16,15 @@ export interface WearableStatus {
   lastSync?: string;
 }
 
+export type WearableProviderKey = 'fitbark' | 'whistle' | 'mockfit';
+
+export interface WearableProviderInfo {
+  key: WearableProviderKey;
+  name: string;
+  description: string;
+  supportsOAuth: boolean;
+}
+
 export interface ActivitySummaryRow {
   metric_type: string;
   avg: string;
@@ -32,7 +41,29 @@ export type MetricType =
   | 'heart_rate'
   | 'sleep_duration'
   | 'sleep_quality'
-  | 'activity_score';
+  | 'activity_score'
+  | 'gps_distance';
+
+export const WEARABLE_PROVIDERS: WearableProviderInfo[] = [
+  {
+    key: 'fitbark',
+    name: 'FitBark',
+    description: 'Daily activity and sleep sync',
+    supportsOAuth: true,
+  },
+  {
+    key: 'whistle',
+    name: 'Whistle',
+    description: 'GPS distance and activity sync',
+    supportsOAuth: false,
+  },
+  {
+    key: 'mockfit',
+    name: 'MockFit',
+    description: 'Demo wearable provider',
+    supportsOAuth: false,
+  },
+];
 
 // ---------------------------------------------------------------------------
 // API helpers
@@ -68,7 +99,7 @@ export async function getWearableStatus(petId: string): Promise<WearableStatus> 
  */
 export async function syncWearable(
   petId: string,
-  providerKey = 'mockfit',
+  providerKey: WearableProviderKey = 'mockfit',
 ): Promise<{ imported: number }> {
   const res = await apiClient.post<{ data: { imported: number } }>('/activity/sync', {
     petId,
@@ -82,7 +113,7 @@ export async function syncWearable(
  */
 export async function connectWearable(
   petId: string,
-  providerKey: string,
+  providerKey: WearableProviderKey,
   accessToken: string,
 ): Promise<void> {
   await apiClient.post('/activity/connect', { petId, providerKey, accessToken });
@@ -121,6 +152,7 @@ export async function getActivitySummary(petId: string): Promise<ActivitySummary
 }
 
 const wearableService = {
+  WEARABLE_PROVIDERS,
   getWearableStatus,
   syncWearable,
   connectWearable,
