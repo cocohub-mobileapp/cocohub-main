@@ -191,6 +191,8 @@ Record → SHA-256 hash → Stellar manageData tx → tamper-evident audit trail
 - `VETH` — Vet Health Credits
 - `PAWP` — PawPoints loyalty rewards
 
+For local testnet development, see [Stellar Testnet Setup](docs/STELLAR-SETUP.md).
+
 ---
 
 ## 🧪 Testing
@@ -201,8 +203,6 @@ npm run typecheck     # TypeScript
 npm run lint          # ESLint
 npm run e2e:test      # Maestro E2E smoke test
 ```
-
----
 
 ## 🤝 Contributing
 
