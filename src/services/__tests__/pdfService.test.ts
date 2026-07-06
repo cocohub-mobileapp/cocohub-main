@@ -6,9 +6,12 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import QRCode from 'qrcode';
 
+import { AppointmentStatus, AppointmentType } from '../../models/Appointment';
 import {
+  generateHealthMetricsReport,
   generateVaccinationCertificate,
   shareCertificate,
+  shareHealthMetricsReport,
   type PetCertificateInfo,
 } from '../../services/pdfService';
 import type { VaccinationReminder } from '../../services/vaccinationService';
@@ -160,6 +163,86 @@ describe('pdfService — Vaccination Certificate PDF Generator (Issue #417)', ()
       mockIsAvailable.mockResolvedValue(false);
       await expect(shareCertificate('/mock/cert.txt')).rejects.toThrow(
         'Sharing is not available on this device.',
+      );
+    });
+  });
+
+  describe('generateHealthMetricsReport', () => {
+    it('generates a vet-ready health metrics report with dashboard data', async () => {
+      const report = await generateHealthMetricsReport({
+        pet: {
+          id: 'pet-123',
+          name: 'Buddy',
+          species: 'dog',
+          breed: 'Labrador',
+          dateOfBirth: '2020-01-15',
+          weightKg: 28,
+          microchipId: 'chip-1',
+        },
+        healthScore: 87,
+        latestMetric: {
+          id: 'metric-1',
+          petId: 'pet-123',
+          recordedAt: '2026-07-01T12:00:00Z',
+          weightKg: 28.4,
+          temperatureC: 38.5,
+          activityLevel: 'high',
+          notes: 'Doing well',
+        },
+        weightHistory: [{ date: '2026-07-01T12:00:00Z', weightKg: 28.4 }],
+        activeMedications: [
+          {
+            id: 'med-1',
+            petId: 'pet-123',
+            name: 'Carprofen',
+            dosage: '25 mg',
+            frequency: 12,
+            startDate: '2026-06-01',
+          },
+        ],
+        upcomingAppointments: [
+          {
+            id: 'appt-1',
+            petId: 'pet-123',
+            vetId: 'vet-1',
+            date: '2026-07-15',
+            time: '09:30',
+            type: AppointmentType.ROUTINE_CHECKUP,
+            status: AppointmentStatus.CONFIRMED,
+            createdAt: '2026-07-01T00:00:00Z',
+            updatedAt: '2026-07-01T00:00:00Z',
+          },
+        ],
+        recentRecords: [
+          {
+            id: 'rec-1',
+            petId: 'pet-123',
+            type: 'treatment',
+            date: '2026-06-20',
+            veterinarian: 'Dr. Smith',
+            notes: 'Follow-up exam',
+            createdAt: '2026-06-20T00:00:00Z',
+          },
+        ],
+      });
+
+      expect(report.filePath).toContain('health-metrics-report-pet-123');
+      const content: string = mockWriteFile.mock.calls[0][1];
+      expect(content).toContain('COCOHUB VET-READY HEALTH METRICS REPORT');
+      expect(content).toContain('Buddy');
+      expect(content).toContain('Health Score: 87/100');
+      expect(content).toContain('Carprofen');
+      expect(content).toContain('ROUTINE CHECKUP');
+      expect(content).toContain('Follow-up exam');
+    });
+  });
+
+  describe('shareHealthMetricsReport', () => {
+    it('shares the report as a PDF', async () => {
+      await shareHealthMetricsReport('/mock/documents/health-report.pdf');
+      expect(mockShare).toHaveBeenCalledWith(
+        '/mock/documents/health-report.pdf',
+        expect.objectContaining({ mimeType: 'application/pdf' }),
       );
     });
   });
