@@ -21,11 +21,46 @@ export type RootStackParamList = {
 
 // ─── Main Tab ─────────────────────────────────────────────────────────────────
 export type MainTabParamList = {
-  PetList: undefined;        // 🐾 Pets
-  Care: undefined;           // 💊 Care (Meds + Vaccines + Alerts)
-  Schedule: undefined;       // 📅 Schedule (Appointments)
-  Search: undefined;         // 🔍 Search
-  More: undefined;           // ☰  More (Profile, Community, etc.)
+  PetList:
+    | {
+        screen?: keyof PetStackParamList;
+        params?: PetStackParamList[keyof PetStackParamList];
+      }
+    | undefined; // 🐾 Pets
+  Care:
+    | {
+        initialTab?: 'Medications' | 'Vaccinations' | 'Alerts';
+        medicationId?: string;
+        vaccinationId?: string;
+        alertId?: string;
+        healthAlertId?: string;
+        petId?: string;
+        dueDate?: string;
+      }
+    | undefined; // 💊 Care (Meds + Vaccines + Alerts)
+  Schedule:
+    | {
+        appointmentId?: string;
+        petId?: string;
+        initialVetName?: string;
+        initialDate?: string;
+        initialTime?: string;
+        openBooking?: boolean;
+      }
+    | undefined; // 📅 Schedule (Appointments)
+  Search: undefined; // 🔍 Search
+  More:
+    | {
+        screen?:
+          | 'MoreHub'
+          | 'Profile'
+          | 'Notifications'
+          | 'Community'
+          | 'Telemedicine'
+          | 'Emergency';
+        params?: Record<string, unknown>;
+      }
+    | undefined; // ☰  More (Profile, Community, etc.)
 };
 
 // ─── Pet Stack (nested inside PetList tab) ────────────────────────────────────

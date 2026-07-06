@@ -3,6 +3,7 @@ import { Linking } from 'react-native';
 
 import apiClient from './apiClient';
 import { getItem, setItem, removeItem } from './localDB';
+export { extractDeepLinkParams, type DeepLinkParams } from './notificationDeepLinking';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -74,12 +75,6 @@ export type NotificationAction =
   | 'mark_as_taken'
   | 'skip_dose'
   | 'snooze_30min';
-
-// ─── Deep Link Navigation Types ───────────────────────────────────────────────
-export interface DeepLinkParams {
-  route: string;
-  params?: Record<string, any>;
-}
 
 export interface NotificationDeepLink {
   petId?: string;
@@ -287,72 +282,6 @@ export const snooze = async (
 export const openApp = async (notification: Notifications.Notification): Promise<void> => {
   await markAsRead(notification.request.identifier);
   await Linking.openURL(getNotificationUrl(notification.request.content.data));
-};
-
-// ─── Deep Link Builders ───────────────────────────────────────────────────────
-
-/**
- * Extract deep link parameters from notification data
- */
-export const extractDeepLinkParams = (
-  data: Record<string, unknown>,
-): { route: string; params: Record<string, any> } | null => {
-  const type = data.type as NotificationGroup | undefined;
-
-  if (type === 'medication' && data.medicationId) {
-    return {
-      route: 'Medications',
-      params: { medicationId: data.medicationId },
-    };
-  }
-
-  if (type === 'appointment' && data.appointmentId) {
-    return {
-      route: 'Appointments',
-      params: { appointmentId: data.appointmentId },
-    };
-  }
-
-  if (type === 'vaccination' && data.vaccinationId) {
-    const params: Record<string, any> = { vaccinationId: data.vaccinationId };
-    if (data.petId) params.petId = data.petId;
-    if (data.dueDate) params.dueDate = data.dueDate;
-    return {
-      route: 'Vaccinations',
-      params,
-    };
-  }
-
-  if (type === 'sos' && data.sosId) {
-    return {
-      route: 'Emergency',
-      params: { sosId: data.sosId },
-    };
-  }
-
-  // Fallback to petId if available
-  if (data.petId) {
-    return {
-      route: 'PetDetail',
-      params: { petId: data.petId },
-    };
-  }
-
-  // Type-based fallback without specific ID
-  if (type === 'medication') {
-    return { route: 'Medications', params: {} };
-  }
-  if (type === 'appointment') {
-    return { route: 'Appointments', params: {} };
-  }
-  if (type === 'vaccination') {
-    return { route: 'Vaccinations', params: {} };
-  }
-  if (type === 'sos') {
-    return { route: 'Emergency', params: {} };
-  }
-
-  return null;
 };
 
 let medicationServiceModule: typeof import('./medicationService') | null = null;
