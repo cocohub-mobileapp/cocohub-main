@@ -160,13 +160,14 @@ const PetShareScreen: React.FC<Props> = ({ petId, petName, onBack }) => {
   const isLoading = (action: LoadingAction) => loading === action;
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="pet-share-screen">
       <View style={styles.header}>
         <TouchableOpacity
           onPress={onBack}
           style={styles.backBtn}
           accessibilityRole="button"
           accessibilityLabel="Back"
+          testID="pet-share-back-button"
         >
           <Text style={styles.backText}>‹ Back</Text>
         </TouchableOpacity>
@@ -184,6 +185,7 @@ const PetShareScreen: React.FC<Props> = ({ petId, petName, onBack }) => {
               key={opt}
               style={[styles.expiryChip, qrExpiry === opt && styles.expiryChipActive]}
               onPress={() => setQrExpiry(opt)}
+              testID={`qr-expiry-${opt}`}
             >
               <Text
                 style={[styles.expiryChipText, qrExpiry === opt && styles.expiryChipTextActive]}
@@ -195,6 +197,7 @@ const PetShareScreen: React.FC<Props> = ({ petId, petName, onBack }) => {
           <TouchableOpacity
             style={[styles.expiryChip, qrOneTimeUse && styles.expiryChipActive]}
             onPress={() => setQrOneTimeUse(!qrOneTimeUse)}
+            testID="qr-one-time-use-toggle"
           >
             <Text style={[styles.expiryChipText, qrOneTimeUse && styles.expiryChipTextActive]}>
               1×
@@ -252,6 +255,7 @@ const PetShareScreen: React.FC<Props> = ({ petId, petName, onBack }) => {
           accessibilityRole="button"
           accessibilityLabel="Generate QR code"
           accessibilityHint="Generate a QR code for this pet profile"
+          testID="generate-qr-code-button"
         >
           <Text style={styles.optionIcon}>📷</Text>
           <View style={styles.optionText}>
@@ -267,13 +271,18 @@ const PetShareScreen: React.FC<Props> = ({ petId, petName, onBack }) => {
 
         {/* QR Code Preview */}
         {qrPayload && qrImageUrl && (
-          <View style={styles.qrContainer} accessibilityLabel={`QR code for ${petName}'s profile`}>
+          <View
+            style={styles.qrContainer}
+            accessibilityLabel={`QR code for ${petName}'s profile`}
+            testID="pet-share-qr-preview"
+          >
             <Text style={styles.qrLabel}>Scan to view {petName}'s profile</Text>
             <Image
               source={{ uri: qrImageUrl }}
               style={styles.qrImage}
               accessible
               accessibilityLabel="QR code"
+              testID="pet-share-qr-image"
             />
             <Text style={styles.qrPayload} selectable numberOfLines={6}>
               {qrPayload}
@@ -284,6 +293,7 @@ const PetShareScreen: React.FC<Props> = ({ petId, petName, onBack }) => {
               disabled={loading !== null}
               accessibilityRole="button"
               accessibilityLabel="Share QR code"
+              testID="share-qr-code-button"
             >
               {isLoading('qr-share') ? (
                 <ActivityIndicator size="small" color="#4CAF50" />
@@ -297,6 +307,7 @@ const PetShareScreen: React.FC<Props> = ({ petId, petName, onBack }) => {
               disabled={loading !== null}
               accessibilityRole="button"
               accessibilityLabel="Print QR code"
+              testID="print-qr-code-button"
             >
               {isLoading('print') ? (
                 <ActivityIndicator size="small" color="#4CAF50" />
@@ -311,6 +322,7 @@ const PetShareScreen: React.FC<Props> = ({ petId, petName, onBack }) => {
                 disabled={loading !== null}
                 accessibilityRole="button"
                 accessibilityLabel="Revoke QR code"
+                testID="revoke-qr-code-button"
               >
                 <Text style={styles.revokeBtnText}>Revoke Code</Text>
               </TouchableOpacity>
