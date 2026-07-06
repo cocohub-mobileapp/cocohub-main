@@ -41,18 +41,29 @@ export default function CareNavigator() {
       <GlobalPetSelector />
 
       {/* Top tab bar */}
-      <View style={[styles.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.tabBar,
+          { backgroundColor: colors.surface, borderBottomColor: colors.border },
+        ]}
+      >
         {TABS.map((tab) => {
           const isActive = active === tab.key;
           return (
             <TouchableOpacity
               key={tab.key}
-              style={[styles.tab, isActive && { borderBottomColor: colors.primary, borderBottomWidth: 3 }]}
+              style={[
+                styles.tab,
+                isActive && { borderBottomColor: colors.primary, borderBottomWidth: 3 },
+              ]}
               onPress={() => setActive(tab.key)}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
+              testID={`care-tab-${tab.key.toLowerCase()}`}
             >
-              <Text style={[styles.tabLabel, { color: isActive ? colors.primary : colors.placeholder }]}>
+              <Text
+                style={[styles.tabLabel, { color: isActive ? colors.primary : colors.placeholder }]}
+              >
                 {tab.label}
               </Text>
             </TouchableOpacity>
