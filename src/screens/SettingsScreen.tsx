@@ -26,11 +26,9 @@ import {
   requestPasswordReset,
   promptForBiometricSetup,
 } from '../services/authService';
-import {
-  getEntitySyncStatuses,
-  type EntitySyncRecord,
-} from '../services/cloudSyncService';
+import { getEntitySyncStatuses, type EntitySyncRecord } from '../services/cloudSyncService';
 import { getUserProfile, saveUserProfile, updateUserProfile } from '../services/userService';
+import { WEARABLE_PROVIDERS } from '../services/wearableService';
 import { useAppTheme } from '../theme';
 import { formatAddress } from '../utils/localeValues';
 import { useTheme, type ThemeMode } from '../utils/useTheme';
@@ -161,9 +159,10 @@ const SettingsScreen: React.FC<Props> = ({ onLogout }) => {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [exportRequesting, setExportRequesting] = useState(false);
-  const [entitySyncStatuses, setEntitySyncStatuses] = useState<
-    Record<SyncEntityType, EntitySyncRecord> | null
-  >(null);
+  const [entitySyncStatuses, setEntitySyncStatuses] = useState<Record<
+    SyncEntityType,
+    EntitySyncRecord
+  > | null>(null);
 
   // ── Load profile on mount ──────────────────────────────────────────────────
 
@@ -700,6 +699,27 @@ const SettingsScreen: React.FC<Props> = ({ onLogout }) => {
         </TouchableOpacity>
       </View>
 
+      {/* ── Connected Devices ── */}
+      <SectionHeader title={t('settings.connectedDevices', 'Connected Devices')} />
+      <View style={cardStyle}>
+        {WEARABLE_PROVIDERS.map((provider, idx, arr) => (
+          <React.Fragment key={provider.key}>
+            <View style={styles.syncRow}>
+              <View style={styles.deviceInfo}>
+                <Text style={[styles.rowLabel, { color: colors.text }]}>{provider.name}</Text>
+                <Text style={[styles.deviceDescription, { color: colors.secondaryText }]}>
+                  {provider.description}
+                </Text>
+              </View>
+              <Text style={[styles.syncStatusText, { color: colors.secondaryText }]}>
+                {provider.supportsOAuth ? 'OAuth' : 'Token'}
+              </Text>
+            </View>
+            {idx < arr.length - 1 && <RowSeparator />}
+          </React.Fragment>
+        ))}
+      </View>
+
       {/* ── Sync Status ── */}
       <SectionHeader title={t('settings.syncStatus', 'Sync Status')} />
       <View style={cardStyle}>
@@ -882,6 +902,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
   },
+  deviceInfo: { flex: 1, paddingRight: 12 },
+  deviceDescription: { fontSize: 12, marginTop: 2 },
   syncStatusText: {
     fontSize: 12,
     flexShrink: 1,
