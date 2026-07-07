@@ -1,4 +1,4 @@
-﻿import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -21,11 +21,21 @@ export type RootStackParamList = {
 
 // ─── Main Tab ─────────────────────────────────────────────────────────────────
 export type MainTabParamList = {
-  PetList: undefined;        // 🐾 Pets
-  Care: undefined;           // 💊 Care (Meds + Vaccines + Alerts)
-  Schedule: undefined;       // 📅 Schedule (Appointments)
-  Search: undefined;         // 🔍 Search
-  More: undefined;           // ☰  More (Profile, Community, etc.)
+  PetList: undefined; // 🐾 Pets
+  Care:
+    | {
+        initialTab?:
+          | 'Medications'
+          | 'Vaccinations'
+          | 'Alerts'
+          | 'medications'
+          | 'vaccinations'
+          | 'alerts';
+      }
+    | undefined; // 💊 Care (Meds + Vaccines + Alerts)
+  Schedule: { appointmentId?: string } | undefined; // 📅 Schedule (Appointments)
+  Search: undefined; // 🔍 Search
+  More: { screen?: string; params?: Record<string, unknown> } | undefined; // ☰  More (Profile, Community, etc.)
 };
 
 // ─── Pet Stack (nested inside PetList tab) ────────────────────────────────────

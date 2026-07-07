@@ -1,4 +1,4 @@
-﻿import * as Notifications from 'expo-notifications';
+import * as Notifications from 'expo-notifications';
 import { Linking } from 'react-native';
 
 import apiClient from './apiClient';
@@ -65,6 +65,8 @@ export type NotificationGroup =
   | 'appointment'
   | 'vaccination'
   | 'alert'
+  | 'health_alert'
+  | 'community_reply'
   | 'scheduled'
   | 'sos';
 export type NotificationAction =
@@ -102,6 +104,8 @@ const CATEGORY_BY_GROUP: Record<NotificationGroup, NotificationCategory> = {
   appointment: 'appointments',
   vaccination: 'health',
   alert: 'health',
+  health_alert: 'health',
+  community_reply: 'general',
   scheduled: 'general',
   sos: 'health',
 };
@@ -177,23 +181,52 @@ const getNotificationUrl = (data: Record<string, unknown> = {}): string => {
   const deepLink = data.deepLink ?? data.url;
   if (typeof deepLink === 'string' && deepLink.length > 0) return deepLink;
 
-  if (typeof data.petId === 'string') return `cocohub://pets/${encodeURIComponent(data.petId)}`;
   if (data.type === 'medication' && typeof data.medicationId === 'string') {
-    return `cocohub://medications?medicationId=${encodeURIComponent(data.medicationId)}`;
+    return `cocohub://care/medications?medicationId=${encodeURIComponent(data.medicationId)}`;
   }
   if (data.type === 'appointment' && typeof data.appointmentId === 'string') {
-    return `cocohub://appointments?appointmentId=${encodeURIComponent(data.appointmentId)}`;
+    return `cocohub://schedule?appointmentId=${encodeURIComponent(data.appointmentId)}`;
   }
   if (data.type === 'vaccination' && typeof data.vaccinationId === 'string') {
-    return `cocohub://vaccinations?vaccinationId=${encodeURIComponent(data.vaccinationId)}`;
+    return `cocohub://care/vaccinations?vaccinationId=${encodeURIComponent(data.vaccinationId)}`;
   }
   if (data.type === 'sos' && typeof data.sosId === 'string') {
-    return `cocohub://emergency?sosId=${encodeURIComponent(data.sosId)}`;
+    return `cocohub://more/emergency?sosId=${encodeURIComponent(data.sosId)}`;
   }
-  if (data.type === 'medication') return 'cocohub://medications';
-  if (data.type === 'appointment') return 'cocohub://appointments';
-  if (data.type === 'vaccination') return 'cocohub://vaccinations';
-  if (data.type === 'sos') return 'cocohub://emergency';
+  if ((data.type === 'alert' || data.type === 'health_alert') && typeof data.petId === 'string') {
+    const alertId =
+      typeof data.alertId === 'string'
+        ? data.alertId
+        : typeof data.healthAlertId === 'string'
+          ? data.healthAlertId
+          : undefined;
+    const suffix = alertId ? `?alertId=${encodeURIComponent(alertId)}` : '';
+    return `cocohub://pets/${encodeURIComponent(data.petId)}/dashboard${suffix}`;
+  }
+  if (data.type === 'alert' || data.type === 'health_alert') {
+    const alertId =
+      typeof data.alertId === 'string'
+        ? data.alertId
+        : typeof data.healthAlertId === 'string'
+          ? data.healthAlertId
+          : undefined;
+    const suffix = alertId ? `?alertId=${encodeURIComponent(alertId)}` : '';
+    return `cocohub://care/alerts${suffix}`;
+  }
+  if (data.type === 'community_reply') {
+    const params = new URLSearchParams();
+    if (typeof data.postId === 'string') params.set('postId', data.postId);
+    if (typeof data.replyId === 'string') params.set('replyId', data.replyId);
+    if (typeof data.commentId === 'string') params.set('commentId', data.commentId);
+    const query = params.toString();
+    return query ? `cocohub://more/community?${query}` : 'cocohub://more/community';
+  }
+  if (typeof data.petId === 'string') return `cocohub://pets/${encodeURIComponent(data.petId)}`;
+  if (data.type === 'medication') return 'cocohub://care/medications';
+  if (data.type === 'appointment') return 'cocohub://schedule';
+  if (data.type === 'vaccination') return 'cocohub://care/vaccinations';
+  if (data.type === 'sos') return 'cocohub://more/emergency';
+  if (data.type === 'community_reply') return 'cocohub://more/community';
 
   return 'cocohub://';
 };
@@ -297,7 +330,17 @@ export const openApp = async (notification: Notifications.Notification): Promise
 export const extractDeepLinkParams = (
   data: Record<string, unknown>,
 ): { route: string; params: Record<string, any> } | null => {
-  const type = data.type as NotificationGroup | undefined;
+  const type = typeof data.type === 'string' ? data.type : undefined;
+
+  const copyPresentParams = (keys: string[]): Record<string, any> =>
+    keys.reduce(
+      (params, key) => {
+        const value = data[key];
+        if (value) params[key] = value;
+        return params;
+      },
+      {} as Record<string, any>,
+    );
 
   if (type === 'medication' && data.medicationId) {
     return {
@@ -313,10 +356,8 @@ export const extractDeepLinkParams = (
     };
   }
 
-  if (type === 'vaccination' && data.vaccinationId) {
-    const params: Record<string, any> = { vaccinationId: data.vaccinationId };
-    if (data.petId) params.petId = data.petId;
-    if (data.dueDate) params.dueDate = data.dueDate;
+  if (type === 'vaccination' && (data.vaccinationId || data.petId || data.dueDate)) {
+    const params = copyPresentParams(['vaccinationId', 'petId', 'dueDate']);
     return {
       route: 'Vaccinations',
       params,
@@ -327,6 +368,21 @@ export const extractDeepLinkParams = (
     return {
       route: 'Emergency',
       params: { sosId: data.sosId },
+    };
+  }
+
+  if (type === 'alert' || type === 'health_alert') {
+    const params = copyPresentParams(['alertId', 'healthAlertId', 'petId']);
+    return {
+      route: data.petId ? 'PetHealthDashboard' : 'Alerts',
+      params,
+    };
+  }
+
+  if (type === 'community_reply') {
+    return {
+      route: 'Community',
+      params: copyPresentParams(['postId', 'replyId', 'commentId']),
     };
   }
 
@@ -350,6 +406,12 @@ export const extractDeepLinkParams = (
   }
   if (type === 'sos') {
     return { route: 'Emergency', params: {} };
+  }
+  if (type === 'alert' || type === 'health_alert') {
+    return { route: 'Alerts', params: {} };
+  }
+  if (type === 'community_reply') {
+    return { route: 'Community', params: {} };
   }
 
   return null;
