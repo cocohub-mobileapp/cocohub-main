@@ -1,4 +1,4 @@
-﻿import { type LinkingOptions } from '@react-navigation/native';
+import { type LinkingOptions } from '@react-navigation/native';
 import * as Linking from 'expo-linking';
 
 function extractUTM(url: string): Record<string, string> {
@@ -24,10 +24,32 @@ export const linking: LinkingOptions<any> = {
   prefixes: [Linking.createURL('/'), 'https://cocohub.app', 'cocohub://', 'cocohubapp://'],
   config: {
     screens: {
-      PetProfile: 'pets/:petId',
-      RecordDetail: 'pets/:petId/records/:recordId',
+      Main: {
+        screens: {
+          PetList: {
+            screens: {
+              PetDetail: 'pets/:petId',
+              PetHealthDashboard: 'pets/:petId/dashboard',
+              PetHealthMetrics: 'pets/:petId/health',
+            },
+          },
+          Care: 'care/:initialTab?',
+          Schedule: 'schedule',
+          More: {
+            path: 'more',
+            screens: {
+              Community: 'community',
+              Emergency: 'emergency',
+              Notifications: 'notifications',
+              Profile: 'profile',
+            },
+          },
+        },
+      },
       Appointment: 'appointments/:appointmentId',
       SOSDetail: 'sos/:sosId',
+      Community: 'community',
+      HealthAlert: 'care/alerts',
       WebFallback: '*',
     },
   },

@@ -8,6 +8,8 @@ import type { AppNotification } from '../services/notificationStore';
 export const VALID_NAV_SCREENS = new Set([
   'Medications',
   'Appointments',
+  'Vaccinations',
+  'Alerts',
   'Emergency',
   'PetList',
   'PetDetail',

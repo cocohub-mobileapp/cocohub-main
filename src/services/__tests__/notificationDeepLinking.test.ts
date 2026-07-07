@@ -5,8 +5,25 @@
  * - Deep link extraction from notification data
  * - Mapping notification types to routes and params
  * - Cold-start and background handling
- * - All notification types (medication, appointment, vaccination, SOS)
+ * - All notification types (medication, appointment, vaccination, SOS, health alert, community reply)
  */
+
+jest.mock('../apiClient', () => ({
+  __esModule: true,
+  default: {
+    post: jest.fn(),
+    get: jest.fn(),
+    delete: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+  },
+}));
+
+jest.mock('../localDB', () => ({
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+}));
 
 import { extractDeepLinkParams } from '../notificationService';
 
@@ -154,6 +171,84 @@ describe('Notification Deep Linking', () => {
         expect(result).toEqual({
           route: 'Emergency',
           params: {},
+        });
+      });
+    });
+
+    describe('Health Alert Notifications', () => {
+      it('extracts health alert notification with alert and pet context', () => {
+        const data = {
+          type: 'alert',
+          alertId: 'alert-123',
+          petId: 'pet-123',
+          category: 'health',
+        };
+
+        const result = extractDeepLinkParams(data);
+
+        expect(result).toEqual({
+          route: 'PetHealthDashboard',
+          params: {
+            alertId: 'alert-123',
+            petId: 'pet-123',
+          },
+        });
+      });
+
+      it('extracts health alert notification without pet context', () => {
+        const data = {
+          type: 'health_alert',
+          healthAlertId: 'health-alert-456',
+          category: 'health',
+        };
+
+        const result = extractDeepLinkParams(data);
+
+        expect(result).toEqual({
+          route: 'Alerts',
+          params: {
+            healthAlertId: 'health-alert-456',
+          },
+        });
+      });
+    });
+
+    describe('Community Reply Notifications', () => {
+      it('extracts community reply notification with post and reply context', () => {
+        const data = {
+          type: 'community_reply',
+          postId: 'post-123',
+          replyId: 'reply-456',
+          category: 'general',
+        };
+
+        const result = extractDeepLinkParams(data);
+
+        expect(result).toEqual({
+          route: 'Community',
+          params: {
+            postId: 'post-123',
+            replyId: 'reply-456',
+          },
+        });
+      });
+
+      it('extracts community reply notification with comment context', () => {
+        const data = {
+          type: 'community_reply',
+          postId: 'post-789',
+          commentId: 'comment-101',
+          category: 'general',
+        };
+
+        const result = extractDeepLinkParams(data);
+
+        expect(result).toEqual({
+          route: 'Community',
+          params: {
+            postId: 'post-789',
+            commentId: 'comment-101',
+          },
         });
       });
     });
