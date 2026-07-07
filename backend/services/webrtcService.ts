@@ -80,6 +80,9 @@ export interface Consultation {
   startedAt?: string;
   endedAt?: string;
   roomToken: string;
+  vetDecision?: 'accepted' | 'declined';
+  vetDecisionAt?: string;
+  vetDecisionReason?: string;
   recordingConsent: RecordingConsent;
   recordingUrl?: string;
   createdAt: string;
@@ -209,6 +212,25 @@ export function recordConsent(
     c.recordingConsent.consentedAt = new Date().toISOString();
   }
 
+  c.updatedAt = new Date().toISOString();
+  return c;
+}
+
+export function recordVetDecision(
+  consultationId: string,
+  decision: 'accepted' | 'declined',
+  reason?: string,
+): Consultation | undefined {
+  const c = consultations.get(consultationId);
+  if (!c) return undefined;
+
+  c.vetDecision = decision;
+  c.vetDecisionAt = new Date().toISOString();
+  c.vetDecisionReason = reason;
+  if (decision === 'declined') {
+    c.status = 'cancelled';
+    c.endedAt = c.vetDecisionAt;
+  }
   c.updatedAt = new Date().toISOString();
   return c;
 }
