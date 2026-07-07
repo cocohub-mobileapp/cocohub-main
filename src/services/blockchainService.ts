@@ -2,8 +2,8 @@
 import axios, { type AxiosResponse } from 'axios';
 import CryptoJS from 'crypto-js';
 
-import { CircuitBreaker, retryWithBackoff } from '../utils/circuitBreaker';
 import type { MedicalRecord } from './medicalRecordService';
+import { CircuitBreaker, retryWithBackoff } from '../utils/circuitBreaker';
 
 // ==============================
 // TYPES (UNCHANGED)
@@ -40,6 +40,28 @@ export interface RecordIntegrityResult {
   txHash?: string;
 }
 
+export interface MedicalRecordRegistryStoreInput {
+  petId: string;
+  recordHash: string;
+  vetAddress: string;
+  contractId?: string;
+}
+
+export interface MedicalRecordRegistryStoreResult {
+  recordId: string;
+  recordHash: string;
+  contractId: string;
+  txHash?: string;
+  ledger?: number;
+  status: 'pending' | 'submitted' | 'confirmed' | 'failed';
+}
+
+export interface MedicalRecordRegistryVerification {
+  recordId: string;
+  verified: boolean;
+  contractId: string;
+}
+
 export type MedicalRecordWithChainData = MedicalRecord & {
   hash?: string;
   recordHash?: string;
@@ -61,6 +83,10 @@ const HORIZON_URL =
   STELLAR_NETWORK === 'PUBLIC'
     ? 'https://horizon.stellar.org'
     : 'https://horizon-testnet.stellar.org';
+const runtimeEnv = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+  .process?.env;
+const MEDICAL_RECORD_REGISTRY_CONTRACT_ID =
+  runtimeEnv?.EXPO_PUBLIC_MEDICAL_RECORD_REGISTRY_CONTRACT_ID || '';
 
 // Initialize Stellar Server
 let stellarServer: StellarSdk.Horizon.Server | null = null;
@@ -277,6 +303,79 @@ export const storeRecordOnChain = async (
   );
 };
 
+const getMedicalRecordRegistryContractId = (contractId?: string): string => {
+  const resolved =
+    contractId === undefined ? MEDICAL_RECORD_REGISTRY_CONTRACT_ID.trim() : contractId.trim();
+
+  if (!resolved) {
+    throw new BlockchainServiceError(
+      'Medical record registry contract ID is not configured',
+      'MISSING_CONTRACT_ID',
+    );
+  }
+
+  return resolved;
+};
+
+const normalizeRecordHash = (hash: string): string => {
+  const normalized = hash.trim().toLowerCase();
+
+  if (!/^[0-9a-f]{64}$/.test(normalized)) {
+    throw new BlockchainServiceError(
+      'Record hash must be a 32-byte hex string',
+      'INVALID_RECORD_HASH',
+    );
+  }
+
+  return normalized;
+};
+
+export const storeRecordInMedicalRegistryContract = async (
+  input: MedicalRecordRegistryStoreInput,
+): Promise<MedicalRecordRegistryStoreResult> => {
+  const petId = input.petId.trim();
+  const vetAddress = input.vetAddress.trim();
+  const recordHash = normalizeRecordHash(input.recordHash);
+  const contractId = getMedicalRecordRegistryContractId(input.contractId);
+
+  if (!petId) {
+    throw new BlockchainServiceError('Pet ID is required', 'INVALID_PET_ID');
+  }
+  if (!vetAddress) {
+    throw new BlockchainServiceError('Vet address is required', 'INVALID_VET_ADDRESS');
+  }
+
+  const response: AxiosResponse<MedicalRecordRegistryStoreResult> = await axios.post(
+    `${API_BASE_URL}/blockchain/contracts/medical-record-registry/store`,
+    {
+      petId,
+      recordHash,
+      vetAddress,
+      contractId,
+    },
+  );
+
+  return response.data;
+};
+
+export const verifyRecordInMedicalRegistryContract = async (
+  recordId: string,
+  contractId?: string,
+): Promise<MedicalRecordRegistryVerification> => {
+  const normalizedRecordId = normalizeRecordHash(recordId);
+  const resolvedContractId = getMedicalRecordRegistryContractId(contractId);
+
+  const response: AxiosResponse<MedicalRecordRegistryVerification> = await axios.post(
+    `${API_BASE_URL}/blockchain/contracts/medical-record-registry/verify`,
+    {
+      recordId: normalizedRecordId,
+      contractId: resolvedContractId,
+    },
+  );
+
+  return response.data;
+};
+
 /**
  * Retrieve record hash from Stellar blockchain.
  */
@@ -370,9 +469,7 @@ export const getStellarNetworkInfo = async (): Promise<{
           network: STELLAR_NETWORK,
           horizonUrl: HORIZON_URL,
           passphrase:
-            STELLAR_NETWORK === 'PUBLIC'
-              ? StellarSdk.Networks.PUBLIC
-              : StellarSdk.Networks.TESTNET,
+            STELLAR_NETWORK === 'PUBLIC' ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET,
           currentLedger: latestLedger.sequence,
           latestLedger: latestLedger.sequence,
         };
@@ -454,7 +551,7 @@ export const fundTestnetAccount = async (publicKey: string): Promise<boolean> =>
 
 /**
  * Submit a transaction to Stellar network with circuit breaker and exponential backoff retry.
- * 
+ *
  * - Wraps calls in circuit breaker (3 failures → open for 8s)
  * - Retries on 503/504/429 with exponential backoff + jitter (max 3 attempts)
  * - Returns typed errors so callers can distinguish network vs. logic failures

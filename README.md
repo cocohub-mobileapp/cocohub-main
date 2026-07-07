@@ -179,12 +179,53 @@ Cocohub uses a **dual-layer** approach — your data stays private:
 
 1. **Storage** — Records stored encrypted on the Cocohub backend (AES-256)
 2. **Verification** — A SHA-256 hash of each record is anchored on Stellar via `manageData`
+   or the Soroban medical-record registry contract in
+   `contracts/medical-record-registry`
 
 **No personal data is ever written to the blockchain.** Only hashes. Any vet can verify a record independently by recomputing the hash and checking it against the on-chain value.
 
 ```
 Record → SHA-256 hash → Stellar manageData tx → tamper-evident audit trail
 ```
+
+### Soroban Medical Record Registry
+
+The registry contract stores pet medical record hashes for approved vet
+addresses and exposes `store_record(pet_id, record_hash, vet_address)` plus
+`verify_record(record_id) -> bool`. Build and test it with:
+
+```bash
+cargo test --manifest-path contracts/medical-record-registry/Cargo.toml
+cargo build --manifest-path contracts/medical-record-registry/Cargo.toml --target wasm32v1-none --release
+```
+
+The contract has been deployed and initialized on Stellar testnet:
+
+- Contract ID: `CCMVO2NWSL2EQATEDUDWJOG5UVBNV57V4MIXGGE5NC5W2B25Y52DHYNN`
+- Admin: `GAMRBYWBKXRVKMEC4UAS3GFDQLSJSARR6TGAJLWK4562MMMND7IUUVQO`
+- Upload tx: `d3b973eef44edc7078255083f8323e843f2896a7df644fa7be9b4980ba8b126f`
+- Create tx: `0964a9c9914ca97f1feca8c5360f490e161d29748f1b8d1462c19d05370e261d`
+- Initialize tx: `8d1ae1c86854e4f95e459a6e9310361e16991eefdf2f8e3fe0943f0ce1114b07`
+
+Live store-to-verify testnet flow:
+
+- Vet: `GBNMSPZLENKEV4RMDRHK6L6R6ZJR75AJ4C773OCBUVLMMDNPPLGRXO43`
+- Record hash: `4e9a76e464bcdb92da54077c3f1a157dd3c1522d640e6c9b7a528d78909507f5`
+- Approve vet tx: `c3904eb26245fdb6669f49f26fd6a2511ebf18628f6294ab7e166aba3a83b475`
+- Store record tx: `2d0720c051a80dcc5c8831ced75408f6253b508c992b4199fa7db0bd79e9189f`
+- Verify record tx: `c9e3aefe81631b95e88f7ef5a2834583bba52c943c5359344e9904e43c95ada7`
+- Verify result: `true`
+
+Configure the app with:
+
+```bash
+MEDICAL_RECORD_REGISTRY_CONTRACT_ID=CCMVO2NWSL2EQATEDUDWJOG5UVBNV57V4MIXGGE5NC5W2B25Y52DHYNN
+EXPO_PUBLIC_MEDICAL_RECORD_REGISTRY_CONTRACT_ID=CCMVO2NWSL2EQATEDUDWJOG5UVBNV57V4MIXGGE5NC5W2B25Y52DHYNN
+EXPO_PUBLIC_SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
+```
+
+Full deployment commands are in
+[`contracts/medical-record-registry/README.md`](contracts/medical-record-registry/README.md).
 
 **Stellar assets:**
 - `PETC` — Cocohub utility token

@@ -11,8 +11,10 @@ import {
   getStellarNetworkInfo,
   getTransactionHistory,
   retrieveRecordHash,
+  storeRecordInMedicalRegistryContract,
   storeMedicalRecordOnChain,
   storeRecordOnChain,
+  verifyRecordInMedicalRegistryContract,
   verifyMedicalRecordOnChain,
   verifyRecordIntegrity,
   verifyRecordOnChain,
@@ -116,6 +118,80 @@ describe('blockchainService', () => {
 
     it('should throw error if recordId is missing', async () => {
       await expect(retrieveRecordHash('')).rejects.toThrow('Record ID is required');
+    });
+  });
+
+  describe('medical record registry contract', () => {
+    const recordHash = 'A'.repeat(64);
+    const contractId = 'CCOCOHUBMEDICALREGISTRYTESTNET000000000000000000000000000000';
+    const vetAddress = 'GVETADDRESS';
+
+    it('stores a record through the registry contract endpoint', async () => {
+      const mockResult = {
+        recordId: recordHash.toLowerCase(),
+        recordHash: recordHash.toLowerCase(),
+        contractId,
+        txHash: 'tx123',
+        status: 'submitted' as const,
+      };
+      mockedAxios.post.mockResolvedValue({ data: mockResult });
+
+      const result = await storeRecordInMedicalRegistryContract({
+        petId: ' pet-1 ',
+        recordHash,
+        vetAddress: ` ${vetAddress} `,
+        contractId,
+      });
+
+      expect(result).toEqual(mockResult);
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        expect.stringContaining('/blockchain/contracts/medical-record-registry/store'),
+        {
+          petId: 'pet-1',
+          recordHash: recordHash.toLowerCase(),
+          vetAddress,
+          contractId,
+        },
+      );
+    });
+
+    it('verifies a record through the registry contract endpoint', async () => {
+      const mockResult = {
+        recordId: recordHash.toLowerCase(),
+        verified: true,
+        contractId,
+      };
+      mockedAxios.post.mockResolvedValue({ data: mockResult });
+
+      const result = await verifyRecordInMedicalRegistryContract(recordHash, contractId);
+
+      expect(result).toEqual(mockResult);
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        expect.stringContaining('/blockchain/contracts/medical-record-registry/verify'),
+        {
+          recordId: recordHash.toLowerCase(),
+          contractId,
+        },
+      );
+    });
+
+    it('rejects malformed record hashes before calling the API', async () => {
+      await expect(
+        verifyRecordInMedicalRegistryContract('not-a-32-byte-hex-hash', contractId),
+      ).rejects.toThrow('Record hash must be a 32-byte hex string');
+      expect(mockedAxios.post).not.toHaveBeenCalled();
+    });
+
+    it('requires a contract id before calling the API', async () => {
+      await expect(
+        storeRecordInMedicalRegistryContract({
+          petId: 'pet-1',
+          recordHash,
+          vetAddress,
+          contractId: '',
+        }),
+      ).rejects.toThrow('Medical record registry contract ID is not configured');
+      expect(mockedAxios.post).not.toHaveBeenCalled();
     });
   });
 

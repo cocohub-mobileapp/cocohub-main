@@ -4,8 +4,11 @@ import cors from 'cors';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 
 import { errBody } from './response';
+import { getPoolStats } from '../config/database';
 import { getRedisClient } from '../config/redis';
+import { attachAudit } from '../middleware/auditLog';
 import performanceLogger from '../middleware/performanceLogger';
+import { authRateLimiter, dataRateLimiter, publicRateLimiter } from '../middleware/rateLimiter';
 import { createRedisSessionMiddleware } from '../middleware/redisSession';
 import { requestLogger } from '../middleware/requestLogger';
 import { sanitizeInputs } from '../middleware/sanitize';
@@ -18,6 +21,7 @@ import auditLogsRouter from './routes/auditLogs';
 import auditTrailRouter from './routes/auditTrail';
 import authRouter from './routes/auth';
 import backupsRouter from './routes/backups';
+import blockchainRouter from './routes/blockchain';
 import breedsRouter from './routes/breeds';
 import communityRouter from './routes/community';
 import docsRouter from './routes/docs';
@@ -44,8 +48,6 @@ import usersRouter from './routes/users';
 import vaccinationsRouter from './routes/vaccinations';
 import vetsRouter from './routes/vets';
 import vitalsRouter from './routes/vitals';
-import { attachAudit } from '../middleware/auditLog';
-import { authRateLimiter, dataRateLimiter, publicRateLimiter } from '../middleware/rateLimiter';
 import activityRouter from '../src/routes/activity';
 import adminRouter from '../src/routes/admin';
 import anchorRouter from '../src/routes/anchor';
@@ -60,8 +62,6 @@ import notificationsRouter from '../src/routes/notifications';
 import notificationTemplatesRouter from '../src/routes/notificationTemplates';
 import oauthRouter from '../src/routes/oauth';
 import shelterRouter from '../src/routes/shelter';
-
-import { getPoolStats } from '../config/database';
 
 // Readiness probe state — set to false while the process is draining
 let isReady = true;
@@ -164,6 +164,7 @@ export function createApp(): Express {
   api.use('/anchor', anchorRouter);
   api.use('/notes', dataRateLimiter, notesRouter);
   api.use('/backups', dataRateLimiter, backupsRouter);
+  api.use('/blockchain', dataRateLimiter, blockchainRouter);
   api.use('/family-sharing', familySharingRouter);
   api.use('/federation', federationRouter);
   api.use('/users', authRateLimiter, usersRouter);
