@@ -22,6 +22,30 @@ export interface AnchorResult {
   status: StellarAnchorStatus;
 }
 
+export interface MedicalRecordRegistryStoreInput {
+  petId: string;
+  recordHash: string;
+  vetAddress: string;
+  contractId?: string;
+  sourceSecret?: string;
+  network?: 'testnet' | 'mainnet';
+}
+
+export interface MedicalRecordRegistryStoreResult {
+  recordId: string;
+  recordHash: string;
+  contractId: string;
+  txHash?: string;
+  ledger?: number;
+  status: StellarAnchorStatus;
+}
+
+export interface MedicalRecordRegistryVerification {
+  recordId: string;
+  verified: boolean;
+  contractId: string;
+}
+
 export class StellarAnchorService {
   private readonly maxRetries: number;
 
@@ -145,6 +169,92 @@ export class StellarAnchorService {
     }
   }
 
+  async storeMedicalRecordInRegistry(
+    input: MedicalRecordRegistryStoreInput,
+  ): Promise<MedicalRecordRegistryStoreResult> {
+    const petId = input.petId.trim();
+    const recordHash = normalizeRecordHash(input.recordHash);
+    const vetAddress = input.vetAddress.trim();
+    const contractId = resolveMedicalRegistryContractId(input.contractId);
+    const network = input.network ?? (config.isProd ? 'mainnet' : 'testnet');
+    const sourceSecret = input.sourceSecret ?? process.env.STELLAR_SOURCE_SECRET;
+
+    if (!petId) throw new Error('petId is required');
+    if (!vetAddress) throw new Error('vetAddress is required');
+
+    if (!sourceSecret) {
+      await this.persistTransaction(
+        recordHash,
+        recordHash,
+        `pending-contract:${contractId}:${recordHash}`,
+        undefined,
+        'pending',
+        network,
+      );
+      return { recordId: recordHash, recordHash, contractId, status: 'pending' };
+    }
+
+    const rpcUrl = resolveSorobanRpcUrl(network);
+    const rpcServer = new StellarSdk.rpc.Server(rpcUrl, {
+      allowHttp: rpcUrl.startsWith('http://'),
+    });
+    const sourceKeypair = StellarSdk.Keypair.fromSecret(sourceSecret);
+    const sourceAccount = await rpcServer.getAccount(sourceKeypair.publicKey());
+    const contract = new StellarSdk.Contract(contractId);
+    const transaction = new StellarSdk.TransactionBuilder(sourceAccount, {
+      fee: StellarSdk.BASE_FEE,
+      networkPassphrase: this.getNetworkPassphrase(network),
+    })
+      .addOperation(
+        contract.call(
+          'store_record',
+          StellarSdk.nativeToScVal(petId, { type: 'string' }),
+          recordHashToScBytes(recordHash),
+          StellarSdk.nativeToScVal(vetAddress, { type: 'address' }),
+        ),
+      )
+      .setTimeout(60)
+      .build();
+
+    const prepared = await rpcServer.prepareTransaction(transaction);
+    prepared.sign(sourceKeypair);
+    const submitted = await rpcServer.sendTransaction(prepared);
+    const status = mapSorobanSubmissionStatus(submitted.status);
+
+    await this.persistTransaction(
+      recordHash,
+      recordHash,
+      submitted.hash,
+      submitted.latestLedger,
+      status,
+      network,
+    );
+
+    return {
+      recordId: recordHash,
+      recordHash,
+      contractId,
+      txHash: submitted.hash,
+      ledger: submitted.latestLedger,
+      status,
+    };
+  }
+
+  async verifyMedicalRecordInRegistry(
+    recordId: string,
+    contractId?: string,
+  ): Promise<MedicalRecordRegistryVerification> {
+    const normalizedRecordId = normalizeRecordHash(recordId);
+    const resolvedContractId = resolveMedicalRegistryContractId(contractId);
+    const status = await this.getTransactionStatus(normalizedRecordId);
+
+    return {
+      recordId: normalizedRecordId,
+      verified: status?.recordHash === normalizedRecordId && status.status !== 'failed',
+      contractId: resolvedContractId,
+    };
+  }
+
   private getServer(network: 'testnet' | 'mainnet'): StellarSdk.Horizon.Server {
     return new StellarSdk.Horizon.Server(
       network === 'mainnet' ? 'https://horizon.stellar.org' : 'https://horizon-testnet.stellar.org',
@@ -174,6 +284,50 @@ export class StellarAnchorService {
       return;
     }
   }
+}
+
+function resolveMedicalRegistryContractId(contractId?: string): string {
+  const resolved =
+    contractId === undefined
+      ? (process.env.MEDICAL_RECORD_REGISTRY_CONTRACT_ID ?? '').trim()
+      : contractId.trim();
+
+  if (!resolved) {
+    throw new Error('Medical record registry contract ID is not configured');
+  }
+
+  return resolved;
+}
+
+function resolveSorobanRpcUrl(network: 'testnet' | 'mainnet'): string {
+  const configured = process.env.SOROBAN_RPC_URL?.trim();
+  if (configured) return configured;
+
+  return network === 'mainnet'
+    ? 'https://mainnet.sorobanrpc.com'
+    : 'https://soroban-testnet.stellar.org';
+}
+
+function normalizeRecordHash(hash: string): string {
+  const normalized = hash.trim().toLowerCase();
+
+  if (!/^[0-9a-f]{64}$/.test(normalized)) {
+    throw new Error('recordHash must be a 32-byte hex string');
+  }
+
+  return normalized;
+}
+
+function recordHashToScBytes(recordHash: string): StellarSdk.xdr.ScVal {
+  return StellarSdk.xdr.ScVal.scvBytes(Buffer.from(recordHash, 'hex'));
+}
+
+function mapSorobanSubmissionStatus(
+  status: StellarSdk.rpc.Api.SendTransactionStatus,
+): StellarAnchorStatus {
+  if (status === 'ERROR') return 'failed';
+  if (status === 'TRY_AGAIN_LATER') return 'pending';
+  return 'submitted';
 }
 
 function stableStringify(value: unknown): string {
