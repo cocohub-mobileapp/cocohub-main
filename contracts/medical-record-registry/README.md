@@ -29,6 +29,15 @@ Current deployed testnet instance:
 - Create tx: `0964a9c9914ca97f1feca8c5360f490e161d29748f1b8d1462c19d05370e261d`
 - Initialize tx: `8d1ae1c86854e4f95e459a6e9310361e16991eefdf2f8e3fe0943f0ce1114b07`
 
+Live store-to-verify testnet flow:
+
+- Vet: `GBNMSPZLENKEV4RMDRHK6L6R6ZJR75AJ4C773OCBUVLMMDNPPLGRXO43`
+- Record hash: `4e9a76e464bcdb92da54077c3f1a157dd3c1522d640e6c9b7a528d78909507f5`
+- Approve vet tx: `c3904eb26245fdb6669f49f26fd6a2511ebf18628f6294ab7e166aba3a83b475`
+- Store record tx: `2d0720c051a80dcc5c8831ced75408f6253b508c992b4199fa7db0bd79e9189f`
+- Verify record tx: `c9e3aefe81631b95e88f7ef5a2834583bba52c943c5359344e9904e43c95ada7`
+- Verify result: `true`
+
 To deploy a new instance:
 
 Install the Stellar CLI and WASM target:
