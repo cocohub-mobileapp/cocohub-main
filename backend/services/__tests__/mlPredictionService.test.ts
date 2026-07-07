@@ -81,4 +81,38 @@ describe('mlPredictionService', () => {
     expect(alerts[0].petId).toBe('pet-risky');
     expect(alerts[0].status).toBe('active');
   });
+
+  it('classifies emergency symptom descriptions with immediate action guidance', () => {
+    const prediction = mlPredictionService.predictSymptoms({
+      petId: 'pet-emergency',
+      ownerId: 'owner-1',
+      species: 'dog',
+      breed: 'Mixed',
+      symptoms: 'My dog cannot breathe and has blue gums after collapsing.',
+    });
+
+    expect(prediction.urgency).toBe('emergency');
+    expect(prediction.probableConditions[0].condition).toBe('Respiratory distress');
+    expect(prediction.recommendedActions).toContain('Seek emergency veterinary care immediately.');
+    expect(prediction.disclaimer).toContain('not veterinary advice');
+  });
+
+  it('returns likely conditions for common non-emergency symptoms', () => {
+    const prediction = mlPredictionService.predictSymptoms({
+      petId: 'pet-skin',
+      ownerId: 'owner-1',
+      species: 'cat',
+      symptoms: 'Scratching ears constantly and shaking head with redness.',
+    });
+
+    expect(prediction.urgency).toBe('low');
+    expect(prediction.probableConditions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          condition: 'Ear or skin irritation',
+          confidence: expect.any(Number),
+        }),
+      ]),
+    );
+  });
 });

@@ -4,8 +4,11 @@ import cors from 'cors';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 
 import { errBody } from './response';
+import { getPoolStats } from '../config/database';
 import { getRedisClient } from '../config/redis';
+import { attachAudit } from '../middleware/auditLog';
 import performanceLogger from '../middleware/performanceLogger';
+import { authRateLimiter, dataRateLimiter, publicRateLimiter } from '../middleware/rateLimiter';
 import { createRedisSessionMiddleware } from '../middleware/redisSession';
 import { requestLogger } from '../middleware/requestLogger';
 import { sanitizeInputs } from '../middleware/sanitize';
@@ -31,6 +34,7 @@ import medicationsRouter from './routes/medications';
 import paymentsRouter from './routes/payments';
 import petsRouter from './routes/pets';
 import photosRouter from './routes/photos';
+import predictionsRouter from './routes/predictions';
 import privacyRouter from './routes/privacy';
 import reconciliationRouter from './routes/reconciliation';
 import referralsRouter from './routes/referrals';
@@ -44,8 +48,6 @@ import usersRouter from './routes/users';
 import vaccinationsRouter from './routes/vaccinations';
 import vetsRouter from './routes/vets';
 import vitalsRouter from './routes/vitals';
-import { attachAudit } from '../middleware/auditLog';
-import { authRateLimiter, dataRateLimiter, publicRateLimiter } from '../middleware/rateLimiter';
 import activityRouter from '../src/routes/activity';
 import adminRouter from '../src/routes/admin';
 import anchorRouter from '../src/routes/anchor';
@@ -60,8 +62,6 @@ import notificationsRouter from '../src/routes/notifications';
 import notificationTemplatesRouter from '../src/routes/notificationTemplates';
 import oauthRouter from '../src/routes/oauth';
 import shelterRouter from '../src/routes/shelter';
-
-import { getPoolStats } from '../config/database';
 
 // Readiness probe state — set to false while the process is draining
 let isReady = true;
@@ -182,6 +182,7 @@ export function createApp(): Express {
   api.use('/community', dataRateLimiter, communityRouter);
   api.use('/forum', forumRouter);
   api.use('/photos', dataRateLimiter, photosRouter);
+  api.use('/predictions', dataRateLimiter, predictionsRouter);
   api.use('/breeds', breedsRouter);
   api.use('/reports', reportsRouter);
   api.use('/sync', dataRateLimiter, syncRouter);
