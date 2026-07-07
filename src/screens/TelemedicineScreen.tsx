@@ -19,14 +19,17 @@ import {
   View,
 } from 'react-native';
 
+import VideoConsultationScreen from './VideoConsultationScreen';
 import type { Appointment } from '../models/Appointment';
-import { pickDocument, uploadDocument, type DocumentMeta } from '../services/documentService';
+import { pickDocument, uploadDocument } from '../services/documentService';
 import petService, { type Pet } from '../services/petService';
 import {
   getTelemedicineAvailability,
+  joinTelemedicineConsultation,
   reportTelemedicineNoShow,
   scheduleTelemedicineAppointment,
   submitTelemedicineQuestionnaire,
+  type TelemedicineJoinSession,
   type TelemedicineAvailabilitySlot,
 } from '../services/telemedicineService';
 import { searchVets, type VetProfile } from '../services/vetService';
@@ -78,9 +81,13 @@ const TelemedicineScreen: React.FC = () => {
   const [slots, setSlots] = useState<TelemedicineAvailabilitySlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<TelemedicineAvailabilitySlot | null>(null);
   const [appointment, setAppointment] = useState<Appointment | null>(null);
+  const [activeVideoSession, setActiveVideoSession] = useState<TelemedicineJoinSession | null>(
+    null,
+  );
   const [questionnaire, setQuestionnaire] = useState({ symptoms: '', duration: '', concerns: '' });
   const [loading, setLoading] = useState(false);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [joiningConsultation, setJoiningConsultation] = useState(false);
   const [localTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
 
   // Chat state
@@ -207,6 +214,26 @@ const TelemedicineScreen: React.FC = () => {
       Alert.alert('Unable to update appointment', String(err));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleJoinConsultation = async () => {
+    if (!appointment?.consultationId) {
+      Alert.alert(
+        'Video room unavailable',
+        'This appointment does not have a linked WebRTC consultation room.',
+      );
+      return;
+    }
+
+    try {
+      setJoiningConsultation(true);
+      const session = await joinTelemedicineConsultation(appointment.consultationId);
+      setActiveVideoSession(session);
+    } catch (err) {
+      Alert.alert('Unable to join consultation', String(err));
+    } finally {
+      setJoiningConsultation(false);
     }
   };
 
@@ -371,6 +398,19 @@ const TelemedicineScreen: React.FC = () => {
     );
   };
 
+  if (activeVideoSession && appointment) {
+    return (
+      <VideoConsultationScreen
+        consultationId={activeVideoSession.consultationId}
+        roomToken={activeVideoSession.roomToken}
+        userId={activeVideoSession.userId}
+        userRole={activeVideoSession.userRole}
+        petName={selectedPet?.name ?? appointment.petName ?? appointment.pet?.name ?? 'your pet'}
+        onEnd={() => setActiveVideoSession(null)}
+      />
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.outerContainer}
@@ -472,6 +512,18 @@ const TelemedicineScreen: React.FC = () => {
             </Text>
             <Text style={styles.detailText}>Video link:</Text>
             <Text style={styles.linkText}>{appointment.videoCallUrl}</Text>
+            <Pressable
+              style={[
+                styles.primaryBtn,
+                (!appointment.consultationId || joiningConsultation) && styles.primaryBtnDisabled,
+              ]}
+              onPress={handleJoinConsultation}
+              disabled={!appointment.consultationId || joiningConsultation}
+            >
+              <Text style={styles.primaryBtnText}>
+                {joiningConsultation ? 'Joining Consultation...' : 'Join Video Consultation'}
+              </Text>
+            </Pressable>
 
             {!appointment.questionnaireRespondedAt ? (
               <>

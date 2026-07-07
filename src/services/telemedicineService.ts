@@ -23,6 +23,50 @@ export interface ScheduleTelemedicineAppointmentInput {
   notes?: string;
 }
 
+export interface TelemedicineJoinSession {
+  consultationId: string;
+  roomToken: string;
+  userId: string;
+  userRole: 'owner' | 'vet';
+  iceServers: Array<{ urls: string | string[]; username?: string; credential?: string }>;
+  waitingRoomPosition?: number;
+  estimatedWaitMinutes?: number;
+}
+
+export interface TelemedicineDecisionResponse {
+  consultation: {
+    id: string;
+    vetDecision?: 'accepted' | 'declined';
+    vetDecisionAt?: string;
+    vetDecisionReason?: string;
+  };
+  appointment?: Appointment;
+}
+
+export interface TelemedicineConsultationNoteInput {
+  subjective?: string;
+  objective?: string;
+  assessment?: string;
+  plan?: string;
+  notes?: string;
+}
+
+export interface TelemedicineConsultationNoteResponse {
+  record: {
+    id: string;
+    petId: string;
+    vetId: string;
+    type: string;
+    diagnosis?: string;
+    treatment?: string;
+    notes?: string;
+    visitDate: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  appointment?: Appointment;
+}
+
 export async function getTelemedicineAvailability(
   vetId: string,
   timeZone: string,
@@ -62,6 +106,50 @@ export async function submitTelemedicineQuestionnaire(
     const response = await apiClient.post<{ data: Appointment }>(
       `${TELEMEDICINE_ENDPOINT}/${encodeURIComponent(appointmentId)}/questionnaire`,
       { responses },
+    );
+    return response.data.data;
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : String(error));
+  }
+}
+
+export async function joinTelemedicineConsultation(
+  consultationId: string,
+): Promise<TelemedicineJoinSession> {
+  try {
+    const response = await apiClient.post<{ data: TelemedicineJoinSession }>(
+      `/consultations/${encodeURIComponent(consultationId)}/join`,
+    );
+    return response.data.data;
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : String(error));
+  }
+}
+
+export async function respondToTelemedicineConsultation(
+  consultationId: string,
+  decision: 'accepted' | 'declined',
+  reason?: string,
+): Promise<TelemedicineDecisionResponse> {
+  try {
+    const response = await apiClient.post<{ data: TelemedicineDecisionResponse }>(
+      `/consultations/${encodeURIComponent(consultationId)}/decision`,
+      { decision, reason },
+    );
+    return response.data.data;
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : String(error));
+  }
+}
+
+export async function saveTelemedicineConsultationNote(
+  consultationId: string,
+  input: TelemedicineConsultationNoteInput,
+): Promise<TelemedicineConsultationNoteResponse> {
+  try {
+    const response = await apiClient.post<{ data: TelemedicineConsultationNoteResponse }>(
+      `/consultations/${encodeURIComponent(consultationId)}/notes`,
+      input,
     );
     return response.data.data;
   } catch (error) {

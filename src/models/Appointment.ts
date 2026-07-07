@@ -138,6 +138,18 @@ export interface Appointment {
   /** Telemedicine appointment flag */
   isTelemedicine?: boolean;
 
+  /** WebRTC consultation session linked to this appointment */
+  consultationId?: string;
+
+  /** Medical record created from the completed telemedicine consultation note */
+  consultationNoteRecordId?: string;
+
+  /** Vet's response to the telemedicine request */
+  vetDecision?: 'accepted' | 'declined';
+
+  /** UTC timestamp when the vet accepted or declined */
+  vetDecisionAt?: string;
+
   /** Video call link for telemedicine appointments */
   videoCallUrl?: string;
 

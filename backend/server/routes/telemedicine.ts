@@ -3,8 +3,10 @@ import express from 'express';
 import { authenticateJWT, type AuthenticatedRequest } from '../../middleware/auth';
 import { AppointmentStatus, AppointmentType } from '../../models/Appointment';
 import { UserRole } from '../../models/UserRole';
+import { sendToUser } from '../../services/pushService';
 import { getVetAvailability } from '../../services/telemedicineService';
 import { generateVideoCallLink } from '../../services/videoCallService';
+import { createConsultation } from '../../services/webrtcService';
 import { addMinutes, getCurrentDateInTimezone, parseZonedDateTime } from '../../utils/dateUtils';
 import { ok, sendError } from '../response';
 import { store, type StoredAppointment } from '../store';
@@ -81,6 +83,13 @@ router.post('/appointments', (req: AuthenticatedRequest, res) => {
 
   const appointmentId = store.newId();
   const videoCallLink = generateVideoCallLink(appointmentId);
+  const consultation = createConsultation(
+    body.petId.trim(),
+    pet.ownerId,
+    body.vetId.trim(),
+    scheduledAt.toISOString(),
+    body.durationMinutes ?? 30,
+  );
 
   const row: StoredAppointment = {
     id: appointmentId,
@@ -94,6 +103,7 @@ router.post('/appointments', (req: AuthenticatedRequest, res) => {
     notes: body.notes?.trim(),
     timeZone,
     isTelemedicine: true,
+    consultationId: consultation.id,
     videoCallUrl: videoCallLink.url,
     videoProvider: videoCallLink.provider,
     questionnaireDueAt: addMinutes(scheduledAt, -24 * 60).toISOString(),
@@ -103,6 +113,19 @@ router.post('/appointments', (req: AuthenticatedRequest, res) => {
   };
 
   store.appointments.set(appointmentId, row);
+  void sendToUser(
+    row.vetId,
+    'appointment_alerts',
+    'New telemedicine request',
+    `A pet owner requested a video consultation for ${row.date} at ${row.time}.`,
+    {
+      type: 'telemedicine_request',
+      appointmentId: row.id,
+      consultationId: row.consultationId,
+      petId: row.petId,
+    },
+  ).catch(() => undefined);
+
   return res.status(201).json(appointmentResponse(row));
 });
 

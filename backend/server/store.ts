@@ -84,6 +84,10 @@ export interface StoredAppointment {
   cancelledAt?: string;
   cancellationReason?: string;
   isTelemedicine?: boolean;
+  consultationId?: string;
+  consultationNoteRecordId?: string;
+  vetDecision?: 'accepted' | 'declined';
+  vetDecisionAt?: string;
   videoCallUrl?: string;
   videoProvider?: 'jitsi' | 'zoom';
   timeZone?: string;
