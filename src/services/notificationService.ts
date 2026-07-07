@@ -2,6 +2,7 @@
 import { Linking } from 'react-native';
 
 import apiClient from './apiClient';
+import emergencyService from './emergencyService';
 import { getItem, setItem, removeItem } from './localDB';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -140,6 +141,7 @@ const ACTION_MARK_AS_READ = 'MARK_AS_READ';
 const ACTION_MARK_AS_TAKEN = 'MARK_AS_TAKEN';
 const ACTION_SNOOZE_30MIN = 'SNOOZE_30MIN';
 const ACTION_SKIP_DOSE = 'SKIP_DOSE';
+const ACTION_TRIGGER_SOS = 'TRIGGER_SOS';
 
 const DEFAULT_PREFS: NotificationPreferences = {
   medicationReminders: true,
@@ -240,8 +242,22 @@ export const registerNotificationActions = async (): Promise<void> => {
     },
   ];
 
+  const sosActions = [
+    {
+      identifier: ACTION_TRIGGER_SOS,
+      buttonTitle: 'Send SOS',
+      options: { opensAppToForeground: false },
+    },
+    {
+      identifier: ACTION_OPEN,
+      buttonTitle: 'Open',
+      options: { opensAppToForeground: true },
+    },
+  ];
+
   await Promise.all([
     Notifications.setNotificationCategoryAsync('medication', medicationActions),
+    Notifications.setNotificationCategoryAsync('sos', sosActions),
     ...['appointment', 'vaccination', 'alert', 'scheduled'].map((category) =>
       Notifications.setNotificationCategoryAsync(category, defaultActions),
     ),
@@ -408,10 +424,19 @@ async function handleSkipDose(notification: Notifications.Notification): Promise
   }
 }
 
+async function handleTriggerSOS(): Promise<void> {
+  await emergencyService.triggerSOS('Pet emergency - triggered from Android lock screen');
+}
+
 export const handleNotificationAction = async (
   response: Notifications.NotificationResponse,
 ): Promise<void> => {
   const { actionIdentifier, notification } = response;
+
+  if (actionIdentifier === ACTION_TRIGGER_SOS) {
+    await handleTriggerSOS();
+    return;
+  }
 
   if (actionIdentifier === ACTION_MARK_AS_TAKEN) {
     await handleMarkAsTaken(notification);
