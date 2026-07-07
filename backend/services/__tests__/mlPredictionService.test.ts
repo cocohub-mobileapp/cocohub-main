@@ -81,4 +81,36 @@ describe('mlPredictionService', () => {
     expect(alerts[0].petId).toBe('pet-risky');
     expect(alerts[0].status).toBe('active');
   });
+
+  it('triages emergency symptom text without an external API key', async () => {
+    const prediction = await mlPredictionService.analyzeSymptoms({
+      petId: 'cat-1',
+      ownerId: 'owner-1',
+      species: 'cat',
+      breed: 'domestic shorthair',
+      symptoms: 'Straining to urinate and cannot pee',
+    });
+
+    expect(prediction.urgency).toBe('emergency');
+    expect(prediction.probableConditions[0].condition).toBe('Possible urinary obstruction');
+    expect(prediction.recommendedActions).toEqual(
+      expect.arrayContaining(['Go to an emergency veterinarian immediately.']),
+    );
+  });
+
+  it('returns moderate digestive triage with a vet disclaimer', async () => {
+    const prediction = await mlPredictionService.analyzeSymptoms({
+      petId: 'dog-1',
+      ownerId: 'owner-1',
+      species: 'dog',
+      breed: 'beagle',
+      symptoms: 'Vomiting this morning and not eating much',
+    });
+
+    expect(['moderate', 'high']).toContain(prediction.urgency);
+    expect(prediction.probableConditions.map((condition) => condition.condition)).toContain(
+      'Gastrointestinal upset',
+    );
+    expect(prediction.disclaimer).toContain('not a medical diagnosis');
+  });
 });
