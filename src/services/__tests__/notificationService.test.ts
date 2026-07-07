@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 
+import emergencyService from '../emergencyService';
 import { getItem, setItem } from '../localDB';
 import {
   requestPermissions,
@@ -12,6 +13,8 @@ import {
   cancelEntityNotification,
   filterNotificationsByCategory,
   groupNotificationsByCategory,
+  handleNotificationAction,
+  registerNotificationActions,
   scheduleFutureNotification,
   updateScheduledNotification,
   cancelScheduledNotification,
@@ -24,10 +27,29 @@ jest.mock('../localDB', () => ({
   removeItem: jest.fn(),
 }));
 
+jest.mock('../apiClient', () => ({
+  __esModule: true,
+  default: {
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    get: jest.fn(),
+    delete: jest.fn(),
+  },
+}));
+
+jest.mock('../emergencyService', () => ({
+  __esModule: true,
+  default: {
+    triggerSOS: jest.fn(),
+  },
+}));
+
 jest.mock('expo-notifications', () => ({
   getPermissionsAsync: jest.fn(),
   requestPermissionsAsync: jest.fn(),
   setNotificationHandler: jest.fn(),
+  setNotificationCategoryAsync: jest.fn(),
   scheduleNotificationAsync: jest.fn(),
   cancelScheduledNotificationAsync: jest.fn(),
   getAllScheduledNotificationsAsync: jest.fn(),
@@ -232,6 +254,39 @@ describe('notificationService', () => {
       expect(grouped.appointments).toEqual([requests[1]]);
       expect(grouped.health).toEqual([requests[2]]);
       expect(grouped.general).toEqual([requests[3]]);
+    });
+  });
+
+  describe('SOS notification action', () => {
+    it('registers a lock-screen SOS notification category', async () => {
+      await registerNotificationActions();
+
+      expect(Notifications.setNotificationCategoryAsync).toHaveBeenCalledWith(
+        'sos',
+        expect.arrayContaining([
+          expect.objectContaining({
+            identifier: 'TRIGGER_SOS',
+            buttonTitle: 'Send SOS',
+            options: { opensAppToForeground: false },
+          }),
+        ]),
+      );
+    });
+
+    it('triggers SOS from a notification action without opening the app', async () => {
+      await handleNotificationAction({
+        actionIdentifier: 'TRIGGER_SOS',
+        notification: {
+          request: {
+            identifier: 'sos-notification-id',
+            content: { data: { type: 'sos' } },
+          },
+        },
+      } as Notifications.NotificationResponse);
+
+      expect(emergencyService.triggerSOS).toHaveBeenCalledWith(
+        'Pet emergency - triggered from Android lock screen',
+      );
     });
   });
 

@@ -1,4 +1,5 @@
 ﻿import Geolocation from '@react-native-community/geolocation';
+import * as Notifications from 'expo-notifications';
 import { Linking, Platform } from 'react-native';
 
 import apiClient from './apiClient';
@@ -55,6 +56,9 @@ interface LiveSOSSession {
 
 const CONTACTS_KEY = '@emergency_contacts';
 const FAVORITES_KEY = '@emergency_favorites';
+const ANDROID_SOS_NOTIFICATION_ID_KEY = '@android_sos_notification_id';
+const ANDROID_SOS_CHANNEL_ID = 'sos-emergency';
+const ANDROID_SOS_CATEGORY_ID = 'sos';
 
 // ─── Default contacts ─────────────────────────────────────────────────────────
 
@@ -106,6 +110,7 @@ class EmergencyService {
     };
     contacts.push(newContact);
     await setItem(CONTACTS_KEY, JSON.stringify(contacts));
+    await this.syncAndroidSOSLockScreenNotification(contacts);
     return newContact;
   }
 
@@ -118,6 +123,7 @@ class EmergencyService {
     if (idx === -1) throw new Error('Contact not found');
     contacts[idx] = { ...contacts[idx], ...updates };
     await setItem(CONTACTS_KEY, JSON.stringify(contacts));
+    await this.syncAndroidSOSLockScreenNotification(contacts);
     return contacts[idx];
   }
 
@@ -127,6 +133,116 @@ class EmergencyService {
     await setItem(CONTACTS_KEY, JSON.stringify(filtered));
     // Also remove from favorites if present
     await this.removeFavoriteContact(id);
+    await this.syncAndroidSOSLockScreenNotification(filtered);
+  }
+
+  async syncAndroidSOSLockScreenNotification(
+    contacts?: EmergencyContact[],
+  ): Promise<string | null> {
+    if (Platform.OS !== 'android') return null;
+
+    const emergencyContacts = contacts ?? (await this.getEmergencyContacts());
+    if (emergencyContacts.length === 0) {
+      await this.cancelAndroidSOSLockScreenNotification();
+      return null;
+    }
+
+    const hasPermission = await this.requestNotificationPermission();
+    if (!hasPermission) return null;
+
+    await this.ensureAndroidSOSNotificationChannel();
+
+    const storedNotificationId = await getItem(ANDROID_SOS_NOTIFICATION_ID_KEY);
+    if (storedNotificationId) return storedNotificationId;
+
+    const existing = await this.getScheduledAndroidSOSNotification();
+    if (existing) {
+      await setItem(ANDROID_SOS_NOTIFICATION_ID_KEY, existing.identifier);
+      return existing.identifier;
+    }
+
+    const notificationId = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Emergency SOS ready',
+        body: 'Send an SOS to your emergency contacts from the lock screen.',
+        sound: 'default',
+        sticky: true,
+        autoDismiss: false,
+        priority: (Notifications as any).AndroidNotificationPriority?.MAX,
+        categoryIdentifier: ANDROID_SOS_CATEGORY_ID,
+        data: {
+          type: 'sos',
+          category: 'health',
+          sosLockScreenNotification: true,
+        },
+      } as Notifications.NotificationContentInput,
+      trigger: null,
+    });
+
+    await setItem(ANDROID_SOS_NOTIFICATION_ID_KEY, notificationId);
+    return notificationId;
+  }
+
+  async cancelAndroidSOSLockScreenNotification(): Promise<void> {
+    if (Platform.OS !== 'android') return;
+
+    const storedNotificationId = await getItem(ANDROID_SOS_NOTIFICATION_ID_KEY);
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const notificationIds = scheduled
+      .filter((notification) => notification.content.data?.sosLockScreenNotification === true)
+      .map((notification) => notification.identifier);
+
+    if (storedNotificationId) notificationIds.push(storedNotificationId);
+
+    await Promise.all(
+      [...new Set(notificationIds)].map((notificationId) =>
+        Notifications.cancelScheduledNotificationAsync(notificationId),
+      ),
+    );
+    await _removeItem(ANDROID_SOS_NOTIFICATION_ID_KEY);
+  }
+
+  private async ensureAndroidSOSNotificationChannel(): Promise<void> {
+    const setNotificationChannelAsync = (Notifications as any).setNotificationChannelAsync as
+      | undefined
+      | ((
+          channelId: string,
+          options: {
+            name: string;
+            importance?: unknown;
+            lockscreenVisibility?: unknown;
+            bypassDnd?: boolean;
+            enableVibrate?: boolean;
+            vibrationPattern?: number[];
+          },
+        ) => Promise<unknown>);
+
+    if (!setNotificationChannelAsync) return;
+
+    await setNotificationChannelAsync(ANDROID_SOS_CHANNEL_ID, {
+      name: 'Emergency SOS',
+      importance: (Notifications as any).AndroidImportance?.MAX,
+      lockscreenVisibility: (Notifications as any).AndroidNotificationVisibility?.PUBLIC,
+      bypassDnd: true,
+      enableVibrate: true,
+      vibrationPattern: [0, 500, 250, 500],
+    });
+  }
+
+  private async getScheduledAndroidSOSNotification(): Promise<Notifications.NotificationRequest | null> {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    return (
+      scheduled.find(
+        (notification) => notification.content.data?.sosLockScreenNotification === true,
+      ) ?? null
+    );
+  }
+
+  private async requestNotificationPermission(): Promise<boolean> {
+    const existing = await Notifications.getPermissionsAsync();
+    if ((existing as any).granted ?? (existing as any).status === 'granted') return true;
+    const result = await Notifications.requestPermissionsAsync();
+    return (result as any).granted ?? (result as any).status === 'granted';
   }
 
   // ── Favorites ────────────────────────────────────────────────────────────────

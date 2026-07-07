@@ -26,6 +26,10 @@ const SOSButton: React.FC<SOSButtonProps> = ({ onSOSSent, style }) => {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<number | null>(null);
 
+  useEffect(() => {
+    void emergencyService.syncAndroidSOSLockScreenNotification();
+  }, []);
+
   const triggerSOS = useCallback(async () => {
     setIsCountdown(false);
     setCountdown(3);
