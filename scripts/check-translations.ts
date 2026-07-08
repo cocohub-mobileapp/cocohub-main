@@ -14,7 +14,7 @@ import * as path from 'path';
 
 const LOCALES_DIR = path.join(__dirname, '../src/i18n/locales');
 const BASE_LOCALE = 'en';
-const SUPPORTED = ['en', 'es'];
+const SUPPORTED = ['en', 'es', 'pt-BR'];
 
 type NestedRecord = { [key: string]: string | NestedRecord };
 
