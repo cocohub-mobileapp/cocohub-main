@@ -84,7 +84,7 @@ const AppointmentScreen: React.FC = () => {
   const route = useRoute<{
     key: string;
     name: string;
-    params?: MainTabParamList['Appointments'];
+    params?: MainTabParamList['Schedule'];
   }>();
   const routeParams = route.params;
 
@@ -184,6 +184,15 @@ const AppointmentScreen: React.FC = () => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!routeParams?.appointmentId) return;
+    const match = appointments.find((appt) => appt.id === routeParams.appointmentId);
+    if (match) {
+      setTab('upcoming');
+      setDetailAppt(match);
+    }
+  }, [appointments, routeParams?.appointmentId]);
 
   useEffect(() => {
     AsyncStorage.getItem(ARCHIVED_IDS_KEY)

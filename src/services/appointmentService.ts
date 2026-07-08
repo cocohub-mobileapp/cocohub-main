@@ -316,6 +316,7 @@ export async function scheduleAppointmentReminders(
     apptMs - 24 * 60 * 60 * 1000 > now
       ? await scheduleAppointmentNotification({
           id: `${appointment.id}-24h`,
+          petId: appointment.petId,
           title: `Reminder: ${title} tomorrow`,
           date: new Date(apptMs - 24 * 60 * 60 * 1000).toISOString(),
           location: appointment.location,
@@ -326,6 +327,7 @@ export async function scheduleAppointmentReminders(
     apptMs - 60 * 60 * 1000 > now
       ? await scheduleAppointmentNotification({
           id: `${appointment.id}-1h`,
+          petId: appointment.petId,
           title: `Reminder: ${title} in 1 hour`,
           date: new Date(apptMs - 60 * 60 * 1000).toISOString(),
           location: appointment.location,
