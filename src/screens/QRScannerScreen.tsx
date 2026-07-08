@@ -33,8 +33,10 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
   const [torchEnabled, setTorchEnabled] = useState(false);
+  const [cameraTorchEnabled, setCameraTorchEnabled] = useState(false);
   const [showRationale, setShowRationale] = useState(false);
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const torchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastScanRef = useRef<number>(0);
 
   const [_permission, requestPermission] = useCameraPermissions();
@@ -61,6 +63,8 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
       // eslint-disable-next-line react-hooks/exhaustive-deps
       const timeout = scanTimeoutRef.current;
       if (timeout) clearTimeout(timeout);
+      const torchTimeout = torchTimeoutRef.current;
+      if (torchTimeout) clearTimeout(torchTimeout);
     };
   }, [requestCameraPermission]);
 
@@ -100,7 +104,27 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
     })();
   };
 
-  const toggleTorch = () => setTorchEnabled(!torchEnabled);
+  const toggleTorch = () => {
+    const nextTorchEnabled = !torchEnabled;
+
+    if (torchTimeoutRef.current) {
+      clearTimeout(torchTimeoutRef.current);
+      torchTimeoutRef.current = null;
+    }
+
+    setTorchEnabled(nextTorchEnabled);
+
+    if (!nextTorchEnabled || Platform.OS !== 'ios') {
+      setCameraTorchEnabled(nextTorchEnabled);
+      return;
+    }
+
+    setCameraTorchEnabled(false);
+    torchTimeoutRef.current = setTimeout(() => {
+      setCameraTorchEnabled(true);
+      torchTimeoutRef.current = null;
+    }, 100);
+  };
 
   const handlePermissionDenied = () => {
     Alert.alert(
@@ -139,7 +163,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
         <CameraView
           style={styles.camera}
           facing="back"
-          enableTorch={torchEnabled}
+          enableTorch={cameraTorchEnabled}
           onBarcodeScanned={
             scanned
               ? undefined
