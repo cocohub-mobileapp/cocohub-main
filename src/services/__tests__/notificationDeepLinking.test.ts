@@ -17,6 +17,7 @@ describe('Notification Deep Linking', () => {
         const data = {
           type: 'medication',
           medicationId: 'med-123',
+          petId: 'pet-123',
           category: 'medication',
         };
 
@@ -24,7 +25,7 @@ describe('Notification Deep Linking', () => {
 
         expect(result).toEqual({
           route: 'Medications',
-          params: { medicationId: 'med-123' },
+          params: { medicationId: 'med-123', petId: 'pet-123' },
         });
       });
 
@@ -48,6 +49,9 @@ describe('Notification Deep Linking', () => {
         const data = {
           type: 'appointment',
           appointmentId: 'apt-456',
+          petId: 'pet-456',
+          appointmentTitle: 'Annual checkup',
+          appointmentDate: '2026-06-15T10:00:00.000Z',
           category: 'appointments',
         };
 
@@ -55,7 +59,12 @@ describe('Notification Deep Linking', () => {
 
         expect(result).toEqual({
           route: 'Appointments',
-          params: { appointmentId: 'apt-456' },
+          params: {
+            appointmentId: 'apt-456',
+            petId: 'pet-456',
+            appointmentTitle: 'Annual checkup',
+            appointmentDate: '2026-06-15T10:00:00.000Z',
+          },
         });
       });
 

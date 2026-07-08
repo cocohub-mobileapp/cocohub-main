@@ -8,6 +8,7 @@ import { getItem, setItem, removeItem } from './localDB';
 
 export interface Medication {
   id: string;
+  petId?: string;
   name: string;
   dosage: string;
   frequency: number; // hours between doses
@@ -17,6 +18,7 @@ export interface Medication {
 
 export interface Appointment {
   id: string;
+  petId?: string;
   title: string;
   date: string;
   location?: string;
@@ -61,19 +63,9 @@ export interface NotificationPreferences {
 
 export type NotificationCategory = 'medication' | 'appointments' | 'health' | 'general';
 export type NotificationGroup =
-  | 'medication'
-  | 'appointment'
-  | 'vaccination'
-  | 'alert'
-  | 'scheduled'
-  | 'sos';
+  'medication' | 'appointment' | 'vaccination' | 'alert' | 'scheduled' | 'sos';
 export type NotificationAction =
-  | 'open'
-  | 'snooze'
-  | 'mark_as_read'
-  | 'mark_as_taken'
-  | 'skip_dose'
-  | 'snooze_30min';
+  'open' | 'snooze' | 'mark_as_read' | 'mark_as_taken' | 'skip_dose' | 'snooze_30min';
 
 // ─── Deep Link Navigation Types ───────────────────────────────────────────────
 export interface DeepLinkParams {
@@ -300,16 +292,22 @@ export const extractDeepLinkParams = (
   const type = data.type as NotificationGroup | undefined;
 
   if (type === 'medication' && data.medicationId) {
+    const params: Record<string, any> = { medicationId: data.medicationId };
+    if (data.petId) params.petId = data.petId;
     return {
       route: 'Medications',
-      params: { medicationId: data.medicationId },
+      params,
     };
   }
 
   if (type === 'appointment' && data.appointmentId) {
+    const params: Record<string, any> = { appointmentId: data.appointmentId };
+    if (data.petId) params.petId = data.petId;
+    if (data.appointmentTitle) params.appointmentTitle = data.appointmentTitle;
+    if (data.appointmentDate) params.appointmentDate = data.appointmentDate;
     return {
       route: 'Appointments',
-      params: { appointmentId: data.appointmentId },
+      params,
     };
   }
 
@@ -567,6 +565,7 @@ export const scheduleMedicationReminder = async (medication: Medication): Promis
             type: 'medication' as NotificationGroup,
             category: resolveNotificationCategory('medication'),
             medicationId: medication.id,
+            petId: medication.petId,
           },
           categoryIdentifier: resolveNotificationCategory('medication'),
         },
@@ -610,6 +609,9 @@ export const scheduleAppointmentNotification = async (
         type: 'appointment' as NotificationGroup,
         category: resolveNotificationCategory('appointment'),
         appointmentId: appointment.id,
+        petId: appointment.petId,
+        appointmentTitle: appointment.title,
+        appointmentDate: appointment.date,
       },
       categoryIdentifier: resolveNotificationCategory('appointment'),
     },
@@ -894,10 +896,7 @@ export const transferVaccinationNotifications = async (
 // ─── Push token registration ──────────────────────────────────────────────────
 
 export type PushTopic =
-  | 'medication_reminders'
-  | 'appointment_alerts'
-  | 'sos_notifications'
-  | 'health_tips';
+  'medication_reminders' | 'appointment_alerts' | 'sos_notifications' | 'health_tips';
 
 export const ALL_PUSH_TOPICS: PushTopic[] = [
   'medication_reminders',
