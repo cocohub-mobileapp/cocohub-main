@@ -3,6 +3,7 @@ import { Linking } from 'react-native';
 
 import apiClient from './apiClient';
 import { getItem, setItem, removeItem } from './localDB';
+import { handleSOSLockScreenNotificationAction } from './sosLockScreenNotificationService';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -61,19 +62,9 @@ export interface NotificationPreferences {
 
 export type NotificationCategory = 'medication' | 'appointments' | 'health' | 'general';
 export type NotificationGroup =
-  | 'medication'
-  | 'appointment'
-  | 'vaccination'
-  | 'alert'
-  | 'scheduled'
-  | 'sos';
+  'medication' | 'appointment' | 'vaccination' | 'alert' | 'scheduled' | 'sos';
 export type NotificationAction =
-  | 'open'
-  | 'snooze'
-  | 'mark_as_read'
-  | 'mark_as_taken'
-  | 'skip_dose'
-  | 'snooze_30min';
+  'open' | 'snooze' | 'mark_as_read' | 'mark_as_taken' | 'skip_dose' | 'snooze_30min';
 
 // ─── Deep Link Navigation Types ───────────────────────────────────────────────
 export interface DeepLinkParams {
@@ -411,6 +402,10 @@ async function handleSkipDose(notification: Notifications.Notification): Promise
 export const handleNotificationAction = async (
   response: Notifications.NotificationResponse,
 ): Promise<void> => {
+  if (await handleSOSLockScreenNotificationAction(response)) {
+    return;
+  }
+
   const { actionIdentifier, notification } = response;
 
   if (actionIdentifier === ACTION_MARK_AS_TAKEN) {
@@ -894,10 +889,7 @@ export const transferVaccinationNotifications = async (
 // ─── Push token registration ──────────────────────────────────────────────────
 
 export type PushTopic =
-  | 'medication_reminders'
-  | 'appointment_alerts'
-  | 'sos_notifications'
-  | 'health_tips';
+  'medication_reminders' | 'appointment_alerts' | 'sos_notifications' | 'health_tips';
 
 export const ALL_PUSH_TOPICS: PushTopic[] = [
   'medication_reminders',
