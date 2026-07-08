@@ -19,6 +19,7 @@ import emergencyService, {
   type EmergencyContact,
   type VetClinic,
 } from '../services/emergencyService';
+import { ensureSOSLockScreenNotification } from '../services/sosLockScreenNotificationService';
 import { useSecureScreen } from '../utils/secureScreen';
 
 type Tab = 'contacts' | 'nearby';
@@ -47,7 +48,9 @@ const EmergencyContactsScreen: React.FC = () => {
   const loadContacts = useCallback(async () => {
     setLoading(true);
     try {
-      setContacts(await emergencyService.getEmergencyContacts());
+      const nextContacts = await emergencyService.getEmergencyContacts();
+      setContacts(nextContacts);
+      void ensureSOSLockScreenNotification();
     } catch {
       Alert.alert('Error', 'Failed to load emergency contacts.');
     } finally {

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import emergencyService from '../services/emergencyService';
+import { ensureSOSLockScreenNotification } from '../services/sosLockScreenNotificationService';
 import haptics from '../utils/haptics';
 
 interface SOSButtonProps {
@@ -25,6 +26,12 @@ const SOSButton: React.FC<SOSButtonProps> = ({ onSOSSent, style }) => {
   const pressAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    void ensureSOSLockScreenNotification().catch((error) => {
+      console.warn('Unable to prepare lock-screen SOS notification', error);
+    });
+  }, []);
 
   const triggerSOS = useCallback(async () => {
     setIsCountdown(false);
