@@ -1,0 +1,171 @@
+{
+  "common": {
+    "loading": "Carregando...",
+    "retry": "Tentar novamente",
+    "cancel": "Cancelar",
+    "save": "Salvar",
+    "delete": "Excluir",
+    "confirm": "Confirmar",
+    "back": "Voltar",
+    "next": "Avançar",
+    "done": "Concluído",
+    "error": "Erro",
+    "success": "Sucesso",
+    "unknown_error": "Ocorreu um erro inesperado.",
+    "network_error": "Erro de rede. Verifique sua conexão.",
+    "timeout_error": "A solicitação excedeu o tempo limite. Tente novamente."
+  },
+  "auth": {
+    "login_title": "Bem-vindo de volta",
+    "login_subtitle": "Entre na sua conta",
+    "register_title": "Criar conta",
+    "email_label": "E-mail",
+    "email_placeholder": "voce@exemplo.com",
+    "password_label": "Senha",
+    "password_placeholder": "Pelo menos 8 caracteres",
+    "name_label": "Nome completo",
+    "name_placeholder": "Seu nome",
+    "login_button": "Entrar",
+    "register_button": "Criar conta",
+    "logout_button": "Sair",
+    "no_account": "Não tem uma conta?",
+    "have_account": "Já tem uma conta?",
+    "forgot_password": "Esqueceu a senha?",
+    "validation": {
+      "email_required": "O e-mail é obrigatório.",
+      "email_invalid": "Digite um endereço de e-mail válido.",
+      "password_required": "A senha é obrigatória.",
+      "password_weak": "A senha deve ter pelo menos 8 caracteres, incluindo 1 letra maiúscula e 1 número.",
+      "name_required": "O nome é obrigatório."
+    }
+  },
+  "home": {
+    "title": "Meus Pets",
+    "add_pet": "Adicionar pet",
+    "no_pets": "Nenhum pet ainda. Adicione seu primeiro pet!",
+    "greeting": "Olá, {{name}}"
+  },
+  "pet": {
+    "profile_title": "Perfil do Pet",
+    "name_label": "Nome",
+    "species_label": "Espécie",
+    "breed_label": "Raça",
+    "dob_label": "Data de nascimento",
+    "weight_label": "Peso",
+    "edit_button": "Editar perfil",
+    "delete_button": "Remover pet",
+    "delete_confirm": "Tem certeza de que deseja remover {{name}}?",
+    "validation": {
+      "name_required": "O nome do pet é obrigatório.",
+      "dob_invalid": "Digite uma data de nascimento válida."
+    }
+  },
+  "medical": {
+    "title": "Histórico Médico",
+    "add_record": "Adicionar registro",
+    "no_records": "Nenhum registro médico encontrado.",
+    "record_date": "Data",
+    "record_type": "Tipo",
+    "record_notes": "Observações",
+    "vaccination": "Vacinação",
+    "checkup": "Check-up",
+    "surgery": "Cirurgia",
+    "other": "Outro"
+  },
+  "appointments": {
+    "title": "Consultas",
+    "add_appointment": "Agendar consulta",
+    "no_appointments": "Nenhuma consulta futura.",
+    "date_label": "Data",
+    "time_label": "Horário",
+    "vet_label": "Veterinário(a)",
+    "notes_label": "Observações",
+    "upcoming": "Futuras",
+    "past": "Passadas",
+    "cancel_confirm": "Cancelar esta consulta?"
+  },
+  "medication": {
+    "title": "Medicações",
+    "add_medication": "Adicionar medicação",
+    "no_medications": "Nenhuma medicação registrada.",
+    "name_label": "Nome da medicação",
+    "dosage_label": "Dosagem",
+    "frequency_label": "Frequência",
+    "start_date_label": "Data de início",
+    "end_date_label": "Data de término",
+    "reminder": "Lembrete ativado"
+  },
+  "qr": {
+    "title": "Leitor QR",
+    "scan_prompt": "Aponte a câmera para um código QR",
+    "scan_success": "Código QR escaneado com sucesso",
+    "scan_error": "Não foi possível ler o código QR. Tente novamente.",
+    "permission_denied": "A permissão da câmera é necessária para escanear códigos QR."
+  },
+  "emergency": {
+    "title": "Emergência",
+    "call_vet": "Ligar para veterinário de emergência",
+    "nearest_clinic": "Encontrar clínica mais próxima",
+    "first_aid": "Guia de primeiros socorros",
+    "alert_sent": "Alerta de emergência enviado",
+    "no_clinics_found": "Nenhuma clínica próxima encontrada. Verifique sua conexão com a internet.",
+    "location_denied": "A permissão de localização é necessária para encontrar clínicas próximas."
+  },
+  "emailVerification": {
+    "title": "Verifique seu E-mail",
+    "subtitle": "Enviamos um código de 6 dígitos para seu e-mail. Digite abaixo para ativar sua conta.",
+    "placeholder": "Digite o código de 6 dígitos",
+    "verifyButton": "Verificar E-mail",
+    "resendButton": "Reenviar código",
+    "resendCooldown": "Reenviar em {{seconds}}s",
+    "successTitle": "E-mail Verificado!",
+    "successSubtitle": "Sua conta está agora totalmente ativada.",
+    "skipButton": "Pular por enquanto"
+  },
+  "symptomChecker": {
+    "title": "Verificador de Sintomas IA",
+    "inputPlaceholder": "Descreva o que você está observando…",
+    "analyseButton": "Analisar Sintomas →",
+    "selectPetFirst": "Selecione qual pet apresenta esses sintomas.",
+    "describeFirst": "Descreva o que você está observando.",
+    "probableConditions": "Possíveis condições",
+    "recommendedActions": "Ações recomendadas",
+    "disclaimer": "Esta é apenas uma triagem assistida por IA e não substitui um diagnóstico médico. Consulte sempre um veterinário licenciado.",
+    "unavailable": "O verificador de sintomas IA está temporariamente offline. Entre em contato com seu veterinário diretamente."
+  },
+  "species": {
+    "dog": "Cachorro",
+    "cat": "Gato",
+    "bird": "Ave",
+    "rabbit": "Coelho",
+    "hamster": "Hamster",
+    "guinea_pig": "Porquinho-da-índia",
+    "fish": "Peixe",
+    "reptile": "Réptil",
+    "horse": "Cavalo",
+    "ferret": "Furão",
+    "turtle": "Tartaruga",
+    "other": "Outro"
+  },
+  "birthday": {
+    "notification_title": "🎂 Feliz Aniversário, {{name}}!",
+    "notification_body": "Hoje é o dia especial de {{name}}. Dê um carinho extra! 🐾",
+    "milestone_title": "🩺 Marco de saúde",
+    "turns_one": "{{name}} completa 1 ano! Ótima hora para agendar um check-up geral.",
+    "senior": "{{name}} entra na terceira idade aos 7 anos. Considere um painel de saúde sênior com seu veterinário.",
+    "ten_years": "{{name}} tem 10 anos! Visitas semestrais ao veterinário são recomendadas para pets dessa idade."
+  },
+  "error_boundary": {
+    "title": "Algo deu errado",
+    "subtitle": "Ocorreu um erro inesperado na tela {{screen}}. Nossa equipe foi notificada.",
+    "report_retry": "Relatar e Tentar Novamente"
+  },
+  "accessibility": {
+    "close_button": "Fechar",
+    "menu_button": "Abrir menu",
+    "back_button": "Voltar",
+    "loading_indicator": "Carregando",
+    "error_screen": "Tela de erro",
+    "pet_image": "Foto de {{name}}"
+  }
+}
