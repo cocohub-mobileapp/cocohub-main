@@ -31,6 +31,7 @@ jest.mock('../../../backend/middleware/auditLogger', () => ({
 }));
 
 jest.mock('../../../backend/utils/logger', () => ({
+  __esModule: true,
   default: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
@@ -176,6 +177,112 @@ describe('POST /appointments', () => {
   });
 });
 
+// ─── POST /appointments/check-conflicts ────────────────────────────────────────
+
+describe('POST /appointments/check-conflicts', () => {
+  it('flags back-to-back appointments as a warning', async () => {
+    const { date } = futureDate(80);
+
+    const existing = await request(app)
+      .post('/appointments')
+      .set('x-test-user', ADMIN_HEADER)
+      .send({
+        petId: 'p-demo-1',
+        vetId: 'v-check-back-to-back-source',
+        date,
+        time: '10:00',
+        durationMinutes: 30,
+      });
+    expect(existing.status).toBe(201);
+
+    const res = await request(app)
+      .post('/appointments/check-conflicts')
+      .set('x-test-user', ADMIN_HEADER)
+      .send({
+        petId: 'p-demo-1',
+        vetId: 'v-check-back-to-back-next',
+        date,
+        time: '10:30',
+        durationMinutes: 30,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.canSave).toBe(true);
+    expect(res.body.data.hasWarning).toBe(true);
+    expect(res.body.data.conflicts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'near' })]),
+    );
+  });
+
+  it('warns when appointments leave less than 30 minutes for travel', async () => {
+    const { date } = futureDate(81);
+
+    const existing = await request(app)
+      .post('/appointments')
+      .set('x-test-user', ADMIN_HEADER)
+      .send({
+        petId: 'p-demo-1',
+        vetId: 'v-check-travel-source',
+        date,
+        time: '11:00',
+        durationMinutes: 30,
+      });
+    expect(existing.status).toBe(201);
+
+    const res = await request(app)
+      .post('/appointments/check-conflicts')
+      .set('x-test-user', ADMIN_HEADER)
+      .send({
+        petId: 'p-demo-1',
+        vetId: 'v-check-travel-next',
+        date,
+        time: '11:40',
+        durationMinutes: 30,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.canSave).toBe(true);
+    expect(res.body.data.hasWarning).toBe(true);
+    expect(res.body.data.reason).toContain('<= 30 min gap');
+  });
+
+  it('blocks appointments that overlap across midnight', async () => {
+    const { date } = futureDate(82);
+    const nextDate = new Date(`${date}T00:00:00Z`);
+    nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+
+    const existing = await request(app)
+      .post('/appointments')
+      .set('x-test-user', ADMIN_HEADER)
+      .send({
+        petId: 'p-demo-1',
+        vetId: 'v-check-midnight',
+        date,
+        time: '23:30',
+        durationMinutes: 90,
+      });
+    expect(existing.status).toBe(201);
+
+    const res = await request(app)
+      .post('/appointments/check-conflicts')
+      .set('x-test-user', ADMIN_HEADER)
+      .send({
+        petId: 'p-demo-1',
+        vetId: 'v-check-midnight',
+        date: nextDate.toISOString().slice(0, 10),
+        time: '00:15',
+        durationMinutes: 30,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.canSave).toBe(false);
+    expect(res.body.data.hasWarning).toBe(false);
+    expect(res.body.data.conflicts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'exact' })]),
+    );
+  });
+});
+
 // ─── Concurrent booking (race condition prevention) ───────────────────────────
 
 describe('Concurrent booking attempts', () => {
@@ -203,13 +310,15 @@ describe('Concurrent booking attempts', () => {
 
 describe('POST /appointments/:id/cancel', () => {
   let apptId: string;
+  let cancelVetSeq = 0;
 
   beforeEach(async () => {
     const { date, time } = futureDate(50);
+    const vetId = `v-cancel-test-${cancelVetSeq++}`;
     const res = await request(app)
       .post('/appointments')
       .set('x-test-user', OWNER_HEADER)
-      .send({ petId: 'p-demo-1', vetId: 'v-cancel-test', date, time });
+      .send({ petId: 'p-demo-1', vetId, date, time });
     apptId = res.body.data.id;
   });
 
@@ -261,13 +370,15 @@ describe('POST /appointments/:id/cancel', () => {
 
 describe('POST /appointments/:id/reschedule', () => {
   let apptId: string;
+  let rescheduleVetSeq = 0;
 
   beforeEach(async () => {
     const { date, time } = futureDate(60);
+    const vetId = `v-reschedule-test-${rescheduleVetSeq++}`;
     const res = await request(app)
       .post('/appointments')
       .set('x-test-user', OWNER_HEADER)
-      .send({ petId: 'p-demo-1', vetId: 'v-reschedule-test', date, time });
+      .send({ petId: 'p-demo-1', vetId, date, time });
     apptId = res.body.data.id;
   });
 

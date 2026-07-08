@@ -183,6 +183,53 @@ describe('detectConflicts — appointment buffer', () => {
     expect(result.hasConflicts).toBe(true);
   });
 
+  it('flags back-to-back appointments as a warning', async () => {
+    const existing = makeAppt({
+      id: 'back-to-back-1',
+      date: BASE_TIME.toISOString(),
+      durationMinutes: 30,
+    });
+    const proposed = new Date(BASE_TIME.getTime() + 30 * 60_000);
+    mockGetInWindow.mockResolvedValue([existing]);
+
+    const result = await detectConflicts('pet-1', proposed, [], undefined, 30);
+    expect(result.hasConflicts).toBe(true);
+    expect(result.conflicts[0].severity).toBe('warning');
+    expect(result.conflicts[0].description).toContain('back-to-back');
+  });
+
+  it('warns when appointments leave too little travel time between clinics', async () => {
+    const existing = makeAppt({
+      id: 'travel-gap-1',
+      date: BASE_TIME.toISOString(),
+      durationMinutes: 30,
+      location: 'North Clinic',
+    });
+    const proposed = new Date(BASE_TIME.getTime() + 45 * 60_000);
+    mockGetInWindow.mockResolvedValue([existing]);
+
+    const result = await detectConflicts('pet-1', proposed, [], undefined, 30);
+    expect(result.hasConflicts).toBe(true);
+    expect(result.conflicts[0].severity).toBe('warning');
+    expect(result.conflicts[0].description).toContain('travel');
+  });
+
+  it('detects appointments that overlap across midnight', async () => {
+    const lateNight = new Date('2026-06-15T23:30:00.000Z');
+    const afterMidnight = new Date('2026-06-16T00:15:00.000Z');
+    const existing = makeAppt({
+      id: 'midnight-1',
+      date: lateNight.toISOString(),
+      durationMinutes: 90,
+    });
+    mockGetInWindow.mockResolvedValue([existing]);
+
+    const result = await detectConflicts('pet-1', afterMidnight, [], undefined, 30);
+    expect(result.hasConflicts).toBe(true);
+    expect(result.conflicts[0].severity).toBe('conflict');
+    expect(result.conflicts[0].conflictingAppointment?.id).toBe('midnight-1');
+  });
+
   it('does not flag an appointment outside the 1-hour buffer', async () => {
     // 90 min away is outside the buffer
     const ninetyMinLater = new Date(BASE_TIME.getTime() + 90 * 60_000);
@@ -264,11 +311,7 @@ describe('findNextAvailableSlot', () => {
   });
 
   it('returns the very next hour when that slot is clear', async () => {
-    const blocker = makeAppt({ id: 'b1', date: BASE_TIME.toISOString() });
-    // First candidate (+1h) is clear
-    mockGetInWindow
-      .mockResolvedValueOnce([blocker]) // proposed slot itself blocked
-      .mockResolvedValue([]); // +1h is free
+    mockGetInWindow.mockResolvedValue([]);
 
     const slot = await findNextAvailableSlot('pet-1', BASE_TIME, []);
     expect(slot).toBeInstanceOf(Date);
@@ -276,11 +319,18 @@ describe('findNextAvailableSlot', () => {
   });
 
   it('skips multiple blocked slots to find a free one', async () => {
-    const block = makeAppt({ id: 'b1', date: BASE_TIME.toISOString() });
+    const firstCandidateBlock = makeAppt({
+      id: 'b1',
+      date: new Date(BASE_TIME.getTime() + CONFLICT_BUFFER_MS).toISOString(),
+    });
+    const secondCandidateBlock = makeAppt({
+      id: 'b2',
+      date: new Date(BASE_TIME.getTime() + 2 * CONFLICT_BUFFER_MS).toISOString(),
+    });
     // First two candidate slots are blocked, third is free
     mockGetInWindow
-      .mockResolvedValueOnce([block]) // +1h blocked
-      .mockResolvedValueOnce([block]) // +2h blocked
+      .mockResolvedValueOnce([firstCandidateBlock]) // +1h blocked
+      .mockResolvedValueOnce([secondCandidateBlock]) // +2h blocked
       .mockResolvedValue([]); // +3h free
 
     const slot = await findNextAvailableSlot('pet-1', BASE_TIME, []);
