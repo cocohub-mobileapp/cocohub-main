@@ -327,7 +327,13 @@ const AppointmentScreen: React.FC = () => {
     setIsCheckingConflicts(true);
     try {
       const petMeds = medications.filter((m) => m.petId === appt.petId);
-      const result = await detectConflicts(appt.petId, new Date(appt.date), petMeds);
+      const result = await detectConflicts(
+        appt.petId,
+        new Date(appt.date),
+        petMeds,
+        undefined,
+        appt.durationMinutes,
+      );
 
       if (result.hasConflicts) {
         setPendingAppointment(appt);
@@ -413,6 +419,7 @@ const AppointmentScreen: React.FC = () => {
         dateObj,
         petMeds,
         detailAppt.id, // exclude self
+        detailAppt.durationMinutes,
       );
 
       if (result.hasConflicts) {

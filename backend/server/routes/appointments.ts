@@ -10,6 +10,7 @@ import { ok, sendError } from '../response';
 import { store, type StoredAppointment } from '../store';
 
 const router = express.Router();
+const NEAR_CONFLICT_GAP_MS = 30 * 60_000;
 
 // ─── Per-vet booking lock (prevents double-booking under concurrent requests) ──
 const vetLocks = new Map<string, Promise<void>>();
@@ -45,7 +46,7 @@ function overlaps(a: StoredAppointment, startMs: number, endMs: number): boolean
   )
     return false;
 
-  const aStart = new Date(`${a.date}T${a.time}:00Z`).getTime();
+  const aStart = parseAppointmentStartMs(a.date, a.time);
   const aEnd = aStart + (a.durationMinutes ?? 30) * 60_000;
   return aStart < endMs && aEnd > startMs;
 }
@@ -68,7 +69,7 @@ function buildSlots(vetId: string, dateStr: string): string[] {
   for (let t = base.getTime(); t < end.getTime(); t += 30 * 60_000) {
     const slotEnd = t + 30 * 60_000;
     const isTaken = booked.some((a) => {
-      const aStart = new Date(`${a.date}T${a.time}:00Z`).getTime();
+      const aStart = parseAppointmentStartMs(a.date, a.time);
       const aEnd = aStart + (a.durationMinutes ?? 30) * 60_000;
       return aStart < slotEnd && aEnd > t;
     });
@@ -182,7 +183,7 @@ router.post('/', async (req: AuthenticatedRequest, res) => {
   try {
     const row = await withVetLock(vetId, async () => {
       // Atomic conflict check inside the lock
-      const startMs = new Date(`${date}T${time}:00Z`).getTime();
+      const startMs = parseAppointmentStartMs(date, time);
       const endMs = startMs + duration * 60_000;
 
       const conflict = [...store.appointments.values()].find(
@@ -276,7 +277,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res) => {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) return null; // invalid
         if (!/^\d{2}:\d{2}$/.test(newTime)) return null;
 
-        const startMs = new Date(`${newDate}T${newTime}:00Z`).getTime();
+        const startMs = parseAppointmentStartMs(newDate, newTime);
         const endMs = startMs + newDuration * 60_000;
 
         const conflict = [...store.appointments.values()].find(
@@ -356,7 +357,7 @@ router.post('/:id/cancel', async (req: AuthenticatedRequest, res) => {
   }
 
   const t = new Date().toISOString();
-  const { reason } = req.body as { reason?: string };
+  const { reason } = (req.body ?? {}) as { reason?: string };
   const cancelled: StoredAppointment = {
     ...row,
     status: AppointmentStatus.CANCELLED,
@@ -427,7 +428,7 @@ router.post('/:id/reschedule', async (req: AuthenticatedRequest, res) => {
 
   try {
     const result = await withVetLock(vetId, async () => {
-      const startMs = new Date(`${date}T${time}:00Z`).getTime();
+      const startMs = parseAppointmentStartMs(date, time);
       const endMs = startMs + duration * 60_000;
 
       const conflict = [...store.appointments.values()].find(
@@ -518,12 +519,7 @@ router.post('/check-conflicts', (req: AuthenticatedRequest, res) => {
   };
 
   if (!body.petId?.trim() || !body.vetId?.trim() || !body.date?.trim() || !body.time?.trim()) {
-    return sendError(
-      res,
-      400,
-      'VALIDATION_ERROR',
-      'petId, vetId, date, and time are required',
-    );
+    return sendError(res, 400, 'VALIDATION_ERROR', 'petId, vetId, date, and time are required');
   }
 
   const petId = body.petId.trim();
@@ -534,7 +530,7 @@ router.post('/check-conflicts', (req: AuthenticatedRequest, res) => {
   const excludeId = body.excludeId?.trim();
 
   // Parse the requested appointment times
-  const requestedStart = new Date(`${date}T${time}`);
+  const requestedStart = new Date(parseAppointmentStartMs(date, time));
   const requestedEnd = new Date(requestedStart.getTime() + duration * 60_000);
 
   if (isNaN(requestedStart.getTime())) {
@@ -548,7 +544,7 @@ router.post('/check-conflicts', (req: AuthenticatedRequest, res) => {
     if (appt.id === excludeId) continue;
     if (appt.status === AppointmentStatus.CANCELLED) continue;
 
-    const apptStart = new Date(`${appt.date}T${appt.time}`);
+    const apptStart = new Date(parseAppointmentStartMs(appt.date, appt.time));
     const apptEnd = new Date(apptStart.getTime() + (appt.durationMinutes ?? 30) * 60_000);
 
     // Check pet conflicts (same pet, overlapping times)
@@ -558,7 +554,7 @@ router.post('/check-conflicts', (req: AuthenticatedRequest, res) => {
 
       if (overlap) {
         conflicts.push({ type: 'exact', appointment: appt });
-      } else if (gap < 30) {
+      } else if (gap <= NEAR_CONFLICT_GAP_MS) {
         conflicts.push({ type: 'near', appointment: appt });
       }
     }
@@ -586,28 +582,22 @@ router.post('/check-conflicts', (req: AuthenticatedRequest, res) => {
       reason: hasExactConflict
         ? 'Exact time conflict found. Cannot save.'
         : hasNearConflict
-          ? 'Near-time conflict found (< 30 min gap). Proceed with caution.'
+          ? 'Near-time conflict found (<= 30 min gap). Proceed with caution.'
           : null,
     },
     timestamp: new Date().toISOString(),
   });
 });
 
-function timeRangesOverlap(
-  start1: Date,
-  end1: Date,
-  start2: Date,
-  end2: Date,
-): boolean {
+function parseAppointmentStartMs(date: string, time: string): number {
+  return new Date(`${date}T${time}:00Z`).getTime();
+}
+
+function timeRangesOverlap(start1: Date, end1: Date, start2: Date, end2: Date): boolean {
   return start1 < end2 && end1 > start2;
 }
 
-function minGapBetweenRanges(
-  start1: Date,
-  end1: Date,
-  start2: Date,
-  end2: Date,
-): number {
+function minGapBetweenRanges(start1: Date, end1: Date, start2: Date, end2: Date): number {
   if (end1 <= start2) return Math.max(0, start2.getTime() - end1.getTime());
   if (end2 <= start1) return Math.max(0, start1.getTime() - end2.getTime());
   return 0; // Ranges overlap
