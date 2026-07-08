@@ -22,7 +22,9 @@ export { AppointmentStatus } from '../models/Appointment';
 const BASE_URL = '/appointments';
 
 /** Buffer window (ms) around each appointment that counts as a conflict */
-export const CONFLICT_BUFFER_MS = 60 * 60 * 1000; // 1 hour
+export const DEFAULT_CONFLICT_BUFFER_MINUTES = 30;
+export const DEFAULT_APPOINTMENT_DURATION_MINUTES = 30;
+export const CONFLICT_BUFFER_MS = DEFAULT_CONFLICT_BUFFER_MINUTES * 60 * 1000;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,6 +40,11 @@ export interface ConflictDetectionResult {
   hasConflicts: boolean;
   conflicts: AppointmentConflict[];
   suggestedTime?: Date;
+}
+
+export interface ConflictDetectionOptions {
+  bufferMinutes?: number;
+  durationMinutes?: number;
 }
 
 export interface AvailabilityResult {
@@ -63,36 +70,64 @@ export async function detectConflicts(
   proposedTime: Date,
   medications: Medication[] = [],
   excludeId?: string,
+  options: ConflictDetectionOptions = {},
 ): Promise<ConflictDetectionResult> {
   const conflicts: AppointmentConflict[] = [];
 
-  const windowStart = new Date(proposedTime.getTime() - CONFLICT_BUFFER_MS).toISOString();
-  const windowEnd = new Date(proposedTime.getTime() + CONFLICT_BUFFER_MS).toISOString();
+  const bufferMs = (options.bufferMinutes ?? DEFAULT_CONFLICT_BUFFER_MINUTES) * 60_000;
+  const durationMs = (options.durationMinutes ?? DEFAULT_APPOINTMENT_DURATION_MINUTES) * 60_000;
+  const proposedEnd = new Date(proposedTime.getTime() + durationMs);
+  const windowStart = startOfDay(proposedTime).toISOString();
+  const windowEnd = endOfDay(proposedEnd).toISOString();
 
-  const nearby = await getAppointmentsInWindow<Appointment>(petId, windowStart, windowEnd);
-  for (const appt of nearby) {
+  const [nearby, allAppointments] = await Promise.all([
+    getAppointmentsInWindow<Appointment>(petId, windowStart, windowEnd),
+    getAllAppointmentsByPetId<Appointment>(petId).catch(() => []),
+  ]);
+  const recurringAppointments = allAppointments.filter((appt) => isRecurringAppointment(appt));
+  const appointmentsById = new Map<string, Appointment>();
+  for (const appt of [...nearby, ...recurringAppointments]) {
+    appointmentsById.set(appt.id, appt);
+  }
+
+  for (const appt of appointmentsById.values()) {
     if (excludeId && appt.id === excludeId) continue;
-    const apptTime = new Date(appt.date);
-    const diffMs = Math.abs(apptTime.getTime() - proposedTime.getTime());
-    if (diffMs <= CONFLICT_BUFFER_MS) {
-      conflicts.push({
-        type: 'appointment',
-        description: `"${appt.title ?? 'Appointment'}" is scheduled ${_formatTimeDiff(diffMs)} from the proposed time.`,
-        conflictingAppointment: appt,
-      });
+
+    const occurrences = getAppointmentOccurrencesInRange(
+      appt,
+      startOfDay(proposedTime),
+      endOfDay(proposedEnd),
+    );
+    for (const occurrenceStart of occurrences) {
+      const occurrenceEnd = new Date(
+        occurrenceStart.getTime() +
+          (appt.durationMinutes ?? DEFAULT_APPOINTMENT_DURATION_MINUTES) * 60_000,
+      );
+
+      if (intervalsConflict(proposedTime, proposedEnd, occurrenceStart, occurrenceEnd, bufferMs)) {
+        conflicts.push({
+          type: 'appointment',
+          description: `"${appt.title ?? 'Appointment'}" overlaps or is within ${_formatTimeDiff(bufferMs)} of the proposed time.`,
+          conflictingAppointment: appt,
+        });
+        break;
+      }
     }
   }
 
   const { getScheduleForRange } = await import('./medicationService');
-  const windowStartDate = new Date(proposedTime.getTime() - CONFLICT_BUFFER_MS);
-  const windowEndDate = new Date(proposedTime.getTime() + CONFLICT_BUFFER_MS);
+  const windowStartDate = new Date(proposedTime.getTime() - bufferMs);
+  const windowEndDate = new Date(proposedEnd.getTime() + bufferMs);
 
   for (const med of medications) {
     if (!isVetSupervised(med)) continue;
     const doseTimes = getScheduleForRange(med, windowStartDate, windowEndDate);
     for (const doseTime of doseTimes) {
       const diffMs = Math.abs(doseTime.getTime() - proposedTime.getTime());
-      if (diffMs <= CONFLICT_BUFFER_MS) {
+      if (
+        doseTime.getTime() >= windowStartDate.getTime() &&
+        doseTime.getTime() <= windowEndDate.getTime()
+      ) {
         conflicts.push({
           type: 'medication',
           description: `"${med.name}" requires vet supervision at ${_formatTime(doseTime)} (within ${_formatTimeDiff(diffMs)} of the proposed time).`,
@@ -105,7 +140,7 @@ export async function detectConflicts(
 
   const hasConflicts = conflicts.length > 0;
   const suggestedTime = hasConflicts
-    ? await findNextAvailableSlot(petId, proposedTime, medications)
+    ? await findNextAvailableSlot(petId, proposedTime, medications, options)
     : undefined;
 
   return { hasConflicts, conflicts, suggestedTime };
@@ -126,14 +161,19 @@ export async function findNextAvailableSlot(
   petId: string,
   from: Date,
   medications: Medication[] = [],
+  options: ConflictDetectionOptions = {},
 ): Promise<Date | undefined> {
   const MAX_ITERATIONS = 14 * 24;
-  let candidate = new Date(from.getTime() + CONFLICT_BUFFER_MS);
+  const stepMs =
+    ((options.bufferMinutes ?? DEFAULT_CONFLICT_BUFFER_MINUTES) +
+      (options.durationMinutes ?? DEFAULT_APPOINTMENT_DURATION_MINUTES)) *
+    60_000;
+  let candidate = new Date(from.getTime() + stepMs);
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
-    const result = await detectConflicts(petId, candidate, medications);
+    const result = await detectConflicts(petId, candidate, medications, undefined, options);
     if (!result.hasConflicts) return candidate;
-    candidate = new Date(candidate.getTime() + CONFLICT_BUFFER_MS);
+    candidate = new Date(candidate.getTime() + stepMs);
   }
   return undefined;
 }
@@ -359,6 +399,127 @@ export async function cancelAllAppointmentReminders(appointmentId: string): Prom
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
+
+type RecurringAppointment = Appointment & {
+  recurrence?: { frequency?: string; interval?: number; until?: string };
+  recurrenceRule?: string;
+  repeatFrequency?: string;
+  recurrenceEndDate?: string;
+};
+
+function startOfDay(date: Date): Date {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function endOfDay(date: Date): Date {
+  const next = new Date(date);
+  next.setHours(23, 59, 59, 999);
+  return next;
+}
+
+function getAppointmentStart(appt: Appointment): Date {
+  if (appt.date.includes('T')) {
+    return new Date(appt.date);
+  }
+  return new Date(`${appt.date}T${appt.time ?? '00:00'}:00`);
+}
+
+function intervalsConflict(
+  firstStart: Date,
+  firstEnd: Date,
+  secondStart: Date,
+  secondEnd: Date,
+  bufferMs: number,
+): boolean {
+  return (
+    firstStart.getTime() < secondEnd.getTime() + bufferMs &&
+    firstEnd.getTime() > secondStart.getTime() - bufferMs
+  );
+}
+
+function isRecurringAppointment(appt: Appointment): boolean {
+  const recurring = appt as RecurringAppointment;
+  return Boolean(recurring.recurrence || recurring.recurrenceRule || recurring.repeatFrequency);
+}
+
+function getAppointmentOccurrencesInRange(
+  appt: Appointment,
+  rangeStart: Date,
+  rangeEnd: Date,
+): Date[] {
+  const firstStart = getAppointmentStart(appt);
+  const recurrence = getRecurrenceConfig(appt as RecurringAppointment);
+
+  if (!recurrence) {
+    return firstStart.getTime() >= rangeStart.getTime() &&
+      firstStart.getTime() <= rangeEnd.getTime()
+      ? [firstStart]
+      : [];
+  }
+
+  const until = recurrence.until ? new Date(recurrence.until) : rangeEnd;
+  if (until.getTime() < rangeStart.getTime() || firstStart.getTime() > rangeEnd.getTime()) {
+    return [];
+  }
+
+  const occurrences: Date[] = [];
+  let candidate = new Date(firstStart);
+  const interval = recurrence.interval || 1;
+  let guard = 0;
+
+  while (candidate.getTime() <= rangeEnd.getTime() && candidate.getTime() <= until.getTime()) {
+    if (candidate.getTime() >= rangeStart.getTime()) {
+      occurrences.push(new Date(candidate));
+    }
+
+    guard += 1;
+    if (guard > 500) break;
+
+    if (recurrence.frequency === 'weekly') {
+      candidate = new Date(candidate.getTime() + interval * 7 * 24 * 60 * 60_000);
+    } else if (recurrence.frequency === 'monthly') {
+      candidate = new Date(candidate);
+      candidate.setMonth(candidate.getMonth() + interval);
+    } else {
+      candidate = new Date(candidate.getTime() + interval * 24 * 60 * 60_000);
+    }
+  }
+
+  return occurrences;
+}
+
+function getRecurrenceConfig(
+  appt: RecurringAppointment,
+): { frequency: 'daily' | 'weekly' | 'monthly'; interval: number; until?: string } | null {
+  const rawFrequency =
+    appt.recurrence?.frequency ??
+    appt.repeatFrequency ??
+    parseRRuleValue(appt.recurrenceRule, 'FREQ');
+  const normalized = rawFrequency?.toLowerCase();
+
+  if (normalized !== 'daily' && normalized !== 'weekly' && normalized !== 'monthly') {
+    return null;
+  }
+
+  const intervalRaw =
+    appt.recurrence?.interval ?? Number(parseRRuleValue(appt.recurrenceRule, 'INTERVAL'));
+  const interval = Number.isFinite(intervalRaw) && intervalRaw > 0 ? intervalRaw : 1;
+  const until =
+    appt.recurrence?.until ??
+    appt.recurrenceEndDate ??
+    parseRRuleValue(appt.recurrenceRule, 'UNTIL');
+
+  return { frequency: normalized, interval, until };
+}
+
+function parseRRuleValue(rule: string | undefined, key: string): string | undefined {
+  return rule
+    ?.split(';')
+    .map((part) => part.split('='))
+    .find(([name]) => name?.toUpperCase() === key)?.[1];
+}
 
 function _formatTimeDiff(ms: number): string {
   const mins = Math.round(ms / 60_000);

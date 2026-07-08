@@ -63,6 +63,7 @@ import {
   upsertAppointment,
   deleteAppointmentById,
   getAllLocalAppointments,
+  getAllAppointmentsByPetId,
 } from '../localDB';
 import { getScheduleForRange } from '../medicationService';
 
@@ -72,6 +73,9 @@ const mockGetInWindow = getAppointmentsInWindow as jest.MockedFunction<
 const mockUpsert = upsertAppointment as jest.MockedFunction<typeof upsertAppointment>;
 const mockDeleteById = deleteAppointmentById as jest.MockedFunction<typeof deleteAppointmentById>;
 const mockGetAll = getAllLocalAppointments as jest.MockedFunction<typeof getAllLocalAppointments>;
+const mockGetAllByPet = getAllAppointmentsByPetId as jest.MockedFunction<
+  typeof getAllAppointmentsByPetId
+>;
 const mockGetSchedule = getScheduleForRange as jest.MockedFunction<typeof getScheduleForRange>;
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -145,6 +149,7 @@ describe('detectConflicts — clear schedule', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetInWindow.mockResolvedValue([]);
+    mockGetAllByPet.mockResolvedValue([]);
     mockGetSchedule.mockReturnValue([]);
   });
 
@@ -161,6 +166,7 @@ describe('detectConflicts — clear schedule', () => {
 describe('detectConflicts — appointment buffer', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetAllByPet.mockResolvedValue([]);
     mockGetSchedule.mockReturnValue([]);
   });
 
@@ -174,24 +180,65 @@ describe('detectConflicts — appointment buffer', () => {
     expect(result.conflicts[0].conflictingAppointment?.id).toBe('existing-1');
   });
 
-  it('flags an appointment within the 1-hour buffer', async () => {
-    const thirtyMinLater = new Date(BASE_TIME.getTime() + 30 * 60_000);
-    const existing = makeAppt({ id: 'near-1', date: thirtyMinLater.toISOString() });
+  it('flags an appointment within the default 30-minute buffer', async () => {
+    const twentyMinLater = new Date(BASE_TIME.getTime() + 20 * 60_000);
+    const existing = makeAppt({ id: 'near-1', date: twentyMinLater.toISOString() });
     mockGetInWindow.mockResolvedValue([existing]);
 
     const result = await detectConflicts('pet-1', BASE_TIME, []);
     expect(result.hasConflicts).toBe(true);
   });
 
-  it('does not flag an appointment outside the 1-hour buffer', async () => {
-    // 90 min away is outside the buffer
-    const ninetyMinLater = new Date(BASE_TIME.getTime() + 90 * 60_000);
-    const distant = makeAppt({ id: 'far-1', date: ninetyMinLater.toISOString() });
+  it('does not flag an appointment outside the default buffer and duration window', async () => {
     // Window query would not return this (SQL filter); simulate empty result
     mockGetInWindow.mockResolvedValue([]);
 
     const result = await detectConflicts('pet-1', BASE_TIME, []);
     expect(result.hasConflicts).toBe(false);
+  });
+
+  it('flags appointments whose duration overlaps the proposed slot', async () => {
+    const startsBefore = new Date(BASE_TIME.getTime() - 15 * 60_000);
+    const existing = makeAppt({
+      id: 'overlap-1',
+      date: startsBefore.toISOString(),
+      durationMinutes: 45,
+    });
+    mockGetInWindow.mockResolvedValue([existing]);
+
+    const result = await detectConflicts('pet-1', BASE_TIME, []);
+    expect(result.hasConflicts).toBe(true);
+    expect(result.conflicts[0].conflictingAppointment?.id).toBe('overlap-1');
+  });
+
+  it('supports a configurable buffer window', async () => {
+    const startsAfterDefaultSlot = new Date(BASE_TIME.getTime() + 50 * 60_000);
+    const existing = makeAppt({ id: 'buffer-1', date: startsAfterDefaultSlot.toISOString() });
+    mockGetInWindow.mockResolvedValue([existing]);
+
+    const defaultResult = await detectConflicts('pet-1', BASE_TIME, []);
+    const tighterResult = await detectConflicts('pet-1', BASE_TIME, [], undefined, {
+      bufferMinutes: 10,
+    });
+
+    expect(defaultResult.hasConflicts).toBe(true);
+    expect(tighterResult.hasConflicts).toBe(false);
+  });
+
+  it('detects recurring appointment conflicts', async () => {
+    const priorWeek = new Date('2026-06-08T10:15:00.000Z');
+    const recurring = makeAppt({
+      id: 'weekly-1',
+      date: priorWeek.toISOString(),
+      durationMinutes: 30,
+      recurrence: { frequency: 'weekly', interval: 1 },
+    } as Partial<Appointment>);
+    mockGetInWindow.mockResolvedValue([]);
+    mockGetAllByPet.mockResolvedValue([recurring]);
+
+    const result = await detectConflicts('pet-1', BASE_TIME, []);
+    expect(result.hasConflicts).toBe(true);
+    expect(result.conflicts[0].conflictingAppointment?.id).toBe('weekly-1');
   });
 
   it('excludes the appointment with the given excludeId', async () => {
@@ -223,6 +270,7 @@ describe('detectConflicts — vet-supervised medication', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetInWindow.mockResolvedValue([]);
+    mockGetAllByPet.mockResolvedValue([]);
   });
 
   it('flags a vet-supervised medication dose within the buffer', async () => {
@@ -260,10 +308,11 @@ describe('detectConflicts — vet-supervised medication', () => {
 describe('findNextAvailableSlot', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetAllByPet.mockResolvedValue([]);
     mockGetSchedule.mockReturnValue([]);
   });
 
-  it('returns the very next hour when that slot is clear', async () => {
+  it('returns the next default duration-plus-buffer slot when clear', async () => {
     const blocker = makeAppt({ id: 'b1', date: BASE_TIME.toISOString() });
     // First candidate (+1h) is clear
     mockGetInWindow
@@ -272,19 +321,26 @@ describe('findNextAvailableSlot', () => {
 
     const slot = await findNextAvailableSlot('pet-1', BASE_TIME, []);
     expect(slot).toBeInstanceOf(Date);
-    expect(slot!.getTime()).toBe(BASE_TIME.getTime() + CONFLICT_BUFFER_MS);
+    expect(slot!.getTime()).toBe(BASE_TIME.getTime() + 2 * CONFLICT_BUFFER_MS);
   });
 
   it('skips multiple blocked slots to find a free one', async () => {
-    const block = makeAppt({ id: 'b1', date: BASE_TIME.toISOString() });
+    const firstCandidateBlock = makeAppt({
+      id: 'b1',
+      date: new Date(BASE_TIME.getTime() + 2 * CONFLICT_BUFFER_MS).toISOString(),
+    });
+    const secondCandidateBlock = makeAppt({
+      id: 'b2',
+      date: new Date(BASE_TIME.getTime() + 4 * CONFLICT_BUFFER_MS).toISOString(),
+    });
     // First two candidate slots are blocked, third is free
     mockGetInWindow
-      .mockResolvedValueOnce([block]) // +1h blocked
-      .mockResolvedValueOnce([block]) // +2h blocked
+      .mockResolvedValueOnce([firstCandidateBlock]) // +1h blocked
+      .mockResolvedValueOnce([secondCandidateBlock]) // +2h blocked
       .mockResolvedValue([]); // +3h free
 
     const slot = await findNextAvailableSlot('pet-1', BASE_TIME, []);
-    expect(slot!.getTime()).toBe(BASE_TIME.getTime() + 3 * CONFLICT_BUFFER_MS);
+    expect(slot!.getTime()).toBe(BASE_TIME.getTime() + 6 * CONFLICT_BUFFER_MS);
   });
 });
 
