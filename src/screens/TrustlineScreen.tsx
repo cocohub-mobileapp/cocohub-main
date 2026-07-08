@@ -37,6 +37,7 @@ import {
   isValidSecretKey,
   isValidPublicKey,
   COCOHUB_ASSETS,
+  STELLAR_NETWORK,
   XLM_RESERVE_PER_TRUSTLINE,
   TrustlineError,
 } from '../services/trustlineService';
@@ -260,6 +261,77 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
     </View>
   );
 
+  const renderCocohubAssetManager = () => {
+    if (!state) return null;
+
+    return (
+      <View style={styles.cocohubSection}>
+        <Text style={styles.sectionTitle}>Cocohub Token Management</Text>
+        {COCOHUB_ASSETS.map((asset) => {
+          const trustline = state.trustlines.find(
+            (tl) =>
+              tl.assetCode === asset.assetCode && tl.issuerPublicKey === asset.issuerPublicKey,
+          );
+          const hasTrustline = Boolean(trustline);
+          const balance = trustline?.balance ?? '0';
+          const canRemove = trustline ? parseFloat(trustline.balance) === 0 : false;
+
+          return (
+            <View key={asset.assetCode} style={styles.cocohubAssetCard}>
+              <View style={styles.cocohubAssetHeader}>
+                <Text style={styles.assetIcon}>{asset.iconEmoji}</Text>
+                <View style={styles.assetInfo}>
+                  <Text style={styles.assetCode}>{asset.assetCode}</Text>
+                  <Text style={styles.assetName}>{asset.name}</Text>
+                  <Text style={styles.assetDesc}>{asset.description}</Text>
+                </View>
+                <View style={styles.cocohubBalanceBlock}>
+                  <Text style={styles.cocohubBalance}>{parseFloat(balance).toFixed(2)}</Text>
+                  <Text style={styles.cocohubBalanceLabel}>Balance</Text>
+                </View>
+              </View>
+
+              <View style={styles.cocohubAssetFooter}>
+                <Text
+                  style={[
+                    styles.trustlineStatus,
+                    hasTrustline ? styles.trustlineStatusActive : styles.trustlineStatusMissing,
+                  ]}
+                >
+                  {hasTrustline ? 'Trustline active' : 'No trustline'}
+                </Text>
+                {hasTrustline ? (
+                  <TouchableOpacity
+                    style={[styles.assetActionBtn, !canRemove && styles.assetActionBtnDisabled]}
+                    onPress={() => trustline && handleRemove(trustline)}
+                    disabled={!canRemove || actionLoading}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove ${asset.assetCode} trustline`}
+                  >
+                    <Text style={styles.assetActionText}>Remove</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.assetActionBtn}
+                    onPress={() => {
+                      setAddMode('cocohub');
+                      setSelectedAsset(asset);
+                      setView('add');
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Add ${asset.assetCode} trustline`}
+                  >
+                    <Text style={styles.assetActionText}>Add</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
   const renderHistoryItem = ({ item }: { item: TrustlineTransaction }) => (
     <View style={[styles.histCard, !item.successful && styles.histCardFailed]}>
       <View style={styles.histRow}>
@@ -333,9 +405,7 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
               style={[styles.modeBtn, addMode === 'cocohub' && styles.modeBtnActive]}
               onPress={() => setAddMode('cocohub')}
             >
-              <Text
-                style={[styles.modeBtnText, addMode === 'cocohub' && styles.modeBtnTextActive]}
-              >
+              <Text style={[styles.modeBtnText, addMode === 'cocohub' && styles.modeBtnTextActive]}>
                 Cocohub Assets
               </Text>
             </TouchableOpacity>
@@ -488,7 +558,14 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
               {state.trustlines.length} trustline{state.trustlines.length !== 1 ? 's' : ''} ·{' '}
               {XLM_RESERVE_PER_TRUSTLINE} XLM reserved each
             </Text>
+            <View style={styles.networkBadge}>
+              <Text style={styles.networkBadgeText}>
+                {STELLAR_NETWORK === 'PUBLIC' ? 'Public Stellar network' : 'Stellar testnet mode'}
+              </Text>
+            </View>
           </View>
+
+          {renderCocohubAssetManager()}
 
           {/* Trustlines list */}
           <View style={styles.sectionHeader}>
@@ -653,6 +730,46 @@ const styles = StyleSheet.create({
   balanceValue: { fontSize: 20, fontWeight: '800', color: '#111827' },
   balanceLabel: { fontSize: 11, color: '#6B7280', marginTop: 2 },
   reserveNote: { fontSize: 12, color: '#9CA3AF', textAlign: 'center' },
+  networkBadge: {
+    alignSelf: 'center',
+    backgroundColor: '#EEF2FF',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    marginTop: 10,
+  },
+  networkBadgeText: { color: '#3730A3', fontSize: 12, fontWeight: '700' },
+
+  cocohubSection: { marginBottom: 16 },
+  cocohubAssetCard: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 14,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  cocohubAssetHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  cocohubBalanceBlock: { alignItems: 'flex-end' },
+  cocohubBalance: { fontSize: 18, fontWeight: '800', color: '#111827' },
+  cocohubBalanceLabel: { fontSize: 11, color: '#6B7280' },
+  cocohubAssetFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+  },
+  trustlineStatus: { fontSize: 12, fontWeight: '700' },
+  trustlineStatusActive: { color: '#047857' },
+  trustlineStatusMissing: { color: '#92400E' },
+  assetActionBtn: {
+    backgroundColor: '#10B981',
+    borderRadius: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+  },
+  assetActionBtnDisabled: { backgroundColor: '#D1D5DB' },
+  assetActionText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 
   sectionHeader: {
     flexDirection: 'row',

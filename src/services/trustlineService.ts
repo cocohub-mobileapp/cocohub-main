@@ -19,8 +19,8 @@ import type {
 
 // ─── Network config ───────────────────────────────────────────────────────────
 
-const STELLAR_NETWORK = (process.env.STELLAR_NETWORK ?? 'TESTNET') as 'TESTNET' | 'PUBLIC';
-const HORIZON_URL =
+export const STELLAR_NETWORK = (process.env.STELLAR_NETWORK ?? 'TESTNET') as 'TESTNET' | 'PUBLIC';
+export const HORIZON_URL =
   STELLAR_NETWORK === 'PUBLIC'
     ? 'https://horizon.stellar.org'
     : 'https://horizon-testnet.stellar.org';
