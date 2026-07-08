@@ -15,6 +15,7 @@ import {
 
 import PermissionRationaleModal from '../components/PermissionRationaleModal';
 import { scanQRCode } from '../services/qrCodeService';
+import { getQRScannerCameraKey } from '../utils/qrScannerCamera';
 import { useSecureScreen } from '../utils/secureScreen';
 
 interface QRScannerScreenProps {
@@ -100,7 +101,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
     })();
   };
 
-  const toggleTorch = () => setTorchEnabled(!torchEnabled);
+  const toggleTorch = () => setTorchEnabled((enabled) => !enabled);
 
   const handlePermissionDenied = () => {
     Alert.alert(
@@ -137,6 +138,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
     return (
       <View style={styles.cameraContainer}>
         <CameraView
+          key={getQRScannerCameraKey(torchEnabled, Platform.OS)}
           style={styles.camera}
           facing="back"
           enableTorch={torchEnabled}
