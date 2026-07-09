@@ -154,7 +154,7 @@ Or let the pre-commit hook handle it automatically (via Husky).
 - **TypeScript strict** — no `any`, proper return types
 - **No console.log** in production code — use `loggerService`
 - **Encryption** — never store sensitive data in plain AsyncStorage; use `encryptedAsyncStorage` or SecureStore
-- **Stellar** — all blockchain operations go through `src/services/blockchainService.ts`
+- **Stellar** — all blockchain operations go through `src/services/blockchainService.ts`; use the [Stellar Testnet Setup guide](./docs/STELLAR-SETUP.md) for Freighter, Friendbot, `.env` values, and local record-flow testing
 - **Tests** — new features must include at least one unit test
 
 ---

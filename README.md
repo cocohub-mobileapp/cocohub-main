@@ -191,6 +191,8 @@ Record → SHA-256 hash → Stellar manageData tx → tamper-evident audit trail
 - `VETH` — Vet Health Credits
 - `PAWP` — PawPoints loyalty rewards
 
+For local blockchain development, see [Stellar Testnet Setup](./docs/STELLAR-SETUP.md). It covers Freighter, Friendbot funding, `.env` testnet values, and `blockchainService.ts` smoke tests.
+
 ---
 
 ## 🧪 Testing
