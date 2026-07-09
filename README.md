@@ -171,6 +171,8 @@ npm run seed:dev           # Seed test data
 
 **Test credentials:** `owner1@example.com` / `Password123!`
 
+Need the backend API, PostgreSQL, Redis, migrations, and seed data? See the [Backend API local setup guide](docs/BACKEND-SETUP.md).
+
 ---
 
 ## ⛓️ Blockchain Architecture
