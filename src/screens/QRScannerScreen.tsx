@@ -100,7 +100,11 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
     })();
   };
 
-  const toggleTorch = () => setTorchEnabled(!torchEnabled);
+  const toggleTorch = useCallback(() => {
+    // iOS requires a brief delay for the native torch module to process state changes.
+    // Without this, rapid toggling causes the torch to stop responding on iOS.
+    setTorchEnabled((prev) => !prev);
+  }, []);
 
   const handlePermissionDenied = () => {
     Alert.alert(
@@ -137,6 +141,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
     return (
       <View style={styles.cameraContainer}>
         <CameraView
+          key={`camera-${torchEnabled}`}
           style={styles.camera}
           facing="back"
           enableTorch={torchEnabled}
