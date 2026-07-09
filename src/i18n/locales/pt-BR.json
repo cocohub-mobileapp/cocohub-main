@@ -1,0 +1,164 @@
+{
+  "language": {
+    "selectLanguage": "Selecionar idioma",
+    "english": "Inglês",
+    "spanish": "Espanhol",
+    "portuguese": "Português (Brasil)"
+  },
+  "common": {
+    "ok": "OK",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "save": "Salvar",
+    "delete": "Excluir",
+    "edit": "Editar",
+    "done": "Concluído",
+    "back": "Voltar",
+    "next": "Próximo",
+    "skip": "Pular",
+    "close": "Fechar",
+    "loading": "Carregando...",
+    "retry": "Tentar novamente",
+    "yes": "Sim",
+    "no": "Não",
+    "error": "Erro",
+    "success": "Sucesso",
+    "required": "Obrigatório",
+    "optional": "Opcional",
+    "search": "Buscar",
+    "settings": "Configurações",
+    "selectDate": "Selecionar data"
+  },
+  "auth": {
+    "login": "Entrar",
+    "logout": "Sair",
+    "signup": "Cadastrar",
+    "email": "E-mail",
+    "password": "Senha",
+    "forgotPassword": "Esqueceu a senha?",
+    "resetPassword": "Redefinir senha",
+    "loginSuccess": "Login realizado com sucesso",
+    "loginFailed": "Falha ao fazer login"
+  },
+  "onboarding": {
+    "welcome": "Bem-vindo",
+    "welcomeMessage": "Cuide melhor do seu pet com nosso app",
+    "getStarted": "Começar",
+    "next": "Próximo",
+    "skip": "Pular",
+    "finish": "Concluir",
+    "step1Title": "Cadastre seu pet",
+    "step1Description": "Adicione as informações do seu animal de estimação",
+    "step2Title": "Acompanhe a saúde",
+    "step2Description": "Registre vacinas, medicamentos e consultas",
+    "step3Title": "Contatos de emergência",
+    "step3Description": "Tenha acesso rápido a contatos importantes"
+  },
+  "pets": {
+    "myPets": "Meus Pets",
+    "addPet": "Adicionar Pet",
+    "noPets": "Nenhum pet cadastrado",
+    "petName": "Nome do pet",
+    "species": "Espécie",
+    "breed": "Raça",
+    "birthdate": "Data de nascimento",
+    "weight": "Peso",
+    "gender": "Sexo",
+    "male": "Macho",
+    "female": "Fêmea",
+    "photo": "Foto"
+  },
+  "addPet": {
+    "title": "Adicionar Pet",
+    "name": "Nome",
+    "namePlaceholder": "Digite o nome do pet",
+    "species": "Espécie",
+    "breed": "Raça",
+    "birthdate": "Data de nascimento",
+    "photo": "Foto",
+    "addPhoto": "Adicionar Foto",
+    "save": "Salvar Pet",
+    "saveSuccess": "Pet adicionado com sucesso",
+    "saveError": "Erro ao adicionar pet",
+    "nameRequired": "O nome do pet é obrigatório"
+  },
+  "emergency": {
+    "title": "Contatos de Emergência",
+    "primaryContact": "Contato Principal",
+    "secondaryContact": "Contato Secundário",
+    "veterinaryEmergency": "Emergência Veterinária",
+    "sosButton": "Botão SOS",
+    "call": "Ligar",
+    "noNumber": "Sem número",
+    "noNumberMessage": "Nenhum número de telefone disponível para este contato.",
+    "cannotCall": "Não é possível fazer chamadas",
+    "cannotCallIOS": "Este dispositivo não suporta chamadas telefônicas.",
+    "cannotCallAndroid": "Chamadas telefônicas não são suportadas neste dispositivo.",
+    "confirmCallTitle": "Ligar para {{name}}",
+    "confirmCallMessage": "Discar {{number}}?",
+    "addContact": "Adicionar Contato"
+  },
+  "sos": {
+    "title": "SOS",
+    "activate": "Ativar SOS",
+    "confirmTitle": "Confirmar SOS",
+    "confirmMessage": "Tem certeza de que deseja ativar o alerta de emergência?",
+    "cancel": "Cancelar",
+    "activated": "SOS ativado",
+    "sending": "Enviando alerta..."
+  },
+  "qrScanner": {
+    "title": "Leitor de QR Code",
+    "cameraView": "Visualização da Câmera",
+    "instructions": "Aponte a câmera para o QR Code para escanear",
+    "recentScans": "Leituras Recentes",
+    "noScans": "Nenhuma leitura recente",
+    "scanSuccess": "QR Code lido com sucesso",
+    "scanError": "Erro ao ler o QR Code"
+  },
+  "photoUploader": {
+    "addPhoto": "Adicionar Foto",
+    "uploading": "Enviando...",
+    "uploadSuccess": "Foto enviada com sucesso",
+    "uploadError": "Erro ao enviar a foto"
+  },
+  "datePicker": {
+    "selectDate": "Selecionar data",
+    "cancel": "Cancelar",
+    "done": "Concluído"
+  },
+  "errors": {
+    "generic": "Ocorreu um erro. Tente novamente.",
+    "network": "Erro de conexão. Verifique sua internet.",
+    "tryAgain": "Tentar novamente",
+    "reportError": "Relatar erro",
+    "contactSupport": "Contatar Suporte",
+    "clearCache": "Limpar Cache",
+    "restartApp": "Reiniciar Aplicativo"
+  },
+  "update": {
+    "available": "Atualização disponível",
+    "updateNow": "Atualizar Agora",
+    "dismiss": "Agora não",
+    "forceUpdateTitle": "Atualização obrigatória",
+    "forceUpdateMessage": "Uma nova versão é necessária para continuar usando o aplicativo."
+  },
+  "offline": {
+    "message": "Você está offline",
+    "reconnected": "Conexão restabelecida"
+  },
+  "sessionTimeout": {
+    "title": "Sessão expirando",
+    "message": "Sua sessão irá expirar em breve devido à inatividade.",
+    "extend": "Continuar conectado",
+    "logout": "Sair"
+  },
+  "lockScreen": {
+    "title": "Aplicativo Bloqueado",
+    "enterPin": "Digite seu PIN",
+    "unlock": "Desbloquear",
+    "useFaceId": "Usar Face ID",
+    "useTouchId": "Usar Touch ID",
+    "wipeData": "Apagar dados e sair"
+  }
+}
