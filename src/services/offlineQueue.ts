@@ -185,6 +185,9 @@ class OfflineQueue {
           );
           stillPending.splice(0, stillPending.length, ...updated);
         }
+
+        // Clear from syncService queue after successful server confirmation
+        await syncService.removeFromQueue(mutation.id);
       } catch (err) {
         const status = (err as { response?: { status?: number; data?: unknown } })?.response
           ?.status;

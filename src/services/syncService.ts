@@ -229,6 +229,13 @@ export class SyncService {
     return stored ? JSON.parse(stored) : [];
   }
 
+  async removeFromQueue(itemId: string): Promise<void> {
+    const queue = await this.getQueue();
+    const filtered = queue.filter((item) => item.id !== itemId);
+    await setItem(SYNC_QUEUE_KEY, JSON.stringify(filtered));
+    await this.patchStatus({ pendingCount: filtered.length });
+  }
+
   async getStatus(): Promise<SyncStatus> {
     const stored = await getItem(SYNC_STATUS_KEY);
     return stored ? JSON.parse(stored) : DEFAULT_STATUS;
