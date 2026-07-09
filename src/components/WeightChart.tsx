@@ -323,6 +323,8 @@ const WeightChart: React.FC<Props> = ({
                       stroke={colors.card}
                       strokeWidth="2"
                       onPress={() => setSelectedPoint(isSelected ? null : idx)}
+                      accessibilityLabel={buildDataPointAccessibilityLabel(point)}
+                      accessibilityHint={`Double tap to see weight details`}
                     />
                     {isSelected && (
                       <Circle
@@ -332,6 +334,8 @@ const WeightChart: React.FC<Props> = ({
                         fill="none"
                         stroke={colors.chartLine}
                         strokeWidth="1.5"
+                        accessibilityLabel={`Selected point: ${buildDataPointAccessibilityLabel(point)}`}
+                        accessibilityRole="none"
                       />
                     )}
                   </React.Fragment>
@@ -581,3 +585,6 @@ const styles = StyleSheet.create({
 });
 
 export default WeightChart;
+
+
+
