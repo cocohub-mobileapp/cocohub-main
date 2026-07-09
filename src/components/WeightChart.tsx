@@ -324,7 +324,7 @@ const WeightChart: React.FC<Props> = ({
                       strokeWidth="2"
                       onPress={() => setSelectedPoint(isSelected ? null : idx)}
                       accessibilityLabel={buildDataPointAccessibilityLabel(point)}
-                      accessibilityHint={Double tap to see weight details}
+                      accessibilityHint={`Double tap to see weight details`}
                     />
                     {isSelected && (
                       <Circle
@@ -585,5 +585,6 @@ const styles = StyleSheet.create({
 });
 
 export default WeightChart;
+
 
 
