@@ -334,7 +334,7 @@ const WeightChart: React.FC<Props> = ({
                         fill="none"
                         stroke={colors.chartLine}
                         strokeWidth="1.5"
-                        accessibilityLabel={Selected point: }
+                        accessibilityLabel={`Selected point: ${buildDataPointAccessibilityLabel(point)}`}
                         accessibilityRole="none"
                       />
                     )}
@@ -585,4 +585,5 @@ const styles = StyleSheet.create({
 });
 
 export default WeightChart;
+
 
