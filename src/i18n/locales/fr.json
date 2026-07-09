@@ -1,0 +1,142 @@
+{
+  "common": {
+    "ok": "OK",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "close": "Fermer",
+    "back": "Retour",
+    "next": "Suivant",
+    "done": "Terminé",
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "retry": "Réessayer",
+    "submit": "Soumettre",
+    "confirm": "Confirmer",
+    "yes": "Oui",
+    "no": "Non",
+    "search": "Rechercher",
+    "required": "Obligatoire",
+    "optional": "Facultatif",
+    "success": "Succès",
+    "warning": "Avertissement"
+  },
+  "language": {
+    "selectLanguage": "Sélectionner la langue",
+    "english": "Anglais",
+    "spanish": "Espagnol",
+    "french": "Français"
+  },
+  "onboarding": {
+    "welcomeTitle": "Bienvenue",
+    "welcomeSubtitle": "Prenez soin de votre animal en un seul endroit",
+    "getStarted": "Commencer",
+    "skip": "Passer",
+    "createAccount": "Créer un compte",
+    "alreadyHaveAccount": "Vous avez déjà un compte ?",
+    "login": "Connexion"
+  },
+  "auth": {
+    "email": "E-mail",
+    "password": "Mot de passe",
+    "confirmPassword": "Confirmer le mot de passe",
+    "forgotPassword": "Mot de passe oublié ?",
+    "signIn": "Se connecter",
+    "signUp": "S'inscrire",
+    "signOut": "Se déconnecter",
+    "invalidCredentials": "E-mail ou mot de passe invalide"
+  },
+  "home": {
+    "title": "Accueil",
+    "myPets": "Mes animaux",
+    "addPet": "Ajouter un animal",
+    "noPets": "Vous n'avez pas encore ajouté d'animal",
+    "upcomingReminders": "Rappels à venir"
+  },
+  "addPet": {
+    "title": "Ajouter un animal",
+    "petName": "Nom de l'animal",
+    "petType": "Type d'animal",
+    "breed": "Race",
+    "birthDate": "Date de naissance",
+    "weight": "Poids",
+    "gender": "Sexe",
+    "male": "Mâle",
+    "female": "Femelle",
+    "addPhoto": "Ajouter une photo",
+    "savePet": "Enregistrer l'animal",
+    "petAddedSuccess": "Animal ajouté avec succès",
+    "petNameRequired": "Le nom de l'animal est obligatoire"
+  },
+  "pets": {
+    "profile": "Profil",
+    "medicalHistory": "Antécédents médicaux",
+    "vaccinations": "Vaccinations",
+    "medications": "Médicaments",
+    "weightHistory": "Historique du poids",
+    "editPet": "Modifier l'animal",
+    "deletePet": "Supprimer l'animal",
+    "confirmDeletePet": "Êtes-vous sûr de vouloir supprimer cet animal ?"
+  },
+  "sos": {
+    "title": "SOS",
+    "sosButton": "Bouton SOS",
+    "sendAlert": "Envoyer une alerte",
+    "alertSent": "Alerte envoyée",
+    "confirmSos": "Voulez-vous envoyer une alerte d'urgence ?",
+    "cancelAlert": "Annuler l'alerte"
+  },
+  "emergencyContacts": {
+    "title": "Contacts d'urgence",
+    "primaryContact": "Contact principal",
+    "secondaryContact": "Contact secondaire",
+    "veterinaryEmergency": "Urgence vétérinaire",
+    "addContact": "Ajouter un contact",
+    "callNow": "Appeler maintenant",
+    "noNumber": "Aucun numéro",
+    "noNumberAvailable": "Aucun numéro de téléphone n'est disponible pour ce contact.",
+    "cannotMakeCalls": "Impossible de passer des appels",
+    "callsNotSupportedIOS": "Cet appareil ne prend pas en charge les appels téléphoniques.",
+    "callsNotSupportedAndroid": "Les appels téléphoniques ne sont pas pris en charge sur cet appareil.",
+    "dialConfirm": "Composer {{number}} ?"
+  },
+  "qrScanner": {
+    "title": "Scanner QR",
+    "cameraView": "Vue caméra",
+    "scanInstructions": "Alignez le code QR dans le cadre pour le scanner",
+    "recentScans": "Scans récents",
+    "scanSuccess": "Scan réussi",
+    "scanFailed": "Échec du scan"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "notificationPreferences": "Préférences de notification",
+    "privacySettings": "Paramètres de confidentialité",
+    "accountSettings": "Paramètres du compte",
+    "appLock": "Verrouillage de l'application",
+    "about": "À propos",
+    "logout": "Déconnexion",
+    "deleteAccount": "Supprimer le compte"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "medicationReminder": "Rappel de médicament",
+    "birthdayReminder": "Rappel d'anniversaire",
+    "healthMilestone": "Étape de santé",
+    "enableNotifications": "Activer les notifications"
+  },
+  "errors": {
+    "genericError": "Une erreur s'est produite. Veuillez réessayer.",
+    "networkError": "Erreur réseau. Veuillez vérifier votre connexion.",
+    "somethingWentWrong": "Quelque chose s'est mal passé",
+    "reportError": "Signaler l'erreur",
+    "retry": "Réessayer"
+  },
+  "updates": {
+    "updateAvailable": "Mise à jour disponible",
+    "updateRequired": "Mise à jour requise",
+    "updateNow": "Mettre à jour maintenant",
+    "later": "Plus tard"
+  }
+}
