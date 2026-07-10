@@ -1,13 +1,21 @@
 ﻿import React, { useCallback, useEffect, useState } from 'react';
-import { Animated, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Animated,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
+import { EmptyState } from '../components/EmptyState';
 import { HeaderOfflineStatus, useOfflineStatus } from '../components/OfflineIndicator';
 import { OptimizedImage } from '../components/OptimizedImage';
 import PaywallModal from '../components/PaywallModal';
 import PetAggregateView from '../components/PetAggregateView';
 import PetSelectorBar from '../components/PetSelectorBar';
 import PressableCard from '../components/PressableCard';
-import { EmptyState } from '../components/EmptyState';
 import { RetryError } from '../components/RetryError';
 import { SkeletonCard } from '../components/SkeletonCard';
 import SOSButton from '../components/SOSButton';
@@ -109,11 +117,7 @@ const PetListScreen: React.FC<Props> = ({ onSelectPet, onAddPet, onAdoptPet }) =
   const renderItem = useCallback(
     ({ item, index }: { item: Pet; index: number }) => (
       <Animated.View style={getAnimStyle(index)}>
-        <PressableCard
-          onPress={() => onSelectPet(item)}
-          style={styles.card}
-          elevation={1}
-        >
+        <PressableCard onPress={() => onSelectPet(item)} style={styles.card} elevation={1}>
           <View style={styles.cardInner}>
             {item.photoUrl || item.thumbnailUrl ? (
               <OptimizedImage
@@ -129,7 +133,8 @@ const PetListScreen: React.FC<Props> = ({ onSelectPet, onAddPet, onAdoptPet }) =
             <View style={styles.cardInfo}>
               <Text style={[styles.petName, { color: colors.text }]}>{item.name}</Text>
               <Text style={[styles.petMeta, { color: colors.secondaryText }]}>
-                {item.species}{item.breed ? ` · ${item.breed}` : ''}
+                {item.species}
+                {item.breed ? ` · ${item.breed}` : ''}
               </Text>
               {item.dateOfBirth && (
                 <Text style={[styles.petMeta, { color: colors.secondaryText }]}>
@@ -208,14 +213,16 @@ const PetListScreen: React.FC<Props> = ({ onSelectPet, onAddPet, onAdoptPet }) =
           keyExtractor={(p) => p.id}
           renderItem={renderItem}
           getItemLayout={getItemLayout}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, !hasData && styles.emptyList]}
           ListEmptyComponent={
             <EmptyState
               icon="paw"
-              title="No Pets Yet"
-              description="Get started by adding your first pet's profile to Cocohub."
+              title="Start your pet care hub"
+              description="Create your first pet profile to track records, reminders, emergency details, and wellness history in one place."
               buttonText="Add your first pet"
               onPress={handleAddPet}
+              secondaryText="Browse adoptable pets"
+              onSecondaryPress={onAdoptPet}
             />
           }
           refreshControl={
@@ -278,6 +285,7 @@ const styles = StyleSheet.create({
   adoptBtnText: { color: '#fff', fontWeight: '600' },
   loader: { marginTop: 40 },
   list: { padding: 12 },
+  emptyList: { flexGrow: 1 },
   cachedBanner: {
     backgroundColor: '#fff3e0',
     borderBottomWidth: 1,
