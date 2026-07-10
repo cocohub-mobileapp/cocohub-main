@@ -88,6 +88,10 @@ describe('convertFromMg', () => {
     expect(() => convertFromMg(150, 'tablets', undefined, 0)).toThrow('Tablet strength');
   });
 
+  it('throws if tablet conversion has negative tablet strength', () => {
+    expect(() => convertFromMg(150, 'tablets', undefined, -25)).toThrow('Tablet strength');
+  });
+
   it('handles tiny ml dose for 0.1 kg cat on meloxicam (1.5 mg/ml)', () => {
     // 0.1 kg * 0.05 mg/kg = 0.005 mg → 0.005 / 1.5 ≈ 0.00333 ml
     const doseInMg = calculateDoseInMg(0.1, 0.05);
@@ -123,8 +127,16 @@ describe('convertToMg', () => {
     expect(() => convertToMg(5, 'ml')).toThrow('Concentration');
   });
 
+  it('throws if ml conversion has negative concentration', () => {
+    expect(() => convertToMg(5, 'ml', -1)).toThrow('Concentration');
+  });
+
   it('throws if tablet conversion missing tablet strength', () => {
     expect(() => convertToMg(2, 'tablets')).toThrow('Tablet strength');
+  });
+
+  it('throws if tablet conversion has zero tablet strength', () => {
+    expect(() => convertToMg(2, 'tablets', undefined, 0)).toThrow('Tablet strength');
   });
 
   it('round-trips mg → ml → mg', () => {
@@ -218,6 +230,18 @@ describe('computeDosage', () => {
     expect(result.safetyLevel).toBe('safe');
   });
 
+  it('rounds computed liquid doses to three decimals', () => {
+    const result = computeDosage({
+      weightKg: 1,
+      dosePerKg: 1,
+      targetUnit: 'ml',
+      concentration: 3,
+    });
+
+    expect(result.doseInMg).toBe(1);
+    expect(result.dose).toBe(0.333);
+  });
+
   it('computes ml dose with concentration', () => {
     // 10 kg * 0.1 mg/kg = 1 mg; 1 / 1.5 ≈ 0.667 ml
     const result = computeDosage({
@@ -245,6 +269,16 @@ describe('computeDosage', () => {
     const result = computeDosage({ weightKg: 10, dosePerKg: 15, targetUnit: 'mg' }, amoxRange);
     expect(result.rangeMin).toBe(100); // 10 * 10
     expect(result.rangeMax).toBe(220); // 10 * 22
+  });
+
+  it('rounds converted liquid safe ranges to three decimals', () => {
+    const result = computeDosage(
+      { weightKg: 2.5, dosePerKg: 0.15, targetUnit: 'ml', concentration: 3 },
+      { minPerKg: 0.1, maxPerKg: 0.2, typicalPerKg: 0.15 },
+    );
+
+    expect(result.rangeMin).toBe(0.083);
+    expect(result.rangeMax).toBe(0.167);
   });
 
   it('flags high dose with safety warning', () => {
@@ -330,6 +364,14 @@ describe('computeDosage', () => {
     expect(result.safetyLevel).toBe('safe');
   });
 
+  it('computes dose for 100kg+ patient at the safe maximum', () => {
+    const result = computeDosage({ weightKg: 120, dosePerKg: 22, targetUnit: 'mg' }, amoxRange);
+    expect(result.dose).toBe(2640);
+    expect(result.rangeMin).toBe(1200);
+    expect(result.rangeMax).toBe(2640);
+    expect(result.safetyLevel).toBe('safe');
+  });
+
   it('flags critically high dose for large pet', () => {
     const result = computeDosage({ weightKg: 70, dosePerKg: 50, targetUnit: 'mg' }, amoxRange);
     expect(result.safetyLevel).toBe('critical');
@@ -375,6 +417,64 @@ describe('computeDosage', () => {
     const result = computeDosage({ weightKg: 10, dosePerKg: 0.001, targetUnit: 'mg' });
     expect(result.dose).toBe(0.01);
   });
+
+  it('prioritizes zero-weight validation before unit conversion requirements', () => {
+    const result = computeDosage({ weightKg: 0, dosePerKg: 15, targetUnit: 'ml' }, amoxRange);
+    expect(result.safetyLevel).toBe('critical');
+    expect(result.dose).toBe(0);
+    expect(result.doseInMg).toBe(0);
+    expect(result.warnings).toEqual(['Weight must be greater than zero.']);
+  });
+});
+
+// ─── Species-specific dosage multipliers ────────────────────────────────────
+
+describe('species-specific dosage multipliers', () => {
+  it('applies bird-specific doxycycline multiplier compared with dogs', () => {
+    const bird = lookupDrug('doxycycline', 'bird');
+    const dog = lookupDrug('doxycycline', 'dog');
+    const birdTypical = bird?.range?.typicalPerKg ?? Number.NaN;
+    const dogTypical = dog?.range?.typicalPerKg ?? Number.NaN;
+
+    const birdDose = computeDosage({
+      weightKg: 1,
+      dosePerKg: birdTypical,
+      targetUnit: 'mg',
+    });
+    const dogDose = computeDosage({
+      weightKg: 1,
+      dosePerKg: dogTypical,
+      targetUnit: 'mg',
+    });
+
+    expect(birdTypical / dogTypical).toBe(5);
+    expect(birdDose.dose).toBe(25);
+    expect(dogDose.dose).toBe(5);
+  });
+
+  it('applies rabbit-specific meloxicam multiplier compared with cats', () => {
+    const rabbit = lookupDrug('meloxicam', 'rabbit');
+    const cat = lookupDrug('meloxicam', 'cat');
+    const rabbitTypical = rabbit?.range?.typicalPerKg ?? Number.NaN;
+    const catTypical = cat?.range?.typicalPerKg ?? Number.NaN;
+
+    const rabbitDose = computeDosage({
+      weightKg: 2,
+      dosePerKg: rabbitTypical,
+      targetUnit: 'ml',
+      concentration: rabbit?.drug.concentration,
+    });
+    const catDose = computeDosage({
+      weightKg: 2,
+      dosePerKg: catTypical,
+      targetUnit: 'ml',
+      concentration: cat?.drug.concentration,
+    });
+
+    expect(rabbitTypical / catTypical).toBe(10);
+    expect(rabbitDose.doseInMg).toBe(1);
+    expect(catDose.doseInMg).toBe(0.1);
+  });
 });
 
 // ─── lookupDrug ───────────────────────────────────────────────────────────────
@@ -383,9 +483,10 @@ describe('lookupDrug', () => {
   it('returns drug info for known drug and species', () => {
     const result = lookupDrug('amoxicillin', 'dog');
     expect(result).not.toBeNull();
-    expect(result!.drug.name).toBe('Amoxicillin');
-    expect(result!.range).not.toBeNull();
-    expect(result!.range!.typicalPerKg).toBe(15);
+    if (!result || !result.range) throw new Error('Expected amoxicillin dog dosage data');
+
+    expect(result.drug.name).toBe('Amoxicillin');
+    expect(result.range.typicalPerKg).toBe(15);
   });
 
   it('returns null for unknown drug', () => {
@@ -396,43 +497,67 @@ describe('lookupDrug', () => {
     // carprofen has no cat dosage defined
     const result = lookupDrug('carprofen', 'cat');
     expect(result).not.toBeNull();
-    expect(result!.range).toBeNull();
+    if (!result) throw new Error('Expected carprofen drug record');
+
+    expect(result.range).toBeNull();
   });
 
   it('returns contraindication for rabbit amoxicillin', () => {
     const result = lookupDrug('amoxicillin', 'rabbit');
     expect(result).not.toBeNull();
-    expect(result!.contraindications.length).toBeGreaterThan(0);
-    expect(result!.contraindications[0]).toMatch(/enterotoxemia/i);
+    if (!result) throw new Error('Expected amoxicillin rabbit drug record');
+
+    expect(result.contraindications.length).toBeGreaterThan(0);
+    expect(result.contraindications[0]).toMatch(/enterotoxemia/i);
   });
 
   it('returns strict 5 mg/kg max for enrofloxacin in cats', () => {
     const result = lookupDrug('enrofloxacin', 'cat');
     expect(result).not.toBeNull();
-    expect(result!.range!.maxPerKg).toBe(5);
-    expect(result!.warnings[0]).toMatch(/blind/i);
+    if (!result || !result.range) throw new Error('Expected enrofloxacin cat dosage data');
+
+    expect(result.range.maxPerKg).toBe(5);
+    expect(result.warnings[0]).toMatch(/blind/i);
   });
 
   it('returns higher bird-specific range for doxycycline', () => {
     // birds need ~5x more doxycycline than dogs/cats
     const result = lookupDrug('doxycycline', 'bird');
+    const dog = lookupDrug('doxycycline', 'dog');
     expect(result).not.toBeNull();
-    expect(result!.range!.typicalPerKg).toBe(25);
-    expect(result!.range!.typicalPerKg).toBeGreaterThan(
-      lookupDrug('doxycycline', 'dog')!.range!.typicalPerKg,
-    );
+    expect(dog).not.toBeNull();
+    if (!result?.range || !dog?.range) {
+      throw new Error('Expected doxycycline dosage data for both bird and dog');
+    }
+
+    expect(result.range.typicalPerKg).toBe(25);
+    expect(result.range.typicalPerKg).toBeGreaterThan(dog.range.typicalPerKg);
   });
 
   it('returns rabbit-specific metronidazole range (higher than dog/cat)', () => {
     const rabbit = lookupDrug('metronidazole', 'rabbit');
     const dog = lookupDrug('metronidazole', 'dog');
-    expect(rabbit!.range!.typicalPerKg).toBeGreaterThan(dog!.range!.typicalPerKg);
+    if (!rabbit?.range || !dog?.range) {
+      throw new Error('Expected metronidazole dosage data for both rabbit and dog');
+    }
+
+    expect(rabbit.range.typicalPerKg).toBeGreaterThan(dog.range.typicalPerKg);
   });
 
   it('returns meloxicam warnings for cats', () => {
     const result = lookupDrug('meloxicam', 'cat');
-    expect(result!.warnings.length).toBeGreaterThan(0);
-    expect(result!.contraindications.length).toBeGreaterThan(0);
+    if (!result) throw new Error('Expected meloxicam cat drug record');
+
+    expect(result.warnings.length).toBeGreaterThan(0);
+    expect(result.contraindications.length).toBeGreaterThan(0);
+  });
+
+  it('returns empty defaults for supported drugs without a species profile', () => {
+    const result = lookupDrug('amoxicillin', 'other');
+    expect(result).not.toBeNull();
+    expect(result?.range).toBeNull();
+    expect(result?.warnings).toEqual([]);
+    expect(result?.contraindications).toEqual([]);
   });
 });
 
