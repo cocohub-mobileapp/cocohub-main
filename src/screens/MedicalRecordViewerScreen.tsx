@@ -12,14 +12,16 @@ import {
   View,
 } from 'react-native';
 
+import { EmptyState } from '../components/EmptyState';
 import MedicalRecordAttachments from '../components/MedicalRecordAttachments';
+import { useTheme } from '../context/ThemeContext';
+import { requireBiometric, verifyPin } from '../services/authService';
 import {
   getMedicalRecords,
   searchMedicalRecords,
   type MedicalRecord,
   type RecordFilters,
 } from '../services/medicalRecordService';
-import { requireBiometric, verifyPin } from '../services/authService';
 import sessionMonitoringService from '../services/sessionMonitoringService';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -49,13 +51,15 @@ interface Props {
   petId: string;
   petName?: string;
   onBack: () => void;
+  onAddRecord?: () => void;
 }
 
 type AuthGateState = 'checking' | 'authenticated' | 'pin_required' | 'failed';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) => {
+const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack, onAddRecord }) => {
+  const { colors } = useTheme();
   const [authState, setAuthState] = useState<AuthGateState>('checking');
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
@@ -237,10 +241,10 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
     }
   };
 
-  const clearSearch = () => {
+  const clearSearch = useCallback(() => {
     setSearchQuery('');
     setIsSearchMode(false);
-  };
+  }, []);
 
   // ─── Filter actions ───────────────────────────────────────────────────────
 
@@ -250,11 +254,32 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
     // loadFirstPage will be triggered by the useEffect dependency on selectedType/startDate/endDate
   };
 
-  const resetFilters = () => {
+  const resetFilters = useCallback(() => {
     setSelectedType(undefined);
     setStartDate('');
     setEndDate('');
-  };
+  }, []);
+
+  const hasActiveFilters = Boolean(selectedType || startDate || endDate);
+
+  const handleEmptyStateAction = useCallback(() => {
+    if (isSearchMode) {
+      clearSearch();
+      return;
+    }
+
+    if (hasActiveFilters) {
+      resetFilters();
+      return;
+    }
+
+    if (onAddRecord) {
+      onAddRecord();
+      return;
+    }
+
+    onBack();
+  }, [clearSearch, hasActiveFilters, isSearchMode, onAddRecord, onBack, resetFilters]);
 
   // ─── FlatList callbacks ───────────────────────────────────────────────────
 
@@ -266,27 +291,42 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
 
   const renderItem = useCallback(
     ({ item }: { item: MedicalRecord }) => (
-      <TouchableOpacity style={styles.card} onPress={() => setDetailRecord(item)}>
+      <TouchableOpacity
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.card,
+            shadowColor: colors.shadow,
+          },
+        ]}
+        onPress={() => setDetailRecord(item)}
+      >
         <View style={styles.cardRow}>
           <View style={[styles.typeBadge, typeBadgeColor(item.type)]}>
             <Text style={styles.typeBadgeText}>{item.type}</Text>
           </View>
-          <Text style={styles.cardDate}>{new Date(item.date).toLocaleDateString()}</Text>
+          <Text style={[styles.cardDate, { color: colors.secondaryText }]}>
+            {new Date(item.date).toLocaleDateString()}
+          </Text>
         </View>
         {item.notes ? (
-          <Text style={styles.cardNotes} numberOfLines={2}>
+          <Text style={[styles.cardNotes, { color: colors.text }]} numberOfLines={2}>
             {item.notes}
           </Text>
         ) : null}
-        {item.veterinarian ? <Text style={styles.cardMeta}>Vet: {item.veterinarian}</Text> : null}
+        {item.veterinarian ? (
+          <Text style={[styles.cardMeta, { color: colors.secondaryText }]}>
+            Vet: {item.veterinarian}
+          </Text>
+        ) : null}
         {item.documents?.length ? (
-          <Text style={styles.cardMeta}>
+          <Text style={[styles.cardMeta, { color: colors.secondaryText }]}>
             {item.documents.length} attachment{item.documents.length === 1 ? '' : 's'}
           </Text>
         ) : null}
       </TouchableOpacity>
     ),
-    [],
+    [colors],
   );
 
   const renderFooter = useCallback(() => {
@@ -294,29 +334,61 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
     if (loadingMore) {
       return (
         <View style={styles.footerLoader}>
-          <ActivityIndicator size="small" color="#10B981" />
+          <ActivityIndicator size="small" color={colors.primary} />
         </View>
       );
     }
     if (!hasMore && records.length > 0) {
       return (
         <View style={styles.footerEnd}>
-          <Text style={styles.footerEndText}>All records loaded</Text>
+          <Text style={[styles.footerEndText, { color: colors.secondaryText }]}>
+            All records loaded
+          </Text>
         </View>
       );
     }
     return null;
-  }, [loadingMore, hasMore, records.length, isSearchMode]);
+  }, [colors.primary, colors.secondaryText, loadingMore, hasMore, records.length, isSearchMode]);
+
+  const emptyStateTitle = isSearchMode
+    ? 'No matching records'
+    : hasActiveFilters
+      ? 'No records match these filters'
+      : petName
+        ? `No records for ${petName} yet`
+        : 'No medical records yet';
+
+  const emptyStateDescription = isSearchMode
+    ? 'Try a different keyword or clear your search to see all records.'
+    : hasActiveFilters
+      ? 'Clear the current filters to return to the full medical history.'
+      : 'Start a health timeline by importing vaccination, treatment, diagnosis, or visit records.';
+
+  const emptyStateButtonText = isSearchMode
+    ? 'Clear search'
+    : hasActiveFilters
+      ? 'Reset filters'
+      : onAddRecord
+        ? 'Import a record'
+        : 'Back to pet profile';
+
+  const emptyStateIcon = isSearchMode
+    ? 'search-outline'
+    : hasActiveFilters
+      ? 'filter-outline'
+      : 'document-text-outline';
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
   // ── Auth gate: show authentication screen until verified ──
   if (authState === 'checking') {
     return (
-      <View style={styles.container}>
-        <View style={styles.authGateContainer}>
-          <ActivityIndicator size="large" color="#10B981" />
-          <Text style={styles.authGateText}>Verifying authentication…</Text>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.authGateContainer, { backgroundColor: colors.background }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.authGateText, { color: colors.secondaryText }]}>
+            Verifying authentication…
+          </Text>
         </View>
       </View>
     );
@@ -324,13 +396,19 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
 
   if (authState === 'failed') {
     return (
-      <View style={styles.container}>
-        <View style={styles.authGateContainer}>
-          <Text style={styles.authGateTitle}>Authentication Required</Text>
-          <Text style={styles.authGateDescription}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.authGateContainer, { backgroundColor: colors.background }]}>
+          <Text style={[styles.authGateTitle, { color: colors.text }]}>
+            Authentication Required
+          </Text>
+          <Text style={[styles.authGateDescription, { color: colors.secondaryText }]}>
             You must authenticate to view medical records.
           </Text>
-          <TouchableOpacity style={styles.authGateButton} onPress={onBack}>
+          <TouchableOpacity
+            style={[styles.authGateButton, { backgroundColor: colors.primary }]}
+            onPress={onBack}
+            accessibilityRole="button"
+          >
             <Text style={styles.authGateButtonText}>Go Back</Text>
           </TouchableOpacity>
         </View>
@@ -340,16 +418,23 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
 
   if (authState === 'pin_required') {
     return (
-      <View style={styles.container}>
-        <View style={styles.authGateContainer}>
-          <Text style={styles.authGateTitle}>Enter PIN</Text>
-          <Text style={styles.authGateDescription}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.authGateContainer, { backgroundColor: colors.background }]}>
+          <Text style={[styles.authGateTitle, { color: colors.text }]}>Enter PIN</Text>
+          <Text style={[styles.authGateDescription, { color: colors.secondaryText }]}>
             Biometric authentication is unavailable. Please enter your PIN to continue.
           </Text>
           <TextInput
-            style={styles.pinInput}
+            style={[
+              styles.pinInput,
+              {
+                backgroundColor: colors.input,
+                borderColor: colors.border,
+                color: colors.text,
+              },
+            ]}
             placeholder="Enter your PIN"
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={colors.placeholder}
             value={pinInput}
             onChangeText={(text) => {
               setPinInput(text);
@@ -357,16 +442,24 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
             }}
             keyboardType="number-pad"
             secureTextEntry
-            maxLength= {10}
+            maxLength={10}
             accessibilityLabel="PIN input"
             onSubmitEditing={handlePinSubmit}
           />
           {pinError ? <Text style={styles.pinErrorText}>{pinError}</Text> : null}
-          <TouchableOpacity style={styles.authGateButton} onPress={handlePinSubmit}>
+          <TouchableOpacity
+            style={[styles.authGateButton, { backgroundColor: colors.primary }]}
+            onPress={handlePinSubmit}
+            accessibilityRole="button"
+          >
             <Text style={styles.authGateButtonText}>Submit PIN</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.authGateCancelButton} onPress={handleAuthCancel}>
-            <Text style={styles.authGateCancelText}>Cancel</Text>
+          <TouchableOpacity
+            style={styles.authGateCancelButton}
+            onPress={handleAuthCancel}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.authGateCancelText, { color: colors.secondaryText }]}>Cancel</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -374,13 +467,13 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.surface }]}>
         <TouchableOpacity onPress={onBack} accessibilityRole="button" accessibilityLabel="Back">
-          <Text style={styles.backText}>‹ Back</Text>
+          <Text style={[styles.backText, { color: colors.primary }]}>‹ Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
           {petName ? `${petName}'s Records` : 'Medical Records'}
         </Text>
         <TouchableOpacity
@@ -388,16 +481,28 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
           accessibilityRole="button"
           accessibilityLabel="Filters"
         >
-          <Text style={styles.filterBtn}>Filter</Text>
+          <Text style={[styles.filterBtn, { color: colors.primary }]}>Filter</Text>
         </TouchableOpacity>
       </View>
 
       {/* Search bar */}
-      <View style={styles.searchRow}>
+      <View
+        style={[
+          styles.searchRow,
+          { backgroundColor: colors.surface, borderBottomColor: colors.border },
+        ]}
+      >
         <TextInput
-          style={styles.searchInput}
+          style={[
+            styles.searchInput,
+            {
+              backgroundColor: colors.input,
+              borderColor: colors.border,
+              color: colors.text,
+            },
+          ]}
           placeholder="Search records…"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.placeholder}
           value={searchQuery}
           onChangeText={setSearchQuery}
           onSubmitEditing={() => void handleSearch()}
@@ -405,14 +510,20 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
           accessibilityLabel="Search medical records"
         />
         {isSearchMode ? (
-          <TouchableOpacity style={styles.clearBtn} onPress={clearSearch}>
+          <TouchableOpacity
+            style={[styles.clearBtn, { backgroundColor: colors.error }]}
+            onPress={clearSearch}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
+          >
             <Text style={styles.clearBtnText}>✕</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={styles.searchBtn}
+            style={[styles.searchBtn, { backgroundColor: colors.primary }]}
             onPress={() => void handleSearch()}
             accessibilityRole="button"
+            accessibilityLabel="Search records"
           >
             <Text style={styles.searchBtnText}>Search</Text>
           </TouchableOpacity>
@@ -424,33 +535,41 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={styles.chipRow}
+          style={[
+            styles.chipRow,
+            { backgroundColor: colors.surface, borderBottomColor: colors.border },
+          ]}
           contentContainerStyle={styles.chipContent}
         >
           {selectedType ? (
-            <View style={styles.chip}>
-              <Text style={styles.chipText}>{selectedType}</Text>
+            <View style={[styles.chip, { backgroundColor: colors.primaryMuted }]}>
+              <Text style={[styles.chipText, { color: colors.primary }]}>{selectedType}</Text>
             </View>
           ) : null}
           {startDate ? (
-            <View style={styles.chip}>
-              <Text style={styles.chipText}>From: {startDate}</Text>
+            <View style={[styles.chip, { backgroundColor: colors.primaryMuted }]}>
+              <Text style={[styles.chipText, { color: colors.primary }]}>From: {startDate}</Text>
             </View>
           ) : null}
           {endDate ? (
-            <View style={styles.chip}>
-              <Text style={styles.chipText}>To: {endDate}</Text>
+            <View style={[styles.chip, { backgroundColor: colors.primaryMuted }]}>
+              <Text style={[styles.chipText, { color: colors.primary }]}>To: {endDate}</Text>
             </View>
           ) : null}
-          <TouchableOpacity style={styles.chipClear} onPress={resetFilters}>
-            <Text style={styles.chipClearText}>Clear</Text>
+          <TouchableOpacity
+            style={[styles.chipClear, { backgroundColor: colors.primaryMuted }]}
+            onPress={resetFilters}
+            accessibilityRole="button"
+            accessibilityLabel="Clear filters"
+          >
+            <Text style={[styles.chipClearText, { color: colors.primary }]}>Clear</Text>
           </TouchableOpacity>
         </ScrollView>
       ) : null}
 
       {/* List */}
       {loading ? (
-        <ActivityIndicator style={styles.loader} size="large" color="#4CAF50" />
+        <ActivityIndicator style={styles.loader} size="large" color={colors.primary} />
       ) : (
         <FlatList
           data={records}
@@ -468,9 +587,17 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
           // Layout
           contentContainerStyle={records.length === 0 ? styles.emptyContainer : styles.list}
           ListEmptyComponent={
-            <Text style={styles.emptyText}>
-              {isSearchMode ? `No results for "${searchQuery}".` : 'No records found.'}
-            </Text>
+            <EmptyState
+              icon={emptyStateIcon}
+              title={emptyStateTitle}
+              description={emptyStateDescription}
+              buttonText={emptyStateButtonText}
+              onPress={handleEmptyStateAction}
+              secondaryText={!isSearchMode && !hasActiveFilters ? 'Back to pet profile' : undefined}
+              onSecondaryPress={!isSearchMode && !hasActiveFilters ? onBack : undefined}
+              buttonAccessibilityLabel={emptyStateButtonText}
+              testID="medical-records-empty-state"
+            />
           }
         />
       )}
