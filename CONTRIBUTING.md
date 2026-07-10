@@ -12,6 +12,7 @@ We welcome developers, designers, and writers at all skill levels. Contributions
 - [Ways to Contribute](#ways-to-contribute)
 - [Bounty Program](#bounty-program)
 - [Getting Started](#getting-started)
+- [Stellar Testnet Setup](#stellar-testnet-setup)
 - [Development Workflow](#development-workflow)
 - [Code Standards](#code-standards)
 - [Submitting a PR](#submitting-a-pr)
@@ -113,6 +114,12 @@ npx expo start
 Email:    owner1@example.com
 Password: Password123!
 ```
+
+---
+
+## Stellar Testnet Setup
+
+Working on blockchain record flows? Follow the [Stellar testnet setup guide](./docs/STELLAR-SETUP.md) to create a keypair, fund it with Friendbot, configure `.env.development`, verify `src/services/blockchainService.ts`, inspect transactions in Stellar Lab, and set up Freighter.
 
 ---
 
