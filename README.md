@@ -26,6 +26,8 @@ Cocohub gives every pet a **tamper-proof digital health passport** — medicatio
 
 Records are verified on the **Stellar blockchain** (hashes only — no personal data ever on-chain), so any vet anywhere can independently confirm a record hasn't been altered.
 
+For local blockchain development, see the [Stellar testnet setup guide](docs/STELLAR-SETUP.md) for keypair creation, Friendbot funding, Freighter, Stellar Lab, and `blockchainService.ts` smoke tests.
+
 ---
 
 ## 🎬 See it in action
