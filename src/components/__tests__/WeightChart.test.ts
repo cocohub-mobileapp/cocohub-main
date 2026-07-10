@@ -2,6 +2,7 @@ import {
   buildDataPointAccessibilityLabel,
   buildWeightChartAccessibilityLabel,
   describeWeightTrend,
+  filterDataByRange,
   rangeLabel,
 } from '../weightChartAccessibility';
 
@@ -15,6 +16,18 @@ describe('WeightChart accessibility helpers', () => {
   it('builds a chart summary label with pet name, weight, and trend', () => {
     expect(buildWeightChartAccessibilityLabel('Buddy', sampleData, '1M')).toBe(
       'Weight chart for Buddy. Current weight: 12.0 kg. Trend: increasing over the last 30 days.',
+    );
+  });
+
+  it('builds an empty-state chart label for screen readers', () => {
+    expect(buildWeightChartAccessibilityLabel('Buddy', [], '3M')).toBe(
+      'No weight data available for the selected period.',
+    );
+  });
+
+  it('falls back to a generic pet name when none is provided', () => {
+    expect(buildWeightChartAccessibilityLabel(undefined, sampleData, 'ALL')).toContain(
+      'Weight chart for Pet.',
     );
   });
 
@@ -35,24 +48,44 @@ describe('WeightChart accessibility helpers', () => {
   });
 
   it('labels individual data points for screen readers', () => {
-    expect(
-      buildDataPointAccessibilityLabel({
-        date: '2026-03-01T00:00:00Z',
-        weightKg: 12,
-        note: 'Post-surgery',
-      }),
-    ).toContain('12.0 kilograms');
-    expect(
-      buildDataPointAccessibilityLabel({
-        date: '2026-03-01T00:00:00Z',
-        weightKg: 12,
-        note: 'Post-surgery',
-      }),
-    ).toContain('Post-surgery');
+    const label = buildDataPointAccessibilityLabel({
+      date: '2026-03-01T00:00:00Z',
+      weightKg: 12,
+      note: 'Post-surgery',
+    });
+
+    expect(label).toContain('12.0 kilograms');
+    expect(label).toContain('Post-surgery');
+  });
+
+  it('labels individual data points without optional notes', () => {
+    const label = buildDataPointAccessibilityLabel({
+      date: '2026-03-01T00:00:00Z',
+      weightKg: 12.34,
+    });
+
+    expect(label).toContain('12.3 kilograms');
+    expect(label).not.toContain('Note:');
   });
 
   it('maps range filters to readable periods', () => {
+    expect(rangeLabel('1M')).toBe('the last 30 days');
     expect(rangeLabel('3M')).toBe('the last 3 months');
+    expect(rangeLabel('1Y')).toBe('the last year');
     expect(rangeLabel('ALL')).toBe('all recorded data');
+  });
+
+  it('filters weight entries to the selected date range', () => {
+    jest.setSystemTime(new Date('2026-07-10T00:00:00Z'));
+
+    const data = [
+      { date: '2026-06-25T00:00:00Z', weightKg: 12.4 },
+      { date: '2026-05-01T00:00:00Z', weightKg: 12.1 },
+      { date: '2025-07-01T00:00:00Z', weightKg: 10.8 },
+    ];
+
+    expect(filterDataByRange(data, '1M')).toEqual([data[0]]);
+    expect(filterDataByRange(data, '3M')).toEqual([data[0], data[1]]);
+    expect(filterDataByRange(data, 'ALL')).toEqual(data);
   });
 });
