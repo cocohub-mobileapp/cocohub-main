@@ -11,6 +11,9 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import QRCode from 'qrcode';
 
+import config from '../config';
+import apiClient from './apiClient';
+import { getToken } from './authService';
 import type { VaccinationReminder } from './vaccinationService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -185,4 +188,160 @@ export async function anchorCertificateToStellar(certificateHash: string): Promi
     // Non-fatal — certificate is still valid without blockchain anchor
     return null;
   }
+}
+
+// ─── Health dashboard report export (Issue #45) ───────────────────────────────
+
+export interface HealthReportWeightPoint {
+  date: string;
+  weightKg: number;
+  note?: string;
+}
+
+export interface HealthReportMedication {
+  id?: string;
+  name: string;
+  dosage?: string;
+  frequency?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface HealthReportAppointment {
+  id?: string;
+  date: string;
+  time?: string;
+  type: string;
+  status?: string;
+  notes?: string;
+}
+
+export interface HealthReportRecord {
+  id?: string;
+  type: string;
+  date?: string;
+  createdAt?: string;
+  diagnosis?: string;
+  treatment?: string;
+  notes?: string;
+}
+
+export interface HealthDashboardReportPayload {
+  petId: string;
+  petName: string;
+  healthScore: number | null;
+  healthScoreLabel?: string;
+  latestMetric?: {
+    recordedAt: string;
+    weightKg?: number;
+    temperatureC?: number;
+    activityLevel?: string;
+    notes?: string;
+  } | null;
+  weightHistory: HealthReportWeightPoint[];
+  activeMedications: HealthReportMedication[];
+  upcomingAppointments: HealthReportAppointment[];
+  recentRecords: HealthReportRecord[];
+}
+
+export interface GeneratedHealthReport {
+  filePath: string;
+  filename: string;
+  jobId?: string;
+  recordCount?: number;
+}
+
+interface ReportJobResponse {
+  jobId: string;
+}
+
+interface ReportJobStatusResponse {
+  jobId: string;
+  status: 'queued' | 'processing' | 'complete' | 'failed';
+  filename?: string;
+  recordCount?: number;
+  error?: string;
+}
+
+const REPORT_POLL_DELAY_MS = 800;
+const REPORT_MAX_POLLS = 20;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function safeFileSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'health-report';
+}
+
+function absoluteApiUrl(path: string): string {
+  const base = config.api.baseUrl.replace(/\/$/, '');
+  return `${base}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const token = await getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function waitForReport(jobId: string): Promise<ReportJobStatusResponse> {
+  for (let attempt = 0; attempt < REPORT_MAX_POLLS; attempt++) {
+    const { data } = await apiClient.get<ReportJobStatusResponse>(`/reports/${jobId}/status`);
+    if (data.status === 'complete') return data;
+    if (data.status === 'failed') {
+      throw new Error(data.error || 'Health report generation failed.');
+    }
+    await sleep(REPORT_POLL_DELAY_MS);
+  }
+  throw new Error('Health report generation timed out. Please try again.');
+}
+
+/**
+ * Requests a backend PDFKit-generated vet-ready health report, downloads it to
+ * local app storage, and returns the local PDF path for sharing.
+ */
+export async function generateHealthDashboardReport(
+  payload: HealthDashboardReportPayload,
+): Promise<GeneratedHealthReport> {
+  const { data } = await apiClient.post<ReportJobResponse>(
+    `/reports/pets/${payload.petId}/health`,
+    {
+      dashboard: payload,
+    },
+  );
+
+  if (!data?.jobId) {
+    throw new Error('The report service did not return a job id.');
+  }
+
+  const status = await waitForReport(data.jobId);
+  const filename = status.filename || `health-report-${safeFileSegment(payload.petName)}.pdf`;
+  const dir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? '';
+  if (!dir) throw new Error('Local file storage is not available.');
+
+  const filePath = `${dir}${safeFileSegment(filename)}`;
+  await FileSystem.downloadAsync(absoluteApiUrl(`/reports/${data.jobId}/download`), filePath, {
+    headers: await authHeaders(),
+  });
+
+  return {
+    filePath,
+    filename,
+    jobId: data.jobId,
+    recordCount: status.recordCount,
+  };
+}
+
+/** Share the generated health dashboard PDF via the native iOS/Android sheet. */
+export async function shareHealthDashboardReport(filePath: string): Promise<void> {
+  const isAvailable = await Sharing.isAvailableAsync();
+  if (!isAvailable) {
+    throw new Error('Sharing is not available on this device.');
+  }
+
+  await Sharing.shareAsync(filePath, {
+    mimeType: 'application/pdf',
+    UTI: 'com.adobe.pdf',
+    dialogTitle: 'Share Health Report PDF',
+  });
 }

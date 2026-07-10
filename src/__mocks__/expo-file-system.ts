@@ -7,3 +7,6 @@ export const deleteAsync = jest.fn().mockResolvedValue(undefined);
 export const getInfoAsync = jest
   .fn()
   .mockResolvedValue({ exists: true, isDirectory: false, size: 100 });
+export const downloadAsync = jest
+  .fn()
+  .mockResolvedValue({ uri: '/mock/cache/report.pdf', status: 200 });

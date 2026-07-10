@@ -9,14 +9,18 @@
  * Job status stored in Redis with 1-hour TTL.
  * #595
  */
-import express from 'express';
 import { randomUUID } from 'crypto';
 
+import express from 'express';
+
+import { getRedisClient } from '../../config/redis';
 import { authenticateJWT, type AuthenticatedRequest } from '../../middleware/auth';
-import { generateHealthReport } from '../../services/reportService';
+import {
+  generateHealthReport,
+  type HealthDashboardReportSnapshot,
+} from '../../services/reportService';
 import { sendError } from '../response';
 import { store } from '../store';
-import { getRedisClient } from '../../config/redis';
 
 const router = express.Router();
 router.use(authenticateJWT);
@@ -35,6 +39,7 @@ interface JobRecord {
   recordCount?: number;
   error?: string;
   createdAt: string;
+  dashboard?: HealthDashboardReportSnapshot;
 }
 
 // In-memory buffer store (keyed by jobId). In production, use cloud storage / signed URLs.
@@ -76,6 +81,7 @@ function processJobAsync(jobId: string): void {
         records,
         medications,
         generatedBy: job.userId,
+        dashboard: job.dashboard,
       });
 
       pdfBuffers.set(jobId, result.buffer);
@@ -97,6 +103,10 @@ function processJobAsync(jobId: string): void {
  */
 router.post('/pets/:petId/health', async (req: AuthenticatedRequest, res) => {
   const { petId } = req.params as { petId: string };
+  const dashboard =
+    req.body && typeof req.body.dashboard === 'object'
+      ? (req.body.dashboard as HealthDashboardReportSnapshot)
+      : undefined;
 
   const pet = store.pets.get(petId);
   if (!pet) return sendError(res, 404, 'NOT_FOUND', 'Pet not found');
@@ -111,6 +121,7 @@ router.post('/pets/:petId/health', async (req: AuthenticatedRequest, res) => {
     petId,
     userId: req.user?.id ?? 'unknown',
     createdAt: new Date().toISOString(),
+    dashboard,
   };
 
   try {
@@ -131,6 +142,7 @@ router.post('/pets/:petId/health', async (req: AuthenticatedRequest, res) => {
         generatedBy: req.user?.id ?? 'unknown',
         dateFrom,
         dateTo,
+        dashboard,
       });
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);

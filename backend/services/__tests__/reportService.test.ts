@@ -137,4 +137,37 @@ describe('generateHealthReport', () => {
     const result = await generateHealthReport(baseOpts);
     expect(result.buffer.slice(0, 4).toString()).toBe('%PDF');
   });
+
+  it('accepts a health dashboard snapshot for vet-ready sections', async () => {
+    const result = await generateHealthReport({
+      ...baseOpts,
+      dashboard: {
+        petName: 'Buddy',
+        healthScore: 87,
+        healthScoreLabel: 'Excellent',
+        latestMetric: {
+          recordedAt: '2026-07-09T10:00:00.000Z',
+          weightKg: 12.4,
+          temperatureC: 38.6,
+          activityLevel: 'high',
+          notes: 'Bright and active',
+        },
+        weightHistory: [
+          { date: '2026-07-01', weightKg: 12.1 },
+          { date: '2026-07-08', weightKg: 12.4, note: 'Healthy gain' },
+        ],
+        activeMedications: [
+          { name: 'HeartGuard', dosage: '1 tablet', frequency: 'monthly', startDate: '2026-01-01' },
+        ],
+        upcomingAppointments: [
+          { date: '2026-07-20', time: '09:00', type: 'Wellness', status: 'scheduled' },
+        ],
+        recentRecords: [{ type: 'checkup', date: '2026-07-08', notes: 'Routine wellness visit' }],
+      },
+    });
+
+    expect(Buffer.isBuffer(result.buffer)).toBe(true);
+    expect(result.buffer.slice(0, 4).toString()).toBe('%PDF');
+    expect(result.recordCount).toBe(1);
+  });
 });

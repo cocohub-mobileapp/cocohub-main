@@ -6,8 +6,7 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Share,
-  Platform,
+  Alert,
 } from 'react-native';
 
 import HealthScoreChart, {
@@ -28,6 +27,11 @@ import healthScoringServiceV2 from '../services/healthScoringServiceV2';
 import type { MedicalRecord } from '../services/medicalRecordService';
 import { getMedicalRecords } from '../services/medicalRecordService';
 import { getMedications, isMedicationActive } from '../services/medicationService';
+import {
+  generateHealthDashboardReport,
+  shareHealthDashboardReport,
+  type HealthDashboardReportPayload,
+} from '../services/pdfService';
 import petService from '../services/petService';
 import { useSecureScreen } from '../utils/secureScreen';
 
@@ -123,7 +127,13 @@ function appointmentTypeLabel(type: string): string {
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
 // Memoized because it receives simple scalar props
-const SectionHeader = React.memo(function SectionHeader({ title, icon }: { title: string; icon: string }) {
+const SectionHeader = React.memo(function SectionHeader({
+  title,
+  icon,
+}: {
+  title: string;
+  icon: string;
+}) {
   const { colors } = useTheme();
   return (
     <View style={styles.sectionHeader}>
@@ -136,11 +146,7 @@ const SectionHeader = React.memo(function SectionHeader({ title, icon }: { title
 // Note: Card is not memoized because it accepts React.ReactNode children
 function Card({ children, style }: { children: React.ReactNode; style?: object }) {
   const { colors } = useTheme();
-  return (
-    <View style={[styles.card, { backgroundColor: colors.surface }, style]}>
-      {children}
-    </View>
-  );
+  return <View style={[styles.card, { backgroundColor: colors.surface }, style]}>{children}</View>;
 }
 
 // Memoized to avoid re-rendering when parent re-renders
@@ -168,25 +174,27 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [recordsResp, medications, appointments, metrics, scoreHistory, pet] = await Promise.all([
-        getMedicalRecords(petId, { limit: 100 }).catch(() => ({
-          data: [] as MedicalRecord[],
-          total: 0,
-          page: 1,
-          limit: 100,
-          totalPages: 1,
-        })),
-        getMedications().catch(() => [] as Medication[]),
-        getUpcomingAppointments(petId).catch(() => [] as Appointment[]),
-        getHealthMetrics(petId).catch(() => [] as HealthMetricEntry[]),
-        healthScoringServiceV2
-          .getScoreHistory(petId, 365)
-          .catch(() => [] as HealthScoreDataPoint[]),
-        petService.getPetById(petId).catch(() => null),
-      ]);
+      const [recordsResp, medications, appointments, metrics, scoreHistory, pet] =
+        await Promise.all([
+          getMedicalRecords(petId, { limit: 100 }).catch(() => ({
+            data: [] as MedicalRecord[],
+            total: 0,
+            page: 1,
+            limit: 100,
+            totalPages: 1,
+          })),
+          getMedications().catch(() => [] as Medication[]),
+          getUpcomingAppointments(petId).catch(() => [] as Appointment[]),
+          getHealthMetrics(petId).catch(() => [] as HealthMetricEntry[]),
+          healthScoringServiceV2
+            .getScoreHistory(petId, 365)
+            .catch(() => [] as HealthScoreDataPoint[]),
+          petService.getPetById(petId).catch(() => null),
+        ]);
 
       // Fetch breed-specific weight range if we have breed info
       const vetWeightRange = pet?.breed
@@ -213,7 +221,7 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
         .filter((m) => m.weightKg !== undefined)
         .map((m) => ({
           date: m.recordedAt,
-          weightKg: m.weightKg!,
+          weightKg: Number(m.weightKg),
           note: m.notes,
         }));
 
@@ -264,29 +272,94 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
     void load();
   }, [load]);
 
+  const buildReportPayload = useCallback(
+    (): HealthDashboardReportPayload => ({
+      petId,
+      petName,
+      healthScore: data.healthScore,
+      healthScoreLabel:
+        data.healthScore !== null ? scoreLabel(data.healthScore) : 'Not enough data',
+      latestMetric: data.latestMetric
+        ? {
+            recordedAt: data.latestMetric.recordedAt,
+            weightKg: data.latestMetric.weightKg,
+            temperatureC: data.latestMetric.temperatureC,
+            activityLevel: data.latestMetric.activityLevel,
+            notes: data.latestMetric.notes,
+          }
+        : null,
+      weightHistory: data.weightHistory.map((point) => ({
+        date: point.date,
+        weightKg: point.weightKg,
+        note: point.note,
+      })),
+      activeMedications: data.activeMedications.map((med) => ({
+        id: med.id,
+        name: med.name,
+        dosage: med.dosage,
+        frequency: String(med.frequency),
+        startDate: med.startDate,
+        endDate: med.endDate,
+      })),
+      upcomingAppointments: data.upcomingAppointments.map((appt) => ({
+        id: appt.id,
+        date: appt.date,
+        time: appt.time,
+        type: appointmentTypeLabel(appt.type),
+        status: appt.status,
+        notes: appt.notes,
+      })),
+      recentRecords: data.recentRecords.map((record) => ({
+        id: record.id,
+        type: record.type,
+        date: record.date,
+        createdAt: record.createdAt,
+        notes: record.notes,
+      })),
+    }),
+    [data, petId, petName],
+  );
+
   const handleExportChart = useCallback(async () => {
+    if (exporting) return;
+    setExporting(true);
     try {
-      await Share.share({
-        message: `${petName}'s weight chart - exported from Cocohub`,
-        title: `${petName} Weight Chart`,
-      });
+      const report = await generateHealthDashboardReport(buildReportPayload());
+      await shareHealthDashboardReport(report.filePath);
     } catch (err) {
-      console.error('Failed to share chart:', err);
+      console.error('Failed to export health report:', err);
+      Alert.alert(
+        'Export failed',
+        err instanceof Error
+          ? err.message
+          : 'Could not generate the health report PDF. Please try again.',
+      );
+    } finally {
+      setExporting(false);
     }
-  }, [petName]);
+  }, [buildReportPayload, exporting]);
 
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <View
+          style={[
+            styles.header,
+            { backgroundColor: colors.surface, borderBottomColor: colors.border },
+          ]}
+        >
           <TouchableOpacity onPress={onBack} style={styles.backBtn}>
             <Text style={[styles.backText, { color: colors.primary }]}>‹ Back</Text>
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{petName} · Dashboard</Text>
-          <View style={styles.metricsBtn} />
+          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
+            {petName} · Dashboard
+          </Text>
+          <View style={styles.headerActions} />
         </View>
         <View style={{ padding: 16 }}>
-          {Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} height={80} />)}
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonCard key={i} height={80} />
+          ))}
         </View>
       </View>
     );
@@ -298,20 +371,50 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
     upcomingAppointments,
     latestMetric,
     healthScore,
-    weightHistory,
     healthScoreHistory,
     medicalEvents,
   } = data;
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={onBack} style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Back">
+      <View
+        style={[
+          styles.header,
+          { backgroundColor: colors.surface, borderBottomColor: colors.border },
+        ]}
+      >
+        <TouchableOpacity
+          onPress={onBack}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
           <Text style={[styles.backText, { color: colors.primary }]}>‹ Back</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{petName} · Dashboard</Text>
-        <TouchableOpacity onPress={onOpenMetrics} style={[styles.metricsBtn, { backgroundColor: colors.primaryMuted }]} accessibilityRole="button" accessibilityLabel="Open health metrics">
-          <Text style={[styles.metricsBtnText, { color: colors.primary }]}>Metrics</Text>
-        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
+          {petName} · Dashboard
+        </Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={onOpenMetrics}
+            style={[styles.metricsBtn, { backgroundColor: colors.primaryMuted }]}
+            accessibilityRole="button"
+            accessibilityLabel="Open health metrics"
+          >
+            <Text style={[styles.metricsBtnText, { color: colors.primary }]}>Metrics</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleExportChart}
+            disabled={exporting}
+            style={[
+              styles.exportBtn,
+              { backgroundColor: exporting ? colors.border : colors.primary },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Export health report PDF"
+          >
+            <Text style={styles.exportBtnText}>{exporting ? 'Exporting…' : 'PDF'}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -510,27 +613,50 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, fontSize: 14 },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: 16, borderBottomWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
   },
   backBtn: { padding: 4 },
   backText: { fontSize: 17 },
-  headerTitle: { flex: 1, fontSize: 16, fontWeight: '700', textAlign: 'center', marginHorizontal: 8 },
-  metricsBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  headerTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginHorizontal: 8,
+  },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  metricsBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   metricsBtnText: { fontWeight: '700', fontSize: 13 },
+  exportBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  exportBtnText: { fontWeight: '700', fontSize: 13, color: '#fff' },
   scroll: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 32 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginTop: 16, marginBottom: 8 },
   sectionIcon: { fontSize: 18, marginRight: 8 },
   sectionTitle: { fontSize: 15, fontWeight: '700' },
   card: {
-    borderRadius: 12, padding: 16,
-    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
     backgroundColor: 'transparent', // set inline via colors.surface
   },
   emptyText: { fontSize: 14, textAlign: 'center', paddingVertical: 8 },
   scoreRow: { flexDirection: 'row', alignItems: 'center' },
-  scoreBadge: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  scoreBadge: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
   scoreNumber: { fontSize: 28, fontWeight: '800', color: '#fff' },
   scoreMax: { fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: -4 },
   scoreDetails: { flex: 1 },
@@ -548,10 +674,37 @@ const styles = StyleSheet.create({
   listRowTitle: { fontSize: 14, fontWeight: '600' },
   listRowSub: { fontSize: 13, marginTop: 2 },
   listRowDate: { fontSize: 12, marginTop: 4 },
-  apptDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#1565c0', marginTop: 4, marginRight: 12 },
-  medDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#6a1b9a', marginTop: 4, marginRight: 12 },
-  recDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#2e7d32', marginTop: 4, marginRight: 12 },
-  statusBadge: { alignSelf: 'flex-start', marginTop: 4, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  apptDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#1565c0',
+    marginTop: 4,
+    marginRight: 12,
+  },
+  medDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#6a1b9a',
+    marginTop: 4,
+    marginRight: 12,
+  },
+  recDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#2e7d32',
+    marginTop: 4,
+    marginRight: 12,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
   statusConfirmed: { backgroundColor: '#e8f5e9' },
   statusBadgeText: { fontSize: 11, fontWeight: '600' },
 });
