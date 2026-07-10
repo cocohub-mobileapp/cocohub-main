@@ -54,14 +54,20 @@ const ManualEntryScreen: React.FC<ManualEntryScreenProps> = ({ onSubmit, onClose
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} testID="manual-entry-screen">
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       <KeyboardAvoidingView
         style={styles.keyboardContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={styles.header}>
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close manual entry"
+            testID="manual-entry-close-button"
+          >
             <Text style={styles.closeButtonText}>✕</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Manual Entry</Text>
@@ -86,6 +92,7 @@ const ManualEntryScreen: React.FC<ManualEntryScreenProps> = ({ onSubmit, onClose
               placeholderTextColor="#9CA3AF"
               autoCapitalize="none"
               autoCorrect={false}
+              testID="manual-entry-record-id-input"
             />
           </View>
           <View style={styles.inputContainer}>
@@ -98,6 +105,7 @@ const ManualEntryScreen: React.FC<ManualEntryScreenProps> = ({ onSubmit, onClose
               placeholderTextColor="#9CA3AF"
               autoCapitalize="none"
               autoCorrect={false}
+              testID="manual-entry-pet-id-input"
             />
           </View>
           <View style={styles.inputContainer}>
@@ -110,6 +118,7 @@ const ManualEntryScreen: React.FC<ManualEntryScreenProps> = ({ onSubmit, onClose
               placeholderTextColor="#9CA3AF"
               autoCapitalize="none"
               autoCorrect={false}
+              testID="manual-entry-vet-id-input"
             />
           </View>
 
@@ -133,6 +142,7 @@ const ManualEntryScreen: React.FC<ManualEntryScreenProps> = ({ onSubmit, onClose
             style={[styles.clearButton, styles.footerButton]}
             onPress={handleClear}
             disabled={loading}
+            testID="manual-entry-clear-button"
           >
             <Text style={styles.clearButtonText}>Clear</Text>
           </TouchableOpacity>
@@ -140,6 +150,7 @@ const ManualEntryScreen: React.FC<ManualEntryScreenProps> = ({ onSubmit, onClose
             style={[styles.submitButton, styles.footerButton]}
             onPress={() => void handleSubmit()}
             disabled={loading || (!recordId.trim() && !petId.trim() && !vetId.trim())}
+            testID="manual-entry-submit-button"
           >
             <Text style={styles.submitButtonText}>
               {loading ? 'Searching...' : 'Search Records'}

@@ -1,5 +1,5 @@
 ﻿import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import type { CompositeScreenProps } from '@react-navigation/native';
+import type { CompositeScreenProps, NavigatorScreenParams } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { Pet } from '../models/Pet';
@@ -8,11 +8,11 @@ import type { Pet } from '../models/Pet';
 export type RootStackParamList = {
   Onboarding: undefined;
   Auth: undefined;
-  Main: undefined;
+  Main: NavigatorScreenParams<MainTabParamList> | undefined;
   Forum: undefined;
   LostFound: undefined;
   // Modals
-  QRScanner: { onScanSuccess?: (data: string) => void };
+  QRScanner: { onScanSuccess?: (data: string, petId?: string) => void };
   ManualEntry: undefined;
   // Future: Payment / Subscription
   Payment: { planId?: string };
@@ -21,11 +21,11 @@ export type RootStackParamList = {
 
 // ─── Main Tab ─────────────────────────────────────────────────────────────────
 export type MainTabParamList = {
-  PetList: undefined;        // 🐾 Pets
-  Care: undefined;           // 💊 Care (Meds + Vaccines + Alerts)
-  Schedule: undefined;       // 📅 Schedule (Appointments)
-  Search: undefined;         // 🔍 Search
-  More: undefined;           // ☰  More (Profile, Community, etc.)
+  PetList: NavigatorScreenParams<PetStackParamList> | undefined; // 🐾 Pets
+  Care: undefined; // 💊 Care (Meds + Vaccines + Alerts)
+  Schedule: undefined; // 📅 Schedule (Appointments)
+  Search: undefined; // 🔍 Search
+  More: undefined; // ☰  More (Profile, Community, etc.)
 };
 
 // ─── Pet Stack (nested inside PetList tab) ────────────────────────────────────

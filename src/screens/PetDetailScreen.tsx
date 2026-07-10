@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { SkeletonCard } from '../components/SkeletonCard';
 import BreedInsightCard from '../components/BreedInsightCard';
+import { SkeletonCard } from '../components/SkeletonCard';
 import { useTheme } from '../context/ThemeContext';
 import type { Pet } from '../models/Pet';
 import breedInsightsService, { type PetBreedInsights } from '../services/breedInsightsService';
@@ -99,7 +99,12 @@ const PetDetailScreen: React.FC<Props> = ({
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <View
+          style={[
+            styles.header,
+            { backgroundColor: colors.surface, borderBottomColor: colors.border },
+          ]}
+        >
           <TouchableOpacity onPress={onBack} style={styles.backBtn}>
             <Text style={[styles.backText, { color: colors.primary }]}>‹ Back</Text>
           </TouchableOpacity>
@@ -107,7 +112,9 @@ const PetDetailScreen: React.FC<Props> = ({
           <View style={styles.editBtn} />
         </View>
         <View style={{ padding: 16 }}>
-          {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} height={72} />)}
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonCard key={i} height={72} />
+          ))}
         </View>
       </View>
     );
@@ -128,7 +135,7 @@ const PetDetailScreen: React.FC<Props> = ({
   ];
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="pet-detail-screen">
       <View style={styles.header}>
         <TouchableOpacity
           onPress={onBack}
@@ -215,6 +222,7 @@ const PetDetailScreen: React.FC<Props> = ({
             accessibilityRole="button"
             accessibilityLabel="Share pet profile"
             accessibilityHint={`Share ${pet.name}'s profile via link, social media, or QR code`}
+            testID="share-pet-profile-button"
           >
             <Text style={styles.shareBtnText}>Share Profile</Text>
           </TouchableOpacity>
