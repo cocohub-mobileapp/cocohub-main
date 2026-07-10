@@ -12,14 +12,16 @@ import {
   View,
 } from 'react-native';
 
+import { EmptyState } from '../components/EmptyState';
 import MedicalRecordAttachments from '../components/MedicalRecordAttachments';
+import { useTheme } from '../context/ThemeContext';
+import { requireBiometric, verifyPin } from '../services/authService';
 import {
   getMedicalRecords,
   searchMedicalRecords,
   type MedicalRecord,
   type RecordFilters,
 } from '../services/medicalRecordService';
-import { requireBiometric, verifyPin } from '../services/authService';
 import sessionMonitoringService from '../services/sessionMonitoringService';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -56,6 +58,7 @@ type AuthGateState = 'checking' | 'authenticated' | 'pin_required' | 'failed';
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) => {
+  const { colors } = useTheme();
   const [authState, setAuthState] = useState<AuthGateState>('checking');
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
@@ -237,10 +240,53 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
     }
   };
 
-  const clearSearch = () => {
+  const clearSearch = useCallback(() => {
     setSearchQuery('');
     setIsSearchMode(false);
-  };
+  }, []);
+
+  const resetFilters = useCallback(() => {
+    setSelectedType(undefined);
+    setStartDate('');
+    setEndDate('');
+  }, []);
+
+  const hasActiveFilters = Boolean(selectedType || startDate || endDate);
+
+  const handleEmptyStateAction = useCallback(() => {
+    if (isSearchMode) {
+      clearSearch();
+      return;
+    }
+
+    if (hasActiveFilters) {
+      resetFilters();
+      return;
+    }
+
+    onBack();
+  }, [clearSearch, hasActiveFilters, isSearchMode, onBack, resetFilters]);
+
+  const emptyStateCopy = isSearchMode
+    ? {
+        title: 'No matching records',
+        description: `No records matched "${searchQuery}". Clear the search to see the full health history again.`,
+        buttonText: 'Clear search',
+      }
+    : hasActiveFilters
+      ? {
+          title: 'No records match these filters',
+          description:
+            'Try clearing the record type or date filters to review the full medical timeline.',
+          buttonText: 'Clear filters',
+        }
+      : {
+          title: 'No medical records yet',
+          description: petName
+            ? `${petName} does not have any records yet. Start from the pet profile to add vaccinations, treatments, diagnoses, or notes.`
+            : 'This pet does not have any records yet. Start from the pet profile to add vaccinations, treatments, diagnoses, or notes.',
+          buttonText: 'Back to pet profile',
+        };
 
   // ─── Filter actions ───────────────────────────────────────────────────────
 
@@ -248,12 +294,6 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
     setIsSearchMode(false);
     setFiltersVisible(false);
     // loadFirstPage will be triggered by the useEffect dependency on selectedType/startDate/endDate
-  };
-
-  const resetFilters = () => {
-    setSelectedType(undefined);
-    setStartDate('');
-    setEndDate('');
   };
 
   // ─── FlatList callbacks ───────────────────────────────────────────────────
@@ -313,7 +353,7 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
   // ── Auth gate: show authentication screen until verified ──
   if (authState === 'checking') {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.authGateContainer}>
           <ActivityIndicator size="large" color="#10B981" />
           <Text style={styles.authGateText}>Verifying authentication…</Text>
@@ -324,7 +364,7 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
 
   if (authState === 'failed') {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.authGateContainer}>
           <Text style={styles.authGateTitle}>Authentication Required</Text>
           <Text style={styles.authGateDescription}>
@@ -340,7 +380,7 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
 
   if (authState === 'pin_required') {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.authGateContainer}>
           <Text style={styles.authGateTitle}>Enter PIN</Text>
           <Text style={styles.authGateDescription}>
@@ -357,7 +397,7 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
             }}
             keyboardType="number-pad"
             secureTextEntry
-            maxLength= {10}
+            maxLength={10}
             accessibilityLabel="PIN input"
             onSubmitEditing={handlePinSubmit}
           />
@@ -374,7 +414,7 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} accessibilityRole="button" accessibilityLabel="Back">
@@ -466,11 +506,19 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
           maxToRenderPerBatch={10}
           removeClippedSubviews
           // Layout
-          contentContainerStyle={records.length === 0 ? styles.emptyContainer : styles.list}
+          contentContainerStyle={
+            records.length === 0
+              ? [styles.emptyContainer, { backgroundColor: colors.background }]
+              : styles.list
+          }
           ListEmptyComponent={
-            <Text style={styles.emptyText}>
-              {isSearchMode ? `No results for "${searchQuery}".` : 'No records found.'}
-            </Text>
+            <EmptyState
+              icon={isSearchMode || hasActiveFilters ? 'search' : 'document-text'}
+              title={emptyStateCopy.title}
+              description={emptyStateCopy.description}
+              buttonText={emptyStateCopy.buttonText}
+              onPress={handleEmptyStateAction}
+            />
           }
         />
       )}
@@ -772,8 +820,7 @@ const styles = StyleSheet.create({
   chipClearText: { fontSize: 12, color: '#991B1B', fontWeight: '600' },
   loader: { marginTop: 40 },
   list: { padding: 12, paddingBottom: 24 },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 80 },
-  emptyText: { color: '#9CA3AF', fontSize: 15, textAlign: 'center' },
+  emptyContainer: { flexGrow: 1, backgroundColor: '#F9FAFB' },
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,
