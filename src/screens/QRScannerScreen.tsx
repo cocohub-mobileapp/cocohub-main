@@ -14,11 +14,11 @@ import {
 } from 'react-native';
 
 import PermissionRationaleModal from '../components/PermissionRationaleModal';
-import { scanQRCode } from '../services/qrCodeService';
+import { generateQR, scanQRCode } from '../services/qrCodeService';
 import { useSecureScreen } from '../utils/secureScreen';
 
 interface QRScannerScreenProps {
-  onScanSuccess: (data: string) => void;
+  onScanSuccess: (data: string, petId?: string) => void;
   onClose: () => void;
   onManualEntry: () => void;
 }
@@ -80,7 +80,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
       const result = await scanQRCode(data);
 
       if (result.valid && result.petId) {
-        onScanSuccess(data);
+        onScanSuccess(data, result.petId);
       } else {
         const isExpiredOrUsed =
           result.error === 'This code has expired' ||
@@ -101,6 +101,17 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
   };
 
   const toggleTorch = () => setTorchEnabled(!torchEnabled);
+
+  const handleMockScan = async () => {
+    const payload = await generateQR({
+      id: 'detox-qr-pet',
+      name: 'Detox QR Pet',
+      species: 'dog',
+      breed: 'Labrador',
+      microchipId: 'DETOX-QR-001',
+    });
+    await handleBarCodeScanned({ data: payload } as BarCodeScannerResult);
+  };
 
   const handlePermissionDenied = () => {
     Alert.alert(
@@ -171,6 +182,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
             onPress={toggleTorch}
             accessibilityLabel="Toggle flashlight"
             accessibilityRole="button"
+            testID="qr-scanner-torch-button"
           >
             <Text style={styles.controlButtonText}>💡</Text>
           </TouchableOpacity>
@@ -179,6 +191,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
             onPress={onManualEntry}
             accessibilityLabel="Manual entry"
             accessibilityRole="button"
+            testID="qr-scanner-manual-entry-button"
           >
             <Text style={styles.controlButtonText}>📝</Text>
           </TouchableOpacity>
@@ -209,20 +222,35 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
           onPress={onClose}
           accessibilityLabel="Close scanner"
           accessibilityRole="button"
+          testID="qr-scanner-close-button"
         >
           <Text style={styles.closeButtonText}>✕</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Scan QR Code</Text>
         <View style={styles.placeholder} />
       </View>
-      <View style={styles.scannerContainer}>{renderCameraView()}</View>
+      <View style={styles.scannerContainer} testID="qr-scanner-screen">
+        {renderCameraView()}
+      </View>
       <View style={styles.footer}>
         <Text style={styles.footerText}>Scan a Cocohub QR code to access pet records</Text>
+        {__DEV__ && (
+          <TouchableOpacity
+            style={styles.mockScanButton}
+            onPress={() => void handleMockScan()}
+            accessibilityLabel="Mock QR scan"
+            accessibilityRole="button"
+            testID="qr-scanner-mock-scan-button"
+          >
+            <Text style={styles.manualEntryButtonText}>Mock Scan</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={styles.manualEntryButton}
           onPress={onManualEntry}
           accessibilityLabel="Enter code manually"
           accessibilityRole="button"
+          testID="qr-scanner-footer-manual-entry-button"
         >
           <Text style={styles.manualEntryButtonText}>Manual Entry</Text>
         </TouchableOpacity>
@@ -382,6 +410,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
     paddingVertical: 12,
     borderRadius: 8,
+  },
+  mockScanButton: {
+    backgroundColor: '#374151',
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginBottom: 10,
   },
   manualEntryButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '600' },
 });
