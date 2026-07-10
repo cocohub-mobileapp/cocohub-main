@@ -137,7 +137,7 @@ const WeightChart: React.FC<Props> = ({
       <View
         style={[styles.container, { backgroundColor: colors.card, shadowColor: colors.shadow }]}
         accessible
-        accessibilityRole="summary"
+        accessibilityRole="image"
         accessibilityLabel={chartAccessibilityLabel}
       >
         <View style={styles.header}>
@@ -254,7 +254,7 @@ const WeightChart: React.FC<Props> = ({
         />
       ) : (
         <>
-          <View style={styles.chartContainer} importantForAccessibility="no-hide-descendants">
+          <View style={styles.chartContainer} importantForAccessibility="no">
             <Svg width={chartWidth} height={height} accessible={false}>
               <Defs>
                 <LinearGradient id="rangeGradient" x1="0" y1="0" x2="0" y2="1">
@@ -316,6 +316,11 @@ const WeightChart: React.FC<Props> = ({
                 return (
                   <React.Fragment key={idx}>
                     <Circle
+                      accessible
+                      accessibilityRole="button"
+                      accessibilityLabel={buildDataPointAccessibilityLabel(point)}
+                      accessibilityHint="Shows details for this weight entry"
+                      accessibilityState={{ selected: isSelected }}
                       cx={x}
                       cy={y}
                       r={isAnnotated ? 6 : 4}
@@ -332,6 +337,8 @@ const WeightChart: React.FC<Props> = ({
                         fill="none"
                         stroke={colors.chartLine}
                         strokeWidth="1.5"
+                        accessible={false}
+                        importantForAccessibility="no"
                       />
                     )}
                   </React.Fragment>
