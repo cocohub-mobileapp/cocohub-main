@@ -211,6 +211,7 @@ const PetListScreen: React.FC<Props> = ({ onSelectPet, onAddPet, onAdoptPet }) =
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             <EmptyState
+              emoji="🐾"
               icon="paw"
               title="No Pets Yet"
               description="Get started by adding your first pet's profile to Cocohub."
