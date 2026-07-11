@@ -18,6 +18,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useNavigation, type NavigationProp } from '@react-navigation/native';
 
 import type { Appointment } from '../models/Appointment';
 import { pickDocument, uploadDocument, type DocumentMeta } from '../services/documentService';
@@ -30,6 +31,22 @@ import {
   type TelemedicineAvailabilitySlot,
 } from '../services/telemedicineService';
 import { searchVets, type VetProfile } from '../services/vetService';
+import {
+  buildScheduledAtIso,
+  createConsultation,
+  getConsultationActor,
+  joinConsultation,
+} from '../services/webrtcService';
+
+type TelemedicineStackParamList = {
+  VideoConsultation: {
+    consultationId: string;
+    roomToken: string;
+    userId: string;
+    userRole: 'owner' | 'vet';
+    petName: string;
+  };
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,6 +88,7 @@ async function compressImageUnder2MB(uri: string): Promise<string> {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const TelemedicineScreen: React.FC = () => {
+  const navigation = useNavigation<NavigationProp<TelemedicineStackParamList>>();
   const [pets, setPets] = useState<Pet[]>([]);
   const [selectedPet, setSelectedPet] = useState<Pet | null>(null);
   const [vets, setVets] = useState<VetProfile[]>([]);
@@ -89,6 +107,10 @@ const TelemedicineScreen: React.FC = () => {
   const [attachPickerVisible, setAttachPickerVisible] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [viewingImageUri, setViewingImageUri] = useState<string | null>(null);
+  const [consultationSession, setConsultationSession] = useState<{
+    consultationId: string;
+    roomToken: string;
+  } | null>(null);
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -205,6 +227,51 @@ const TelemedicineScreen: React.FC = () => {
       Alert.alert('No-show reported', 'The appointment has been updated.');
     } catch (err) {
       Alert.alert('Unable to update appointment', String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleJoinVideoCall = async () => {
+    if (!appointment || !selectedPet || !selectedVet) return;
+
+    try {
+      setLoading(true);
+      let consultationId = consultationSession?.consultationId;
+      let roomToken = consultationSession?.roomToken;
+
+      if (!consultationId) {
+        const scheduledAt = buildScheduledAtIso(
+          appointment.date,
+          appointment.time,
+          appointment.timeZone ?? localTimeZone,
+          selectedSlot?.startUtc,
+        );
+        const created = await createConsultation({
+          petId: selectedPet.id,
+          vetId: selectedVet.id,
+          scheduledAt,
+          durationMinutes: appointment.durationMinutes ?? 30,
+        });
+        consultationId = created.id;
+      }
+
+      if (!roomToken) {
+        const joined = await joinConsultation(consultationId);
+        roomToken = joined.roomToken;
+        setConsultationSession({ consultationId, roomToken });
+      }
+
+      const { userId, role } = await getConsultationActor();
+      navigation.navigate('VideoConsultation', {
+        consultationId,
+        roomToken,
+        userId,
+        userRole: role,
+        petName: selectedPet.name,
+      });
+    } catch (err) {
+      Alert.alert('Unable to join video call', String(err));
     } finally {
       setLoading(false);
     }
@@ -472,6 +539,14 @@ const TelemedicineScreen: React.FC = () => {
             </Text>
             <Text style={styles.detailText}>Video link:</Text>
             <Text style={styles.linkText}>{appointment.videoCallUrl}</Text>
+
+            <Pressable
+              style={styles.primaryBtn}
+              onPress={() => void handleJoinVideoCall()}
+              disabled={loading}
+            >
+              <Text style={styles.primaryBtnText}>Join Video Consultation</Text>
+            </Pressable>
 
             {!appointment.questionnaireRespondedAt ? (
               <>

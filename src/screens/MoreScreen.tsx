@@ -29,6 +29,7 @@ const EmergencyContactsScreen = React.lazy(() => import('./EmergencyContactsScre
 const ReferralScreen = React.lazy(() => import('./ReferralScreen'));
 const SettingsScreen = React.lazy(() => import('./SettingsScreen'));
 const SymptomCheckerScreen = React.lazy(() => import('./SymptomCheckerScreen'));
+const VideoConsultationScreen = React.lazy(() => import('./VideoConsultationScreen'));
 
 type MoreStackParamList = {
   MoreHub: undefined;
@@ -36,6 +37,13 @@ type MoreStackParamList = {
   Notifications: undefined;
   Community: undefined;
   Telemedicine: undefined;
+  VideoConsultation: {
+    consultationId: string;
+    roomToken: string;
+    userId: string;
+    userRole: 'owner' | 'vet';
+    petName: string;
+  };
   Emergency: undefined;
   Referrals: undefined;
   Settings: undefined;
@@ -172,6 +180,23 @@ export default function MoreScreen() {
       </MoreStack.Screen>
       <MoreStack.Screen name="Telemedicine" options={{ title: 'Telemedicine' }}>
         {() => <Lazy><TelemedicineScreen /></Lazy>}
+      </MoreStack.Screen>
+      <MoreStack.Screen
+        name="VideoConsultation"
+        options={{ title: 'Video Consultation', headerShown: false }}
+      >
+        {({ navigation, route }) => (
+          <Lazy>
+            <VideoConsultationScreen
+              consultationId={route.params.consultationId}
+              roomToken={route.params.roomToken}
+              userId={route.params.userId}
+              userRole={route.params.userRole}
+              petName={route.params.petName}
+              onEnd={() => navigation.goBack()}
+            />
+          </Lazy>
+        )}
       </MoreStack.Screen>
       <MoreStack.Screen name="Emergency" options={{ title: 'Emergency SOS' }}>
         {() => <Lazy><EmergencyContactsScreen /></Lazy>}

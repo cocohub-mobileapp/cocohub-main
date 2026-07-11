@@ -36,6 +36,7 @@ import { io, type Socket } from 'socket.io-client';
 
 import config from '../config';
 import { logError } from '../utils/errorLogger';
+import { formatCallDuration, recordConsultationConsent } from '../services/webrtcService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -45,7 +46,7 @@ interface Props {
   consultationId: string;
   roomToken: string;
   userId: string;
-  userRole: 'OWNER' | 'VET';
+  userRole: 'owner' | 'vet';
   petName: string;
   onEnd: () => void;
 }
@@ -113,10 +114,14 @@ const VideoConsultationScreen: React.FC<Props> = ({
   const [estimatedWait, setEstimatedWait] = useState<number>(0);
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [consentGiven, setConsentGiven] = useState(false);
+  const [callStartedAt, setCallStartedAt] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [isReconnecting, setIsReconnecting] = useState(false);
 
   const socketRef = useRef<Socket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const qualityTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Accumulated stats for Sentry post-call logging */
   const statsHistoryRef = useRef<NetworkStats[]>([]);
 
@@ -252,9 +257,38 @@ const VideoConsultationScreen: React.FC<Props> = ({
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === 'connected') {
           setCallState('in_call');
+          setIsReconnecting(false);
+          if (reconnectTimerRef.current) {
+            clearTimeout(reconnectTimerRef.current);
+            reconnectTimerRef.current = null;
+          }
+          setCallStartedAt((prev) => prev ?? Date.now());
           startQualityMonitor(pc);
-        } else if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
+        } else if (pc.connectionState === 'disconnected') {
           setNetworkQuality('poor');
+          setIsReconnecting(true);
+          if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+          reconnectTimerRef.current = setTimeout(() => {
+            if (pc.connectionState !== 'connected' && socketRef.current) {
+              void pc
+                .createOffer({ iceRestart: true })
+                .then(async (offer) => {
+                  await pc.setLocalDescription(new RTCSessionDescription(offer));
+                  socketRef.current?.emit('offer', { consultationId, sdp: offer });
+                })
+                .catch((err) => {
+                  logError(err instanceof Error ? err : new Error(String(err)), {
+                    screen: 'VideoConsultationScreen',
+                    action: 'iceRestart',
+                  });
+                });
+            }
+          }, 3000);
+        } else if (['failed', 'closed'].includes(pc.connectionState)) {
+          setNetworkQuality('poor');
+          if (pc.connectionState === 'failed') {
+            setIsReconnecting(true);
+          }
         }
       };
 
@@ -276,7 +310,7 @@ const VideoConsultationScreen: React.FC<Props> = ({
       // ---- Signaling event handlers -------------------------------------
       socket.on('peer_joined', async ({ role }: { role: string }) => {
         // Caller (owner) creates the offer
-        if (userRole === 'OWNER' || role === 'OWNER') {
+        if (userRole === 'owner' || role === 'owner') {
           try {
             const offer = await pc.createOffer({});
             await pc.setLocalDescription(new RTCSessionDescription(offer));
@@ -378,8 +412,17 @@ const VideoConsultationScreen: React.FC<Props> = ({
     return () => {
       socket.disconnect();
       if (qualityTimerRef.current) clearInterval(qualityTimerRef.current);
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
     };
   }, [joinRoom]);
+
+  useEffect(() => {
+    if (callState !== 'in_call' || callStartedAt == null) return;
+    const timer = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - callStartedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [callState, callStartedAt]);
 
   // ---- Controls ----------------------------------------------------------
   const toggleMute = useCallback(() => {
@@ -447,6 +490,7 @@ const VideoConsultationScreen: React.FC<Props> = ({
 
   const endCall = useCallback(async () => {
     if (qualityTimerRef.current) clearInterval(qualityTimerRef.current);
+    if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
 
     // Log post-call stats to Sentry
     if (statsHistoryRef.current.length > 0) {
@@ -506,11 +550,7 @@ const VideoConsultationScreen: React.FC<Props> = ({
                 onPress={() => {
                   setConsentGiven(true);
                   setShowConsentModal(false);
-                  // Notify backend of consent
-                  void fetch(`${config.api.baseUrl}/consultations/${consultationId}/consent`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                  }).catch(() => null);
+                  void recordConsultationConsent(consultationId).catch(() => null);
                 }}
               >
                 <Text style={styles.consentBtnTextAccept}>I Consent</Text>
@@ -624,6 +664,16 @@ const VideoConsultationScreen: React.FC<Props> = ({
           </View>
         );
       })()}
+
+      <View style={styles.callTimerBadge} accessibilityLabel="Call duration">
+        <Text style={styles.callTimerText}>{formatCallDuration(elapsedSeconds)}</Text>
+      </View>
+
+      {isReconnecting && (
+        <View style={styles.reconnectBanner}>
+          <Text style={styles.reconnectText}>Reconnecting…</Text>
+        </View>
+      )}
 
       {/* Screen sharing indicator */}
       {isSharingScreen && (
@@ -777,6 +827,26 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   qualityText: { color: '#fff', fontSize: 11, fontWeight: '600', marginLeft: 4 },
+  callTimerBadge: {
+    position: 'absolute',
+    top: 56,
+    right: 16,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  callTimerText: { color: '#fff', fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  reconnectBanner: {
+    position: 'absolute',
+    top: 96,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(255,152,0,0.92)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  reconnectText: { color: '#fff', fontWeight: '700', fontSize: 13 },
   sharingBadge: {
     position: 'absolute',
     top: 100,

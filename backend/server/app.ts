@@ -39,6 +39,7 @@ import searchRouter from './routes/search';
 import supportRouter from './routes/support';
 import syncRouter from './routes/sync';
 import telemedicineRouter from './routes/telemedicine';
+import consultationsRouter from './routes/consultations';
 import travelCertificatesRouter from './routes/travelCertificates';
 import usersRouter from './routes/users';
 import vaccinationsRouter from './routes/vaccinations';
@@ -171,6 +172,7 @@ export function createApp(): Express {
   api.use('/medical-records', dataRateLimiter, medicalRecordsRouter);
   api.use('/appointments', dataRateLimiter, appointmentsRouter);
   api.use('/telemedicine', telemedicineRouter);
+  api.use('/consultations', dataRateLimiter, consultationsRouter);
   api.use('/medications', dataRateLimiter, medicationsRouter);
   api.use('/vaccinations', vaccinationsRouter);
   api.use('/import', dataRateLimiter, importRouter);
