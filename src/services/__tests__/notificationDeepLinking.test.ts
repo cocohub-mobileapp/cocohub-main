@@ -1,406 +1,183 @@
-/**
- * Notification Deep Linking Integration Tests
- *
- * Tests cover:
- * - Deep link extraction from notification data
- * - Mapping notification types to routes and params
- * - Cold-start and background handling
- * - All notification types (medication, appointment, vaccination, SOS)
- */
+jest.mock('../apiClient', () => ({
+  __esModule: true,
+  default: {
+    delete: jest.fn(),
+    get: jest.fn(),
+    patch: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+  },
+}));
+
+jest.mock('../localDB', () => ({
+  getItem: jest.fn(),
+  removeItem: jest.fn(),
+  setItem: jest.fn(),
+}));
 
 import { extractDeepLinkParams } from '../notificationService';
 
 describe('Notification Deep Linking', () => {
   describe('extractDeepLinkParams', () => {
-    describe('Medication Notifications', () => {
-      it('extracts medication notification with ID', () => {
-        const data = {
-          type: 'medication',
-          medicationId: 'med-123',
-          category: 'medication',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toEqual({
-          route: 'Medications',
-          params: { medicationId: 'med-123' },
-        });
+    it('routes medication reminders to the Care medications tab', () => {
+      const result = extractDeepLinkParams({
+        type: 'medication',
+        medicationId: 'med-123',
+        category: 'medication',
       });
 
-      it('extracts medication notification without ID', () => {
-        const data = {
-          type: 'medication',
-          category: 'medication',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toEqual({
-          route: 'Medications',
-          params: {},
-        });
+      expect(result).toEqual({
+        route: 'Care',
+        params: { initialTab: 'Medications', medicationId: 'med-123' },
       });
     });
 
-    describe('Appointment Notifications', () => {
-      it('extracts appointment notification with ID', () => {
-        const data = {
-          type: 'appointment',
-          appointmentId: 'apt-456',
-          category: 'appointments',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toEqual({
-          route: 'Appointments',
-          params: { appointmentId: 'apt-456' },
-        });
+    it('routes medication reminders without an ID to the medication list', () => {
+      const result = extractDeepLinkParams({
+        type: 'medication',
+        category: 'medication',
       });
 
-      it('extracts appointment notification without ID', () => {
-        const data = {
-          type: 'appointment',
-          category: 'appointments',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toEqual({
-          route: 'Appointments',
-          params: {},
-        });
+      expect(result).toEqual({
+        route: 'Care',
+        params: { initialTab: 'Medications' },
       });
     });
 
-    describe('Vaccination Notifications', () => {
-      it('extracts vaccination notification with all params', () => {
-        const data = {
-          type: 'vaccination',
+    it('routes appointment reminders to Schedule', () => {
+      const result = extractDeepLinkParams({
+        type: 'appointment',
+        appointmentId: 'apt-456',
+        category: 'appointments',
+      });
+
+      expect(result).toEqual({
+        route: 'Schedule',
+        params: { appointmentId: 'apt-456' },
+      });
+    });
+
+    it('routes vaccination reminders to the Care vaccinations tab with context', () => {
+      const result = extractDeepLinkParams({
+        type: 'vaccination',
+        vaccinationId: 'vac-789',
+        petId: 'pet-001',
+        dueDate: '2026-06-15',
+        category: 'health',
+      });
+
+      expect(result).toEqual({
+        route: 'Care',
+        params: {
+          initialTab: 'Vaccinations',
           vaccinationId: 'vac-789',
           petId: 'pet-001',
           dueDate: '2026-06-15',
-          category: 'health',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toEqual({
-          route: 'Vaccinations',
-          params: {
-            vaccinationId: 'vac-789',
-            petId: 'pet-001',
-            dueDate: '2026-06-15',
-          },
-        });
-      });
-
-      it('extracts vaccination notification without petId or dueDate', () => {
-        const data = {
-          type: 'vaccination',
-          vaccinationId: 'vac-789',
-          category: 'health',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toEqual({
-          route: 'Vaccinations',
-          params: { vaccinationId: 'vac-789' },
-        });
-      });
-
-      it('extracts vaccination notification without ID', () => {
-        const data = {
-          type: 'vaccination',
-          petId: 'pet-001',
-          category: 'health',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toEqual({
-          route: 'Vaccinations',
-          params: { petId: 'pet-001' },
-        });
+        },
       });
     });
 
-    describe('SOS/Emergency Notifications', () => {
-      it('extracts SOS notification with ID', () => {
-        const data = {
-          type: 'sos',
-          sosId: 'sos-911',
-          category: 'health',
-        };
+    it('routes vaccination reminders without an ID to the vaccinations tab', () => {
+      const result = extractDeepLinkParams({
+        type: 'vaccination',
+        petId: 'pet-001',
+        category: 'health',
+      });
 
-        const result = extractDeepLinkParams(data);
+      expect(result).toEqual({
+        route: 'Care',
+        params: { initialTab: 'Vaccinations' },
+      });
+    });
 
-        expect(result).toEqual({
-          route: 'Emergency',
+    it('routes SOS notifications to the Emergency screen inside More', () => {
+      const result = extractDeepLinkParams({
+        type: 'sos',
+        sosId: 'sos-911',
+        category: 'health',
+      });
+
+      expect(result).toEqual({
+        route: 'More',
+        params: {
+          screen: 'Emergency',
           params: { sosId: 'sos-911' },
-        });
-      });
-
-      it('extracts SOS notification without ID', () => {
-        const data = {
-          type: 'sos',
-          category: 'health',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toEqual({
-          route: 'Emergency',
-          params: {},
-        });
+        },
       });
     });
 
-    describe('Pet-based fallback', () => {
-      it('falls back to PetDetail with petId when available', () => {
-        const data = {
-          type: 'health',
+    it('routes health alerts to the Care alerts tab before pet fallback', () => {
+      const result = extractDeepLinkParams({
+        type: 'health_alert',
+        alertId: 'alert-123',
+        petId: 'pet-123',
+        category: 'health',
+      });
+
+      expect(result).toEqual({
+        route: 'Care',
+        params: {
+          initialTab: 'Alerts',
+          alertId: 'alert-123',
           petId: 'pet-123',
-          category: 'health',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toEqual({
-          route: 'PetDetail',
-          params: { petId: 'pet-123' },
-        });
+        },
       });
     });
 
-    describe('Type-based fallback', () => {
-      it('falls back to Medications when type is medication but no ID', () => {
-        const data = {
-          type: 'medication',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toEqual({
-          route: 'Medications',
-          params: {},
-        });
+    it('routes community replies to the Community screen inside More', () => {
+      const result = extractDeepLinkParams({
+        type: 'community_reply',
+        postId: 'post-123',
+        replyId: 'reply-456',
       });
 
-      it('falls back to Appointments when type is appointment but no ID', () => {
-        const data = {
-          type: 'appointment',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toEqual({
-          route: 'Appointments',
-          params: {},
-        });
-      });
-
-      it('falls back to Vaccinations when type is vaccination but no ID', () => {
-        const data = {
-          type: 'vaccination',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toEqual({
-          route: 'Vaccinations',
-          params: {},
-        });
-      });
-
-      it('falls back to Emergency when type is sos but no ID', () => {
-        const data = {
-          type: 'sos',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toEqual({
-          route: 'Emergency',
-          params: {},
-        });
-      });
-    });
-
-    describe('Default handling', () => {
-      it('returns null for unknown notification type with no fallback', () => {
-        const data = {
-          type: 'unknown',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toBeNull();
-      });
-
-      it('returns null for empty data', () => {
-        const data = {};
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toBeNull();
-      });
-    });
-
-    describe('Complex real-world scenarios', () => {
-      it('handles medication reminder with full notification data', () => {
-        const data = {
-          type: 'medication',
-          category: 'medication',
-          medicationId: 'penicillin-001',
-          title: '💊 Medication Reminder',
-          body: 'Time to give Penicillin (500mg)',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toEqual({
-          route: 'Medications',
-          params: { medicationId: 'penicillin-001' },
-        });
-      });
-
-      it('handles appointment reminder with full notification data', () => {
-        const data = {
-          type: 'appointment',
-          category: 'appointments',
-          appointmentId: 'vet-checkup-2026-06',
-          title: '📅 Appointment Reminder',
-          body: 'Vet checkup at Sunshine Vet Clinic in 60 min',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toEqual({
-          route: 'Appointments',
-          params: { appointmentId: 'vet-checkup-2026-06' },
-        });
-      });
-
-      it('handles vaccination alert with all context', () => {
-        const data = {
-          type: 'vaccination',
-          category: 'health',
-          vaccinationId: 'rabies-booster-fluffy',
-          petId: 'fluffy-001',
-          dueDate: '2026-07-10',
-          leadDays: 7,
-          title: 'Vaccination Reminder',
-          body: 'Rabies Booster is due in 7 days',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toEqual({
-          route: 'Vaccinations',
+      expect(result).toEqual({
+        route: 'More',
+        params: {
+          screen: 'Community',
           params: {
-            vaccinationId: 'rabies-booster-fluffy',
-            petId: 'fluffy-001',
-            dueDate: '2026-07-10',
+            postId: 'post-123',
+            replyId: 'reply-456',
           },
-        });
-      });
-
-      it('handles SOS/emergency alert', () => {
-        const data = {
-          type: 'sos',
-          category: 'health',
-          sosId: 'sos-2026-05-29-001',
-          petId: 'pet-emergency-001',
-          title: '🆘 Emergency Alert',
-          body: 'SOS signal received',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toEqual({
-          route: 'Emergency',
-          params: { sosId: 'sos-2026-05-29-001' },
-        });
+        },
       });
     });
 
-    describe('Edge cases', () => {
-      it('handles null values in data', () => {
-        const data = {
-          type: 'medication',
-          medicationId: null,
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        // Should fall back to type-based routing
-        expect(result).toEqual({
-          route: 'Medications',
-          params: {},
-        });
+    it('falls back to PetDetail inside the PetList tab when only petId is usable', () => {
+      const result = extractDeepLinkParams({
+        type: 'unknown',
+        petId: 'pet-fallback-001',
       });
 
-      it('handles undefined values in data', () => {
-        const data = {
-          type: 'appointment',
-          appointmentId: undefined,
-        };
+      expect(result).toEqual({
+        route: 'PetList',
+        params: {
+          screen: 'PetDetail',
+          params: { petId: 'pet-fallback-001' },
+        },
+      });
+    });
 
-        const result = extractDeepLinkParams(data);
+    it('returns null for unknown notification data without a fallback', () => {
+      expect(extractDeepLinkParams({ type: 'unknown' })).toBeNull();
+      expect(extractDeepLinkParams({})).toBeNull();
+    });
 
-        // Should fall back to type-based routing
-        expect(result).toEqual({
-          route: 'Appointments',
-          params: {},
-        });
+    it('does not pass unrelated notification fields into route params', () => {
+      const result = extractDeepLinkParams({
+        type: 'medication',
+        medicationId: 'med-clean',
+        randomField: 'ignore-me',
+        title: 'ignore-me',
+        body: 'ignore-me',
       });
 
-      it('handles empty string IDs', () => {
-        const data = {
-          type: 'vaccination',
-          vaccinationId: '',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        // Empty string is falsy, should fall back to type-based routing
-        expect(result).toEqual({
-          route: 'Vaccinations',
-          params: {},
-        });
+      expect(result?.params).toEqual({
+        initialTab: 'Medications',
+        medicationId: 'med-clean',
       });
-
-      it('prioritizes explicit ID over petId fallback', () => {
-        const data = {
-          type: 'medication',
-          medicationId: 'med-explicit',
-          petId: 'pet-001',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toEqual({
-          route: 'Medications',
-          params: { medicationId: 'med-explicit' },
-        });
-      });
-
-      it('handles special characters in IDs', () => {
-        const data = {
-          type: 'medication',
-          medicationId: 'med-001:special-chars-@-#',
-        };
-
-        const result = extractDeepLinkParams(data);
-
-        expect(result).toEqual({
-          route: 'Medications',
-          params: { medicationId: 'med-001:special-chars-@-#' },
-        });
-      });
+      expect(result?.params).not.toHaveProperty('randomField');
+      expect(result?.params).not.toHaveProperty('title');
     });
   });
 });

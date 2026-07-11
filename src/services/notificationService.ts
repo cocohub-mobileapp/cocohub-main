@@ -65,6 +65,7 @@ export type NotificationGroup =
   | 'appointment'
   | 'vaccination'
   | 'alert'
+  | 'community'
   | 'scheduled'
   | 'sos';
 export type NotificationAction =
@@ -102,6 +103,7 @@ const CATEGORY_BY_GROUP: Record<NotificationGroup, NotificationCategory> = {
   appointment: 'appointments',
   vaccination: 'health',
   alert: 'health',
+  community: 'general',
   scheduled: 'general',
   sos: 'health',
 };
@@ -177,23 +179,25 @@ const getNotificationUrl = (data: Record<string, unknown> = {}): string => {
   const deepLink = data.deepLink ?? data.url;
   if (typeof deepLink === 'string' && deepLink.length > 0) return deepLink;
 
-  if (typeof data.petId === 'string') return `cocohub://pets/${encodeURIComponent(data.petId)}`;
   if (data.type === 'medication' && typeof data.medicationId === 'string') {
-    return `cocohub://medications?medicationId=${encodeURIComponent(data.medicationId)}`;
+    return `cocohub://care?initialTab=Medications&medicationId=${encodeURIComponent(data.medicationId)}`;
   }
   if (data.type === 'appointment' && typeof data.appointmentId === 'string') {
-    return `cocohub://appointments?appointmentId=${encodeURIComponent(data.appointmentId)}`;
+    return `cocohub://schedule?appointmentId=${encodeURIComponent(data.appointmentId)}`;
   }
   if (data.type === 'vaccination' && typeof data.vaccinationId === 'string') {
-    return `cocohub://vaccinations?vaccinationId=${encodeURIComponent(data.vaccinationId)}`;
+    return `cocohub://care?initialTab=Vaccinations&vaccinationId=${encodeURIComponent(data.vaccinationId)}`;
   }
   if (data.type === 'sos' && typeof data.sosId === 'string') {
-    return `cocohub://emergency?sosId=${encodeURIComponent(data.sosId)}`;
+    return `cocohub://more/emergency?sosId=${encodeURIComponent(data.sosId)}`;
   }
-  if (data.type === 'medication') return 'cocohub://medications';
-  if (data.type === 'appointment') return 'cocohub://appointments';
-  if (data.type === 'vaccination') return 'cocohub://vaccinations';
-  if (data.type === 'sos') return 'cocohub://emergency';
+  if (data.type === 'alert') return 'cocohub://care?initialTab=Alerts';
+  if (data.type === 'community') return 'cocohub://more/community';
+  if (typeof data.petId === 'string') return `cocohub://pets/${encodeURIComponent(data.petId)}`;
+  if (data.type === 'medication') return 'cocohub://care?initialTab=Medications';
+  if (data.type === 'appointment') return 'cocohub://schedule';
+  if (data.type === 'vaccination') return 'cocohub://care?initialTab=Vaccinations';
+  if (data.type === 'sos') return 'cocohub://more/emergency';
 
   return 'cocohub://';
 };
@@ -242,7 +246,7 @@ export const registerNotificationActions = async (): Promise<void> => {
 
   await Promise.all([
     Notifications.setNotificationCategoryAsync('medication', medicationActions),
-    ...['appointment', 'vaccination', 'alert', 'scheduled'].map((category) =>
+    ...['appointment', 'vaccination', 'alert', 'community', 'scheduled'].map((category) =>
       Notifications.setNotificationCategoryAsync(category, defaultActions),
     ),
   ]);
@@ -297,59 +301,92 @@ export const openApp = async (notification: Notifications.Notification): Promise
 export const extractDeepLinkParams = (
   data: Record<string, unknown>,
 ): { route: string; params: Record<string, any> } | null => {
-  const type = data.type as NotificationGroup | undefined;
+  const type = typeof data.type === 'string' ? data.type : undefined;
 
   if (type === 'medication' && data.medicationId) {
     return {
-      route: 'Medications',
-      params: { medicationId: data.medicationId },
+      route: 'Care',
+      params: { initialTab: 'Medications', medicationId: data.medicationId },
     };
   }
 
   if (type === 'appointment' && data.appointmentId) {
     return {
-      route: 'Appointments',
+      route: 'Schedule',
       params: { appointmentId: data.appointmentId },
     };
   }
 
   if (type === 'vaccination' && data.vaccinationId) {
-    const params: Record<string, any> = { vaccinationId: data.vaccinationId };
+    const params: Record<string, any> = {
+      initialTab: 'Vaccinations',
+      vaccinationId: data.vaccinationId,
+    };
     if (data.petId) params.petId = data.petId;
     if (data.dueDate) params.dueDate = data.dueDate;
     return {
-      route: 'Vaccinations',
+      route: 'Care',
       params,
     };
   }
 
   if (type === 'sos' && data.sosId) {
     return {
-      route: 'Emergency',
-      params: { sosId: data.sosId },
+      route: 'More',
+      params: {
+        screen: 'Emergency',
+        params: { sosId: data.sosId },
+      },
     };
   }
 
-  // Fallback to petId if available
-  if (data.petId) {
+  if (type === 'alert' || type === 'health' || type === 'health_alert') {
+    const params: Record<string, any> = { initialTab: 'Alerts' };
+    if (data.alertId) params.alertId = data.alertId;
+    if (data.petId) params.petId = data.petId;
     return {
-      route: 'PetDetail',
-      params: { petId: data.petId },
+      route: 'Care',
+      params,
+    };
+  }
+
+  if (type === 'community' || type === 'community_reply' || type === 'reply') {
+    const params: Record<string, any> = {};
+    if (data.postId) params.postId = data.postId;
+    if (data.replyId) params.replyId = data.replyId;
+    if (data.commentId) params.commentId = data.commentId;
+    return {
+      route: 'More',
+      params: {
+        screen: 'Community',
+        params,
+      },
     };
   }
 
   // Type-based fallback without specific ID
   if (type === 'medication') {
-    return { route: 'Medications', params: {} };
+    return { route: 'Care', params: { initialTab: 'Medications' } };
   }
   if (type === 'appointment') {
-    return { route: 'Appointments', params: {} };
+    return { route: 'Schedule', params: {} };
   }
   if (type === 'vaccination') {
-    return { route: 'Vaccinations', params: {} };
+    return { route: 'Care', params: { initialTab: 'Vaccinations' } };
   }
   if (type === 'sos') {
-    return { route: 'Emergency', params: {} };
+    return { route: 'More', params: { screen: 'Emergency', params: {} } };
+  }
+
+  // Fallback to petId if available
+  if (data.petId) {
+    return {
+      route: 'PetList',
+      params: {
+        screen: 'PetDetail',
+        params: { petId: data.petId },
+      },
+    };
   }
 
   return null;

@@ -5,9 +5,11 @@
  * to avoid native dependency conflicts.
  */
 
-import React, { Suspense, useState } from 'react';
+import { useRoute, type RouteProp } from '@react-navigation/native';
+import React, { Suspense, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import type { CareTabKey, MainTabParamList } from './types';
 import GlobalPetSelector from '../components/GlobalPetSelector';
 import { useTheme } from '../context/ThemeContext';
 
@@ -15,9 +17,7 @@ const MedicationScreen = React.lazy(() => import('../screens/MedicationScreen'))
 const VaccinationScreen = React.lazy(() => import('../screens/VaccinationScreen'));
 const HealthAlertsScreen = React.lazy(() => import('../screens/HealthAlertsScreen'));
 
-type CareTab = 'Medications' | 'Vaccinations' | 'Alerts';
-
-const TABS: { key: CareTab; label: string }[] = [
+const TABS: { key: CareTabKey; label: string }[] = [
   { key: 'Medications', label: '💊 Meds' },
   { key: 'Vaccinations', label: '💉 Vaccines' },
   { key: 'Alerts', label: '⚠️ Alerts' },
@@ -33,7 +33,15 @@ function Loader() {
 
 export default function CareNavigator() {
   const { colors } = useTheme();
-  const [active, setActive] = useState<CareTab>('Medications');
+  const route = useRoute<RouteProp<MainTabParamList, 'Care'>>();
+  const requestedTab = route.params?.initialTab;
+  const [active, setActive] = useState<CareTabKey>(requestedTab ?? 'Medications');
+
+  useEffect(() => {
+    if (requestedTab) {
+      setActive(requestedTab);
+    }
+  }, [requestedTab]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -41,18 +49,28 @@ export default function CareNavigator() {
       <GlobalPetSelector />
 
       {/* Top tab bar */}
-      <View style={[styles.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.tabBar,
+          { backgroundColor: colors.surface, borderBottomColor: colors.border },
+        ]}
+      >
         {TABS.map((tab) => {
           const isActive = active === tab.key;
           return (
             <TouchableOpacity
               key={tab.key}
-              style={[styles.tab, isActive && { borderBottomColor: colors.primary, borderBottomWidth: 3 }]}
+              style={[
+                styles.tab,
+                isActive && { borderBottomColor: colors.primary, borderBottomWidth: 3 },
+              ]}
               onPress={() => setActive(tab.key)}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
             >
-              <Text style={[styles.tabLabel, { color: isActive ? colors.primary : colors.placeholder }]}>
+              <Text
+                style={[styles.tabLabel, { color: isActive ? colors.primary : colors.placeholder }]}
+              >
                 {tab.label}
               </Text>
             </TouchableOpacity>
@@ -64,7 +82,7 @@ export default function CareNavigator() {
       <View style={{ flex: 1 }}>
         <Suspense fallback={<Loader />}>
           {active === 'Medications' && <MedicationScreen />}
-          {active === 'Vaccinations' && <VaccinationScreen />}
+          {active === 'Vaccinations' && <VaccinationScreen petId={route.params?.petId} />}
           {active === 'Alerts' && <HealthAlertsScreen />}
         </Suspense>
       </View>
