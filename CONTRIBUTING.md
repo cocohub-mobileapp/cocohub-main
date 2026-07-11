@@ -114,6 +114,8 @@ Email:    owner1@example.com
 Password: Password123!
 ```
 
+**Stellar testnet (blockchain features):** see [docs/STELLAR-SETUP.md](./docs/STELLAR-SETUP.md) for keypair creation, Friendbot funding, `.env` configuration, and local `blockchainService.ts` testing.
+
 ---
 
 ## Development Workflow

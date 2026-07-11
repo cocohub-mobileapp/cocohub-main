@@ -208,6 +208,8 @@ npm run e2e:test      # Maestro E2E smoke test
 
 We welcome everyone — from first-timers to senior engineers. See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
+**Blockchain local dev:** [docs/STELLAR-SETUP.md](./docs/STELLAR-SETUP.md) — testnet keypair, Friendbot, `.env`, and `blockchainService.ts` smoke tests.
+
 ### Good first issues
 Look for issues tagged [`good first issue`](https://github.com/cocohub-mobileapp/cocohub-main/labels/good%20first%20issue) — these are scoped, self-contained, and come with a bounty.
 
