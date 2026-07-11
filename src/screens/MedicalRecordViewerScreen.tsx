@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 
 import MedicalRecordAttachments from '../components/MedicalRecordAttachments';
+import { EmptyState } from '../components/EmptyState';
+import { useTheme } from '../context/ThemeContext';
 import {
   getMedicalRecords,
   searchMedicalRecords,
@@ -56,6 +58,7 @@ type AuthGateState = 'checking' | 'authenticated' | 'pin_required' | 'failed';
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) => {
+  const { colors } = useTheme();
   const [authState, setAuthState] = useState<AuthGateState>('checking');
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
@@ -468,9 +471,34 @@ const MedicalRecordViewerScreen: React.FC<Props> = ({ petId, petName, onBack }) 
           // Layout
           contentContainerStyle={records.length === 0 ? styles.emptyContainer : styles.list}
           ListEmptyComponent={
-            <Text style={styles.emptyText}>
-              {isSearchMode ? `No results for "${searchQuery}".` : 'No records found.'}
-            </Text>
+            isSearchMode || selectedType || startDate || endDate ? (
+              <View style={styles.emptyContainer}>
+                <Text style={[styles.emptyText, { color: colors.placeholder }]}>
+                  {isSearchMode
+                    ? `No results for "${searchQuery}".`
+                    : 'No records match these filters.'}
+                </Text>
+                <TouchableOpacity style={styles.resetBtn} onPress={resetFilters}>
+                  <Text style={[styles.resetBtnText, { color: colors.primary }]}>Clear filters</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <EmptyState
+                emoji="🩺"
+                icon="document-text-outline"
+                title="No medical records yet"
+                description={`Build ${petName ?? 'your pet'}'s health history by adding vaccinations, treatments, or visit notes from the Care tab.`}
+                buttonText="Back to pet profile"
+                onPress={onBack}
+                secondaryText="How do I add records?"
+                onSecondaryPress={() =>
+                  Alert.alert(
+                    'Adding records',
+                    'Open the Care tab from your pet profile to log vaccinations, treatments, and vet visits. You can also import paper records with the PDF scanner.',
+                  )
+                }
+              />
+            )
           }
         />
       )}
