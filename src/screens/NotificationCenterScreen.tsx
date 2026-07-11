@@ -8,6 +8,7 @@
  *  - Empty / loading / error states
  *  - Deep-link navigation on item press
  */
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import React, { useCallback, useEffect, useReducer, useRef, useState, useMemo } from 'react';
 import {
@@ -21,7 +22,6 @@ import {
   Switch,
   Image,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import NotificationItem, { resolveNavPayload } from '../components/NotificationItem';
 import { SkeletonCard } from '../components/SkeletonCard';
@@ -41,7 +41,7 @@ import {
 } from '../services/notificationStore';
 import { getAllPets, type Pet } from '../services/petService';
 
-type ListItem = 
+type ListItem =
   | { type: 'header'; id: string; petId: string; unreadCount: number; isCollapsed: boolean }
   | { type: 'notification'; id: string; notification: AppNotification };
 
@@ -162,7 +162,10 @@ const FILTERS: { key: Filter; label: string }[] = [
 
 export default function NotificationCenterScreen() {
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
-  const navigation = useNavigation<{ navigate: (screen: string, params?: unknown) => void }>();
+  const navigation = useNavigation<{
+    navigate: (screen: string, params?: unknown) => void;
+    getParent?: () => { navigate: (screen: string, params?: unknown) => void } | undefined;
+  }>();
   const isMounted = useRef(true);
   const { colors } = useTheme();
   const { show: showToast } = useToast();
@@ -177,16 +180,20 @@ export default function NotificationCenterScreen() {
   });
 
   useEffect(() => {
-    AsyncStorage.getItem('notification_group_by_pet').then(val => {
-      if (val !== null && isMounted.current) setGroupByPet(val === 'true');
-    }).catch(() => {});
-    
-    getAllPets().then((petList) => {
-      if (!isMounted.current) return;
-      const map: Record<string, Pet> = {};
-      petList.forEach(p => map[p.id] = p);
-      setPets(map);
-    }).catch(() => {});
+    AsyncStorage.getItem('notification_group_by_pet')
+      .then((val) => {
+        if (val !== null && isMounted.current) setGroupByPet(val === 'true');
+      })
+      .catch(() => {});
+
+    getAllPets()
+      .then((petList) => {
+        if (!isMounted.current) return;
+        const map: Record<string, Pet> = {};
+        petList.forEach((p) => (map[p.id] = p));
+        setPets(map);
+      })
+      .catch(() => {});
 
     return () => {
       isMounted.current = false;
@@ -199,7 +206,7 @@ export default function NotificationCenterScreen() {
   }, []);
 
   const toggleSection = useCallback((sectionId: string) => {
-    setCollapsedSections(prev => {
+    setCollapsedSections((prev) => {
       const next = new Set(prev);
       if (next.has(sectionId)) next.delete(sectionId);
       else next.add(sectionId);
@@ -209,11 +216,11 @@ export default function NotificationCenterScreen() {
 
   const listData = useMemo<ListItem[]>(() => {
     if (!groupByPet) {
-      return state.notifications.map(n => ({ type: 'notification', id: n.id, notification: n }));
+      return state.notifications.map((n) => ({ type: 'notification', id: n.id, notification: n }));
     }
 
     const groups: Record<string, AppNotification[]> = { General: [] };
-    state.notifications.forEach(n => {
+    state.notifications.forEach((n) => {
       const petId = (n.metadata?.petId || n.navPayload?.params?.petId) as string | undefined;
       const key = petId || 'General';
       if (!groups[key]) groups[key] = [];
@@ -221,28 +228,36 @@ export default function NotificationCenterScreen() {
     });
 
     const flatList: ListItem[] = [];
-    
-    const petIds = Object.keys(groups).filter(k => k !== 'General');
-    petIds.forEach(petId => {
+
+    const petIds = Object.keys(groups).filter((k) => k !== 'General');
+    petIds.forEach((petId) => {
       const notifs = groups[petId];
       if (notifs.length === 0) return;
-      
-      const unreadCount = notifs.filter(n => !n.isRead).length;
+
+      const unreadCount = notifs.filter((n) => !n.isRead).length;
       const isCollapsed = collapsedSections.has(petId);
       flatList.push({ type: 'header', id: `header-${petId}`, petId, unreadCount, isCollapsed });
-      
+
       if (!isCollapsed) {
-        notifs.forEach(n => flatList.push({ type: 'notification', id: n.id, notification: n }));
+        notifs.forEach((n) => flatList.push({ type: 'notification', id: n.id, notification: n }));
       }
     });
 
     if (groups.General.length > 0) {
-      const unreadCount = groups.General.filter(n => !n.isRead).length;
+      const unreadCount = groups.General.filter((n) => !n.isRead).length;
       const isCollapsed = collapsedSections.has('General');
-      flatList.push({ type: 'header', id: 'header-General', petId: 'General', unreadCount, isCollapsed });
-      
+      flatList.push({
+        type: 'header',
+        id: 'header-General',
+        petId: 'General',
+        unreadCount,
+        isCollapsed,
+      });
+
       if (!isCollapsed) {
-        groups.General.forEach(n => flatList.push({ type: 'notification', id: n.id, notification: n }));
+        groups.General.forEach((n) =>
+          flatList.push({ type: 'notification', id: n.id, notification: n }),
+        );
       }
     }
 
@@ -304,7 +319,19 @@ export default function NotificationCenterScreen() {
       const target = resolveNavPayload(notification);
       if (target) {
         try {
-          navigation.navigate(target.screen, target.params);
+          if (target.screen === 'More' && typeof target.params?.screen === 'string') {
+            navigation.navigate(
+              target.params.screen,
+              (target.params.params as Record<string, unknown> | undefined) ?? {},
+            );
+          } else {
+            const parentNavigation = navigation.getParent?.();
+            if (parentNavigation) {
+              parentNavigation.navigate(target.screen, target.params);
+            } else {
+              navigation.navigate(target.screen, target.params);
+            }
+          }
         } catch {
           // Navigation target may not be reachable from this context; ignore
         }
@@ -372,16 +399,16 @@ export default function NotificationCenterScreen() {
         const isGeneral = item.petId === 'General';
         const pet = isGeneral ? null : pets[item.petId];
         const name = isGeneral ? 'General' : pet?.name || 'Unknown Pet';
-        
+
         return (
-          <TouchableOpacity 
-            style={styles.sectionHeader} 
+          <TouchableOpacity
+            style={styles.sectionHeader}
             onPress={() => toggleSection(item.petId)}
             activeOpacity={0.7}
           >
             {isGeneral || !pet?.photoUrl ? (
               <View style={styles.sectionIconFallback}>
-                <Text style={{fontSize: 12}}>{isGeneral ? '📌' : '🐾'}</Text>
+                <Text style={{ fontSize: 12 }}>{isGeneral ? '📌' : '🐾'}</Text>
               </View>
             ) : (
               <Image source={{ uri: pet.photoUrl }} style={styles.sectionAvatar} />
@@ -452,8 +479,8 @@ export default function NotificationCenterScreen() {
         </View>
         <View style={styles.toggleRow}>
           <Text style={styles.toggleLabel}>Group by Pet</Text>
-          <Switch 
-            value={groupByPet} 
+          <Switch
+            value={groupByPet}
             onValueChange={handleToggleGroup}
             trackColor={{ false: '#D1D5DB', true: colors.primary }}
           />

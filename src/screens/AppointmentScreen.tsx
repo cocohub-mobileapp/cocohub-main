@@ -84,7 +84,7 @@ const AppointmentScreen: React.FC = () => {
   const route = useRoute<{
     key: string;
     name: string;
-    params?: MainTabParamList['Appointments'];
+    params?: MainTabParamList['Schedule'];
   }>();
   const routeParams = route.params;
 

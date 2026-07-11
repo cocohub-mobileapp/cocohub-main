@@ -395,45 +395,71 @@ describe('resolveNavPayload — deep-link routing', () => {
     };
   }
 
-  it('resolves Medications screen', () => {
+  it('normalizes legacy Medications payloads to the Care tab', () => {
     expect(resolveNavPayload(notif('Medications'))).toEqual({
-      screen: 'Medications',
-      params: undefined,
+      screen: 'Care',
+      params: { initialTab: 'Medications' },
     });
   });
 
-  it('resolves Appointments screen', () => {
+  it('normalizes legacy Appointments payloads to Schedule', () => {
     expect(resolveNavPayload(notif('Appointments'))).toEqual({
-      screen: 'Appointments',
+      screen: 'Schedule',
       params: undefined,
     });
   });
 
-  it('resolves Emergency screen', () => {
-    expect(resolveNavPayload(notif('Emergency'))).toEqual({
-      screen: 'Emergency',
-      params: undefined,
+  it('normalizes legacy Vaccinations payloads to the Care tab', () => {
+    expect(resolveNavPayload(notif('Vaccinations', { petId: 'pet-1' }))).toEqual({
+      screen: 'Care',
+      params: { initialTab: 'Vaccinations', petId: 'pet-1' },
     });
   });
 
-  it('resolves PetDetail with params', () => {
+  it('normalizes Emergency payloads to the nested More screen', () => {
+    expect(resolveNavPayload(notif('Emergency', { sosId: 'sos-1' }))).toEqual({
+      screen: 'More',
+      params: {
+        screen: 'Emergency',
+        params: { sosId: 'sos-1' },
+      },
+    });
+  });
+
+  it('normalizes PetDetail payloads to the nested PetList screen', () => {
     expect(resolveNavPayload(notif('PetDetail', { petId: 'pet-1' }))).toEqual({
-      screen: 'PetDetail',
-      params: { petId: 'pet-1' },
+      screen: 'PetList',
+      params: {
+        screen: 'PetDetail',
+        params: { petId: 'pet-1' },
+      },
     });
   });
 
-  it('resolves PetHealthDashboard screen', () => {
+  it('normalizes PetHealthDashboard payloads to the nested PetList screen', () => {
     expect(resolveNavPayload(notif('PetHealthDashboard', { petId: 'p1' }))).toEqual({
-      screen: 'PetHealthDashboard',
-      params: { petId: 'p1' },
+      screen: 'PetList',
+      params: {
+        screen: 'PetHealthDashboard',
+        params: { petId: 'p1' },
+      },
     });
   });
 
-  it('resolves Community screen', () => {
+  it('normalizes Community payloads to the nested More screen', () => {
     expect(resolveNavPayload(notif('Community'))).toEqual({
-      screen: 'Community',
-      params: undefined,
+      screen: 'More',
+      params: {
+        screen: 'Community',
+        params: {},
+      },
+    });
+  });
+
+  it('passes through current main tab payloads', () => {
+    expect(resolveNavPayload(notif('Care', { initialTab: 'Alerts' }))).toEqual({
+      screen: 'Care',
+      params: { initialTab: 'Alerts' },
     });
   });
 
