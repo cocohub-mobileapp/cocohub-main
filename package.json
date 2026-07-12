@@ -1,7 +1,7 @@
 {
   "name": "cocohub-mobile",
   "version": "1.0.0",
-  "description": "Cocohub — Secure pet health records, medication reminders, QR scanning, and emergency SOS, all powered by blockchain verification.",
+  "description": "Cocohub \u2014 Secure pet health records, medication reminders, QR scanning, and emergency SOS, all powered by blockchain verification.",
   "author": "Cocohub, Inc. <support@cocohub.app> (https://cocohub.app)",
   "homepage": "https://cocohub.app",
   "repository": {
@@ -225,5 +225,6 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "8.59.0",
     "vitest": "^4.1.5"
-  }
+  },
+  "types": "index.d.ts"
 }
