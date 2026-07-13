@@ -68,6 +68,25 @@ export class SyncService {
   }
 
   // ── Queue management ──
+  /** Drop a queued mutation once it has been pushed successfully elsewhere. */
+  async dropMatchingItem(
+    type: SyncEntityType,
+    action: SyncAction,
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    const entityId = data.id as string | undefined;
+    const queue = await this.getQueue();
+    const next = queue.filter((item) => {
+      if (item.type !== type || item.action !== action) return true;
+      if (entityId != null) return item.data.id !== entityId;
+      return item.data !== data;
+    });
+    if (next.length === queue.length) return;
+
+    await setItem(SYNC_QUEUE_KEY, JSON.stringify(next));
+    await this.patchStatus({ pendingCount: next.length });
+  }
+
   async enqueue(
     type: SyncEntityType,
     action: SyncAction,

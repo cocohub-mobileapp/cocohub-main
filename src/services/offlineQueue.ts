@@ -84,6 +84,7 @@ class OfflineQueue {
   private conflictListeners: ConflictListener[] = [];
   private isOnline = false;
   private initialized = false;
+  private queueProcessing: Promise<void> | null = null;
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -160,6 +161,17 @@ class OfflineQueue {
    * Detects 409 conflicts via If-Match / ETag and queues them for resolution.
    */
   async processQueue(): Promise<void> {
+    if (this.queueProcessing) {
+      return this.queueProcessing;
+    }
+
+    this.queueProcessing = this.runProcessQueue().finally(() => {
+      this.queueProcessing = null;
+    });
+    return this.queueProcessing;
+  }
+
+  private async runProcessQueue(): Promise<void> {
     const online = await networkMonitor.isOnline();
     if (!online) return;
 
@@ -170,21 +182,8 @@ class OfflineQueue {
 
     for (const mutation of pending) {
       try {
-        const headers: Record<string, string> = {};
-        if (mutation.etag) headers['If-Match'] = mutation.etag;
-
-        const endpoint = `/${mutation.type}s/${String(mutation.data.id ?? '')}`;
-        const response = await apiClient.put(endpoint, mutation.data, { headers });
-
-        // Capture updated ETag for future mutations on this entity
-        const newEtag = (response.headers as Record<string, string>)?.['etag'];
-        if (newEtag) {
-          // Update stored ETag for subsequent mutations on the same entity
-          const updated = stillPending.map((m) =>
-            m.data.id === mutation.data.id ? { ...m, etag: newEtag } : m,
-          );
-          stillPending.splice(0, stillPending.length, ...updated);
-        }
+        await this.pushMutation(mutation);
+        await syncService.dropMatchingItem(mutation.type, mutation.action, mutation.data);
       } catch (err) {
         const status = (err as { response?: { status?: number; data?: unknown } })?.response
           ?.status;
@@ -406,6 +405,40 @@ class OfflineQueue {
 
   private async clearPersistentQueue(): Promise<void> {
     await setItem(QUEUE_KEY, JSON.stringify([]));
+  }
+
+  private mutationEndpoint(mutation: QueuedMutation): string {
+    if (mutation.type === 'medicalRecord') {
+      const petId = mutation.data.petId as string | undefined;
+      if (petId) return `/pets/${petId}/medical-records`;
+      return '/medical-records';
+    }
+    return `/${mutation.type}s`;
+  }
+
+  private async pushMutation(mutation: QueuedMutation): Promise<void> {
+    const headers: Record<string, string> = {};
+    if (mutation.etag) headers['If-Match'] = mutation.etag;
+
+    const base = this.mutationEndpoint(mutation);
+
+    switch (mutation.action) {
+      case 'create':
+        await apiClient.post(base, mutation.data, { headers });
+        return;
+      case 'update': {
+        const id = String(mutation.data.id ?? '');
+        await apiClient.put(`${base}/${id}`, mutation.data, { headers });
+        return;
+      }
+      case 'delete': {
+        const id = String(mutation.data.id ?? '');
+        await apiClient.delete(`${base}/${id}`, { headers });
+        return;
+      }
+      default:
+        throw new Error(`Unknown sync action: ${mutation.action}`);
+    }
   }
 
   private async _fetchServerVersion(
