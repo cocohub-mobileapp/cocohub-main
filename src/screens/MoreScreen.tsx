@@ -138,8 +138,8 @@ function MoreHub() {
                 <Text style={[styles.rowLabel, { color: item.color ?? colors.text }]}>{item.label}</Text>
                 <View style={styles.rowRight}>
                   {item.badge ? (
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>{item.badge}</Text>
+                    <View style={[styles.badge, { backgroundColor: colors.error }]}>
+                      <Text style={[styles.badgeText, { color: colors.white }]}>{item.badge}</Text>
                     </View>
                   ) : null}
                   <Ionicons name="chevron-forward" size={16} color={colors.placeholder} />
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
   iconWrap: { width: 34, height: 34, borderRadius: 9, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   rowLabel: { flex: 1, fontSize: 15, fontWeight: '500' },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  badge: { backgroundColor: '#EF4444', borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5 },
-  badgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  badge: { borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5 },
+  badgeText: { fontSize: 11, fontWeight: '700' },
   version: { textAlign: 'center', fontSize: 12, marginTop: 32 },
 });
