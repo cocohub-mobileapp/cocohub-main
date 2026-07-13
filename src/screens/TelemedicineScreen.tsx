@@ -30,6 +30,8 @@ import {
   type TelemedicineAvailabilitySlot,
 } from '../services/telemedicineService';
 import { searchVets, type VetProfile } from '../services/vetService';
+import { useTheme } from '../context/ThemeContext';
+import type { lightTheme } from '../theme/colors';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,6 +73,8 @@ async function compressImageUnder2MB(uri: string): Promise<string> {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const TelemedicineScreen: React.FC = () => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createTelemedicineStyles(colors), [colors]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [selectedPet, setSelectedPet] = useState<Pet | null>(null);
   const [vets, setVets] = useState<VetProfile[]>([]);
@@ -401,7 +405,14 @@ const TelemedicineScreen: React.FC = () => {
                   style={[styles.chip, selectedPet?.id === item.id && styles.chipActive]}
                   onPress={() => setSelectedPet(item)}
                 >
-                  <Text style={styles.chipText}>{item.name}</Text>
+                  <Text
+                    style={[
+                      styles.chipText,
+                      selectedPet?.id === item.id && styles.chipTextActive,
+                    ]}
+                  >
+                    {item.name}
+                  </Text>
                 </Pressable>
               )}
               contentContainerStyle={styles.chipList}
@@ -412,7 +423,7 @@ const TelemedicineScreen: React.FC = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Available veterinarians</Text>
           {loading ? (
-            <ActivityIndicator />
+            <ActivityIndicator color={colors.info} />
           ) : (
             <FlatList
               data={vets}
@@ -429,7 +440,7 @@ const TelemedicineScreen: React.FC = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Availability ({localTimeZone})</Text>
           {availabilityLoading ? (
-            <ActivityIndicator />
+            <ActivityIndicator color={colors.info} />
           ) : slots.length === 0 ? (
             <Text style={styles.empty}>Select a vet to view available appointments.</Text>
           ) : (
@@ -479,6 +490,7 @@ const TelemedicineScreen: React.FC = () => {
                 <TextInput
                   style={styles.input}
                   placeholder="Describe symptoms"
+                  placeholderTextColor={colors.placeholder}
                   value={questionnaire.symptoms}
                   onChangeText={(text) => setQuestionnaire((prev) => ({ ...prev, symptoms: text }))}
                   multiline
@@ -486,12 +498,14 @@ const TelemedicineScreen: React.FC = () => {
                 <TextInput
                   style={styles.input}
                   placeholder="How long has it been happening?"
+                  placeholderTextColor={colors.placeholder}
                   value={questionnaire.duration}
                   onChangeText={(text) => setQuestionnaire((prev) => ({ ...prev, duration: text }))}
                 />
                 <TextInput
                   style={styles.input}
                   placeholder="Any urgent concerns?"
+                  placeholderTextColor={colors.placeholder}
                   value={questionnaire.concerns}
                   onChangeText={(text) => setQuestionnaire((prev) => ({ ...prev, concerns: text }))}
                   multiline
@@ -534,7 +548,7 @@ const TelemedicineScreen: React.FC = () => {
       {appointment && (
         <View style={styles.chatInputBar}>
           {uploadingAttachment ? (
-            <ActivityIndicator size="small" color="#007AFF" style={{ marginRight: 8 }} />
+            <ActivityIndicator size="small" color={colors.info} style={{ marginRight: 8 }} />
           ) : (
             <TouchableOpacity
               style={styles.attachBtn}
@@ -547,7 +561,7 @@ const TelemedicineScreen: React.FC = () => {
           <TextInput
             style={styles.chatTextInput}
             placeholder="Type a message…"
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={colors.placeholder}
             value={chatInput}
             onChangeText={setChatInput}
             multiline
@@ -634,83 +648,92 @@ const TelemedicineScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  outerContainer: { flex: 1, backgroundColor: '#F7F8FA' },
+function createTelemedicineStyles(colors: typeof lightTheme) {
+  return StyleSheet.create({
+  outerContainer: { flex: 1, backgroundColor: colors.background },
   scroll: { flex: 1 },
   container: { padding: 16, paddingBottom: 32 },
-  title: { fontSize: 28, fontWeight: '700', marginBottom: 6 },
-  subtitle: { fontSize: 14, color: '#5A5F6F', marginBottom: 18 },
+  title: { fontSize: 28, fontWeight: '700', marginBottom: 6, color: colors.text },
+  subtitle: { fontSize: 14, color: colors.secondaryText, marginBottom: 18 },
   section: { marginBottom: 18 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 8, color: colors.text },
   cardList: { paddingBottom: 8 },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 14,
     marginRight: 12,
     minWidth: 180,
     elevation: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  cardSelected: { borderColor: '#007AFF', borderWidth: 1 },
-  cardTitle: { fontSize: 15, fontWeight: '700', marginBottom: 4 },
-  cardSubtitle: { fontSize: 13, color: '#657786', marginBottom: 4 },
-  cardMeta: { fontSize: 12, color: '#7A7A7A' },
+  cardSelected: { borderColor: colors.info, borderWidth: 1 },
+  cardTitle: { fontSize: 15, fontWeight: '700', marginBottom: 4, color: colors.text },
+  cardSubtitle: { fontSize: 13, color: colors.secondaryText, marginBottom: 4 },
+  cardMeta: { fontSize: 12, color: colors.placeholder },
   chipList: { paddingVertical: 8 },
   chip: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     paddingVertical: 10,
     paddingHorizontal: 16,
     marginRight: 8,
     elevation: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  chipActive: { backgroundColor: '#007AFF' },
-  chipText: { color: '#1F2937', fontWeight: '600' },
+  chipActive: { backgroundColor: colors.info, borderColor: colors.info },
+  chipText: { color: colors.text, fontWeight: '600' },
+  chipTextActive: { color: colors.white },
   slotCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 14,
     marginBottom: 10,
     elevation: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  slotSelected: { borderColor: '#007AFF', borderWidth: 1 },
-  slotText: { fontSize: 15, color: '#1F2937' },
+  slotSelected: { borderColor: colors.info, borderWidth: 1 },
+  slotText: { fontSize: 15, color: colors.text },
   primaryBtn: {
-    backgroundColor: '#007AFF',
+    backgroundColor: colors.info,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
     marginBottom: 12,
   },
   primaryBtnDisabled: { opacity: 0.5 },
-  primaryBtnText: { color: '#FFFFFF', fontWeight: '700' },
+  primaryBtnText: { color: colors.white, fontWeight: '700' },
   secondaryBtn: {
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.muted,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 10,
   },
-  secondaryBtnText: { color: '#111827', fontWeight: '700' },
+  secondaryBtnText: { color: colors.text, fontWeight: '700' },
   input: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.input,
     borderRadius: 12,
     padding: 12,
     marginBottom: 10,
     minHeight: 48,
     textAlignVertical: 'top',
+    color: colors.text,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  empty: { color: '#6B7280' },
-  detailText: { color: '#1F2937', marginBottom: 4 },
-  linkText: { color: '#007AFF', marginBottom: 8 },
-  infoText: { color: '#374151', marginTop: 12 },
-
-  // Chat
-  chatHint: { fontSize: 12, color: '#9CA3AF', marginBottom: 10, marginTop: -4 },
+  empty: { color: colors.placeholder },
+  detailText: { color: colors.text, marginBottom: 4 },
+  linkText: { color: colors.info, marginBottom: 8 },
+  infoText: { color: colors.secondaryText, marginTop: 12 },
+  chatHint: { fontSize: 12, color: colors.placeholder, marginBottom: 10, marginTop: -4 },
   chatMessages: { marginBottom: 8 },
-  chatEmpty: { color: '#9CA3AF', fontSize: 13, marginBottom: 8 },
+  chatEmpty: { color: colors.placeholder, fontSize: 13, marginBottom: 8 },
   chatBubble: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.infoMuted,
     borderRadius: 12,
     padding: 10,
     marginBottom: 8,
@@ -718,29 +741,19 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     borderBottomRightRadius: 4,
   },
-  chatBubbleText: { fontSize: 14, color: '#1F2937', lineHeight: 20 },
-  chatBubbleTime: { fontSize: 10, color: '#9CA3AF', marginTop: 4, textAlign: 'right' },
-  chatImage: {
-    width: 200,
-    height: 150,
-    borderRadius: 8,
-  },
-  pdfAttachment: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
+  chatBubbleText: { fontSize: 14, color: colors.text, lineHeight: 20 },
+  chatBubbleTime: { fontSize: 10, color: colors.placeholder, marginTop: 4, textAlign: 'right' },
+  chatImage: { width: 200, height: 150, borderRadius: 8 },
+  pdfAttachment: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   pdfIcon: { fontSize: 24 },
-  pdfName: { fontSize: 13, fontWeight: '600', color: '#1F2937' },
-  pdfMeta: { fontSize: 11, color: '#9CA3AF' },
-
-  // Chat input bar
+  pdfName: { fontSize: 13, fontWeight: '600', color: colors.text },
+  pdfMeta: { fontSize: 11, color: colors.placeholder },
   chatInputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: colors.border,
     paddingHorizontal: 12,
     paddingVertical: 8,
     paddingBottom: Platform.OS === 'ios' ? 24 : 8,
@@ -750,76 +763,70 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.muted,
     justifyContent: 'center',
     alignItems: 'center',
   },
   attachBtnIcon: { fontSize: 18 },
   chatTextInput: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.input,
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 8,
     fontSize: 14,
-    color: '#1F2937',
+    color: colors.text,
     maxHeight: 100,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   sendBtn: {
-    backgroundColor: '#007AFF',
+    backgroundColor: colors.info,
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
-  sendBtnDisabled: { backgroundColor: '#CBD5E1' },
-  sendBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
-
-  // Attachment picker modal
+  sendBtnDisabled: { backgroundColor: colors.border },
+  sendBtnText: { color: colors.white, fontWeight: '700', fontSize: 14 },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
   },
   attachSheet: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
     paddingBottom: Platform.OS === 'ios' ? 36 : 20,
   },
-  attachSheetTitle: { fontSize: 17, fontWeight: '700', color: '#1F2937', marginBottom: 16 },
+  attachSheetTitle: { fontSize: 17, fontWeight: '700', color: colors.text, marginBottom: 16 },
   attachOption: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
     gap: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: colors.border,
   },
   attachOptionIcon: { fontSize: 22 },
-  attachOptionText: { fontSize: 16, color: '#1F2937' },
+  attachOptionText: { fontSize: 16, color: colors.text },
   attachCancelBtn: {
     marginTop: 12,
     paddingVertical: 14,
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.muted,
     borderRadius: 12,
   },
-  attachCancelText: { fontSize: 16, fontWeight: '600', color: '#374151' },
-
-  // Image viewer
+  attachCancelText: { fontSize: 16, fontWeight: '600', color: colors.secondaryText },
   imageViewerOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.92)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  imageViewerImage: {
-    width: '95%',
-    height: '80%',
-  },
-});
+  imageViewerImage: { width: '95%', height: '80%' },
+  });
+}
 
 export default TelemedicineScreen;

@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Animated, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { HeaderOfflineStatus, useOfflineStatus } from '../components/OfflineIndicator';
@@ -122,7 +122,7 @@ const PetListScreen: React.FC<Props> = ({ onSelectPet, onAddPet, onAdoptPet }) =
                 accessibilityLabel={`${item.name} photo`}
               />
             ) : (
-              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+              <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.primaryMuted }]}>
                 <Text style={styles.avatarEmoji}>🐾</Text>
               </View>
             )}
@@ -136,7 +136,20 @@ const PetListScreen: React.FC<Props> = ({ onSelectPet, onAddPet, onAdoptPet }) =
                   Born: {new Date(item.dateOfBirth).toLocaleDateString()}
                 </Text>
               )}
-              {!offlineStatus?.isOnline ? <Text style={styles.cachedChip}>Cached</Text> : null}
+              {!offlineStatus?.isOnline ? (
+                <Text
+                  style={[
+                    styles.cachedChip,
+                    {
+                      color: colors.warning,
+                      backgroundColor: colors.infoMuted,
+                      borderColor: colors.warning,
+                    },
+                  ]}
+                >
+                  Cached
+                </Text>
+              ) : null}
             </View>
             <Text style={[styles.chevron, { color: colors.border }]}>›</Text>
           </View>
@@ -147,30 +160,30 @@ const PetListScreen: React.FC<Props> = ({ onSelectPet, onAddPet, onAdoptPet }) =
   );
 
   return (
-    <View style={styles.container} testID="pet-list-screen">
-      <View style={styles.header}>
+    <View style={[styles.container, { backgroundColor: colors.background }]} testID="pet-list-screen">
+      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <View style={styles.titleRow}>
-          <Text style={styles.title}>My Pets</Text>
+          <Text style={[styles.title, { color: colors.text }]}>My Pets</Text>
           <HeaderOfflineStatus />
         </View>
         <TouchableOpacity
-          style={styles.addBtn}
+          style={[styles.addBtn, { backgroundColor: colors.success }]}
           onPress={handleAddPet}
           accessibilityRole="button"
           accessibilityLabel="Add pet"
           accessibilityHint="Adds a new pet"
           testID="add-pet-button"
         >
-          <Text style={styles.addBtnText}>+ Add</Text>
+          <Text style={[styles.addBtnText, { color: colors.white }]}>+ Add</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.adoptBtn}
+          style={[styles.adoptBtn, { backgroundColor: colors.accent }]}
           onPress={onAdoptPet}
           accessibilityRole="button"
           accessibilityLabel="Adopt pet"
           accessibilityHint="Browse shelter pets"
         >
-          <Text style={styles.adoptBtnText}>Adopt</Text>
+          <Text style={[styles.adoptBtnText, { color: colors.white }]}>Adopt</Text>
         </TouchableOpacity>
       </View>
 
@@ -178,8 +191,15 @@ const PetListScreen: React.FC<Props> = ({ onSelectPet, onAddPet, onAdoptPet }) =
       <PetSelectorBar onAddPet={handleAddPet} />
 
       {!offlineStatus?.isOnline ? (
-        <View style={styles.cachedBanner}>
-          <Text style={styles.cachedBannerText}>Showing cached pets while offline.</Text>
+        <View
+          style={[
+            styles.cachedBanner,
+            { backgroundColor: colors.infoMuted, borderBottomColor: colors.border },
+          ]}
+        >
+          <Text style={[styles.cachedBannerText, { color: colors.warning }]}>
+            Showing cached pets while offline.
+          </Text>
         </View>
       ) : null}
 
@@ -211,6 +231,7 @@ const PetListScreen: React.FC<Props> = ({ onSelectPet, onAddPet, onAdoptPet }) =
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             <EmptyState
+              emoji="🐾"
               icon="paw"
               title="No Pets Yet"
               description="Get started by adding your first pet's profile to Cocohub."
@@ -249,43 +270,37 @@ const PetListScreen: React.FC<Props> = ({ onSelectPet, onAddPet, onAdoptPet }) =
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  container: { flex: 1 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
   },
-  title: { fontSize: 20, fontWeight: '700', color: '#1a1a1a' },
+  title: { fontSize: 20, fontWeight: '700' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   addBtn: {
-    backgroundColor: '#4CAF50',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
   },
-  addBtnText: { color: '#fff', fontWeight: '600' },
+  addBtnText: { fontWeight: '600' },
   adoptBtn: {
     marginLeft: 10,
-    backgroundColor: '#12372a',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
   },
-  adoptBtnText: { color: '#fff', fontWeight: '600' },
+  adoptBtnText: { fontWeight: '600' },
   loader: { marginTop: 40 },
   list: { padding: 12 },
   cachedBanner: {
-    backgroundColor: '#fff3e0',
     borderBottomWidth: 1,
-    borderBottomColor: '#ffe0b2',
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
-  cachedBannerText: { color: '#a54900', fontSize: 12, fontWeight: '600' },
+  cachedBannerText: { fontSize: 12, fontWeight: '600' },
   card: {
     marginBottom: 10,
     padding: 12,
@@ -295,7 +310,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatar: { width: 56, height: 56, borderRadius: 28, marginRight: 12 },
-  avatarPlaceholder: { backgroundColor: '#e8f5e9', justifyContent: 'center', alignItems: 'center' },
+  avatarPlaceholder: { justifyContent: 'center', alignItems: 'center' },
   avatarEmoji: { fontSize: 24 },
   cardInfo: { flex: 1 },
   petName: { fontSize: 16, fontWeight: '700' },
@@ -305,16 +320,13 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 11,
     fontWeight: '700',
-    color: '#a54900',
-    backgroundColor: '#fff3e0',
-    borderColor: '#ed6c02',
     borderWidth: 1,
     borderRadius: 10,
     paddingHorizontal: 7,
     paddingVertical: 2,
   },
   chevron: { fontSize: 22 },
-  empty: { textAlign: 'center', color: '#999', marginTop: 40, fontSize: 15 },
+  empty: { textAlign: 'center', marginTop: 40, fontSize: 15 },
   floatingSOS: {
     position: 'absolute',
     bottom: 20,
