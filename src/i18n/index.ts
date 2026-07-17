@@ -3,7 +3,9 @@ import { initReactI18next } from 'react-i18next';
 
 export const SUPPORTED_LANGUAGES = [
   { code: 'en', label: 'English', rtl: false },
+  { code: 'fr', label: 'Français', rtl: false },
   { code: 'es', label: 'Español', rtl: false },
+  { code: 'pt-BR', label: 'Português (Brasil)', rtl: false },
   { code: 'ar', label: 'العربية', rtl: true },
 ] as const;
 
@@ -24,8 +26,14 @@ async function loadLocale(lang: string): Promise<void> {
     case 'en':
       bundle = await import('./locales/en');
       break;
+    case 'fr':
+      bundle = await import('./locales/fr');
+      break;
     case 'es':
       bundle = await import('./locales/es');
+      break;
+    case 'pt-BR':
+      bundle = await import('./locales/pt-BR');
       break;
     case 'ar':
       bundle = await import('./locales/ar');
