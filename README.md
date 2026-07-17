@@ -169,6 +169,10 @@ npm run migrate            # Run DB migrations
 npm run seed:dev           # Seed test data
 ```
 
+For a step-by-step backend guide, including Docker, environment variables,
+migrations, seeding, health checks, and troubleshooting, see
+[docs/BACKEND-SETUP.md](docs/BACKEND-SETUP.md).
+
 **Test credentials:** `owner1@example.com` / `Password123!`
 
 ---
