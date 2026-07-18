@@ -1,0 +1,15 @@
+{
+  "welcome": "Bem-vindo",
+  "login": "Entrar",
+  "logout": "Sair",
+  "username": "Nome de usuário",
+  "password": "Senha",
+  "rememberMe": "Lembrar-me",
+  "forgotPassword": "Esqueceu a senha?",
+  "submit": "Enviar",
+  "home": "Início",
+  "about": "Sobre",
+  "contact": "Contato",
+  "error": "Erro",
+  "notFound": "Página não encontrada"
+}
