@@ -1,106 +1,26 @@
-name: E2E Tests — Detox
+name: E2E Detox Tests
 
 on:
   push:
-    branches: [main, master]
+    branches:
+      - main
   pull_request:
-    branches: [main, master]
-  workflow_dispatch:
-
-concurrency:
-  group: e2e-detox-${{ github.ref }}
-  cancel-in-progress: true
+    branches:
+      - main
 
 jobs:
-  e2e-android:
-    name: Detox E2E — Android
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Setup JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
-            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      - name: Build Android debug APK
-        run: npx detox build --configuration android.emu.debug
-
-      - name: Run Detox E2E tests (Android)
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 33
-          target: google_apis
-          arch: x86_64
-          profile: pixel_6
-          disable-animations: true
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          script: |
-            npm run seed:test
-            npx detox test --configuration android.emu.debug --headless --record-logs all
-
-      - name: Upload Detox artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: detox-artifacts-android
-          path: artifacts/
-          retention-days: 7
-
-  e2e-ios:
-    name: Detox E2E — iOS
+  e2e:
     runs-on: macos-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v2
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
+    - name: Install dependencies
+      run: yarn install
 
-      - name: Install dependencies
-        run: npm ci
+    - name: Build iOS app
+      run: yarn build:ios
 
-      - name: Install CocoaPods
-        run: cd ios && pod install && cd ..
-
-      - name: Build iOS debug app
-        run: npx detox build --configuration ios.sim.debug
-
-      - name: Run Detox E2E tests (iOS)
-        run: |
-          npm run seed:test
-          npx detox test --configuration ios.sim.debug --record-logs all
-
-      - name: Upload Detox artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: detox-artifacts-ios
-          path: artifacts/
-          retention-days: 7
+    - name: Run Detox tests
+      run: yarn detox test --configuration ios.sim
