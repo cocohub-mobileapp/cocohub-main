@@ -1,79 +1,41 @@
-import express from 'express';
-
-import { authenticateJWT, type AuthenticatedRequest } from '../../middleware/auth';
-import {
-  exchangeOAuthCode,
-  getClaim,
-  getClaims,
-  getPolicies,
-  getPolicy,
-  submitClaim,
-  type InsuranceProvider,
-} from '../../services/insuranceService';
-import { ok, sendError } from '../response';
+import express, { Request, Response } from 'express';
+import multer from'multer';
+import path from 'path';
+import fs from 'fs';
 
 const router = express.Router();
-router.use(authenticateJWT);
 
-const PROVIDERS: InsuranceProvider[] = ['trupanion', 'nationwide', 'mock'];
-
-// GET /api/insurance/policies
-router.get('/policies', (req: AuthenticatedRequest, res) => {
-  return res.json(ok(getPolicies(req.user!.id)));
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadPath = path.join(__dirname, '../../uploads');
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath);
+    }
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + '-' + file.originalname);
+  },
 });
 
-// POST /api/insurance/connect — OAuth code exchange
-router.post('/connect', async (req: AuthenticatedRequest, res) => {
-  const { provider, code } = req.body as { provider: InsuranceProvider; code: string };
-  if (!provider || !PROVIDERS.includes(provider)) {
-    return sendError(
-      res,
-      400,
-      'VALIDATION_ERROR',
-      `provider must be one of: ${PROVIDERS.join(', ')}`,
-    );
-  }
-  if (!code) return sendError(res, 400, 'VALIDATION_ERROR', 'code required');
-  try {
-    const policy = await exchangeOAuthCode(provider, code, req.user!.id);
-    return res.status(201).json(ok(policy));
-  } catch (e) {
-    return sendError(res, 502, 'PROVIDER_ERROR', 'Failed to connect insurance provider');
-  }
-});
+const upload = multer({ storage });
 
-// GET /api/insurance/claims
-router.get('/claims', (req: AuthenticatedRequest, res) => {
-  return res.json(ok(getClaims(req.user!.id)));
-});
+router.post('/claims', upload.any(), async (req: Request, res: Response) => {
+  const { description, amount } = req.body;
+  const attachments = req.files;
 
-// GET /api/insurance/claims/:id
-router.get('/claims/:id', (req: AuthenticatedRequest, res) => {
-  const claim = getClaim(req.params.id);
-  if (!claim || claim.userId !== req.user!.id) {
-    return sendError(res, 404, 'NOT_FOUND', 'Claim not found');
+  if (!description ||!amount ||!attachments) {
+    return res.status(400).json({ error: 'Missing required fields' });
   }
-  return res.json(ok(claim));
-});
 
-// POST /api/insurance/claims
-router.post('/claims', (req: AuthenticatedRequest, res) => {
-  const { policyId, petId, amount, description, attachmentUrls } = req.body as {
-    policyId: string;
-    petId?: string;
-    amount: number;
-    description: string;
-    attachmentUrls?: string[];
-  };
-  if (!policyId || !amount || !description) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'policyId, amount, and description required');
-  }
-  const policy = getPolicy(policyId);
-  if (!policy || policy.userId !== req.user!.id) {
-    return sendError(res, 404, 'NOT_FOUND', 'Policy not found');
-  }
-  const claim = submitClaim(policyId, req.user!.id, { petId, amount, description, attachmentUrls });
-  return res.status(201).json(ok(claim));
+  // Simulate claim processing
+  const claimId = Math.random().toString(36).substr(2, 9);
+  const status ='submitted';
+
+  // Save claim details to a database (not implemented here)
+  // For simplicity, we'll just return a simulated response
+
+  res.json({ id: claimId, status, description, amount, attachments: attachments.map((file: any) => file.path) });
 });
 
 export default router;
