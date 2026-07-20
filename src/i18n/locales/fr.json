@@ -1,0 +1,171 @@
+{
+  "common": {
+    "loading": "Chargement鈥?,
+    "retry": "R茅essayer",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "confirm": "Confirmer",
+    "back": "Retour",
+    "next": "Suivant",
+    "done": "Termin茅",
+    "error": "Erreur",
+    "success": "Succ猫s",
+    "unknown_error": "Une erreur inattendue s'est produite.",
+    "network_error": "Erreur r茅seau. V茅rifiez votre connexion.",
+    "timeout_error": "La requ锚te a expir茅. Veuillez r茅essayer."
+  },
+  "auth": {
+    "login_title": "Bon retour",
+    "login_subtitle": "Connectez-vous 脿 votre compte",
+    "register_title": "Cr茅er un compte",
+    "email_label": "E-mail",
+    "email_placeholder": "vous@exemple.com",
+    "password_label": "Mot de passe",
+    "password_placeholder": "Au moins 8 caract猫res",
+    "name_label": "Nom complet",
+    "name_placeholder": "Votre nom",
+    "login_button": "Se connecter",
+    "register_button": "Cr茅er un compte",
+    "logout_button": "Se d茅connecter",
+    "no_account": "Vous n'avez pas de compte ?",
+    "have_account": "Vous avez d茅j脿 un compte ?",
+    "forgot_password": "Mot de passe oubli茅 ?",
+    "validation": {
+      "email_required": "L'e-mail est requis.",
+      "email_invalid": "Veuillez saisir une adresse e-mail valide.",
+      "password_required": "Le mot de passe est requis.",
+      "password_weak": "Le mot de passe doit comporter au moins 8 caract猫res, inclure 1 lettre majuscule et 1 chiffre.",
+      "name_required": "Le nom est requis."
+    }
+  },
+  "home": {
+    "title": "Mes animaux",
+    "add_pet": "Ajouter un animal",
+    "no_pets": "Pas encore d鈥檃nimal. Ajoutez votre premier animal !",
+    "greeting": "Bonjour, {{name}}"
+  },
+  "pet": {
+    "profile_title": "Profil de l鈥檃nimal",
+    "name_label": "Nom",
+    "species_label": "Esp猫ce",
+    "breed_label": "Race",
+    "dob_label": "Date de naissance",
+    "weight_label": "Poids",
+    "edit_button": "Modifier le profil",
+    "delete_button": "Supprimer l鈥檃nimal",
+    "delete_confirm": "脢tes-vous s没r de vouloir supprimer {{name}} ?",
+    "validation": {
+      "name_required": "Le nom de l'animal est requis.",
+      "dob_invalid": "Veuillez saisir une date de naissance valide."
+    }
+  },
+  "medical": {
+    "title": "Dossier m茅dical",
+    "add_record": "Ajouter un dossier",
+    "no_records": "Aucun dossier m茅dical trouv茅.",
+    "record_date": "Date",
+    "record_type": "Type",
+    "record_notes": "Notes",
+    "vaccination": "Vaccination",
+    "checkup": "Bilan de sant茅",
+    "surgery": "Chirurgie",
+    "other": "Autre"
+  },
+  "appointments": {
+    "title": "Rendez-vous",
+    "add_appointment": "Planifier un rendez-vous",
+    "no_appointments": "Aucun rendez-vous 脿 venir.",
+    "date_label": "Date",
+    "time_label": "Heure",
+    "vet_label": "V茅t茅rinaire",
+    "notes_label": "Notes",
+    "upcoming": "脌 venir",
+    "past": "Pass茅s",
+    "cancel_confirm": "Annuler ce rendez-vous ?"
+  },
+  "medication": {
+    "title": "M茅dicaments",
+    "add_medication": "Ajouter un m茅dicament",
+    "no_medications": "Aucun m茅dicament enregistr茅.",
+    "name_label": "Nom du m茅dicament",
+    "dosage_label": "Posologie",
+    "frequency_label": "Fr茅quence",
+    "start_date_label": "Date de d茅but",
+    "end_date_label": "Date de fin",
+    "reminder": "Rappel activ茅"
+  },
+  "qr": {
+    "title": "Scanner QR",
+    "scan_prompt": "Pointez la cam茅ra vers un code QR",
+    "scan_success": "Code QR scann茅 avec succ猫s",
+    "scan_error": "Impossible de lire le code QR. R茅essayez.",
+    "permission_denied": "L'autorisation de la cam茅ra est requise pour scanner les codes QR."
+  },
+  "emergency": {
+    "title": "Urgence",
+    "call_vet": "Appeler le v茅t茅rinaire d鈥檜rgence",
+    "nearest_clinic": "Trouver la clinique la plus proche",
+    "first_aid": "Guide de premiers secours",
+    "alert_sent": "Alerte d鈥檜rgence envoy茅e",
+    "no_clinics_found": "Aucune clinique 脿 proximit茅. V茅rifiez votre connexion internet.",
+    "location_denied": "La permission de localisation est n茅cessaire pour trouver des cliniques 脿 proximit茅."
+  },
+  "emailVerification": {
+    "title": "V茅rifiez votre e-mail",
+    "subtitle": "Nous avons envoy茅 un code 脿 6 chiffres 脿 votre adresse e-mail. Saisissez-le ci-dessous pour activer votre compte.",
+    "placeholder": "Saisissez le code 脿 6 chiffres",
+    "verifyButton": "V茅rifier l鈥檈-mail",
+    "resendButton": "Renvoyer le code",
+    "resendCooldown": "Renvoyer dans {{seconds}}s",
+    "successTitle": "E-mail v茅rifi茅 !",
+    "successSubtitle": "Votre compte est maintenant enti猫rement activ茅.",
+    "skipButton": "Passer pour l鈥檌nstant"
+  },
+  "symptomChecker": {
+    "title": "Analyseur de sympt么mes IA",
+    "inputPlaceholder": "D茅crivez ce que vous observez鈥?,
+    "analyseButton": "Analyser les sympt么mes 鈫?,
+    "selectPetFirst": "Veuillez s茅lectionner l鈥檃nimal qui pr茅sente ces sympt么mes.",
+    "describeFirst": "Veuillez d茅crire ce que vous observez.",
+    "probableConditions": "Affections possibles",
+    "recommendedActions": "Actions recommand茅es",
+    "disclaimer": "Ceci est un triage assist茅 par IA uniquement et ne constitue pas un diagnostic m茅dical. Consultez toujours un v茅t茅rinaire agr茅茅.",
+    "unavailable": "L'analyseur de sympt么mes IA est temporairement indisponible. Veuillez contacter directement votre v茅t茅rinaire."
+  },
+  "species": {
+    "dog": "Chien",
+    "cat": "Chat",
+    "bird": "Oiseau",
+    "rabbit": "Lapin",
+    "hamster": "Hamster",
+    "guinea_pig": "Cochon d鈥橧nde",
+    "fish": "Poisson",
+    "reptile": "Reptile",
+    "horse": "Cheval",
+    "ferret": "Furet",
+    "turtle": "Tortue",
+    "other": "Autre"
+  },
+  "birthday": {
+    "notification_title": "馃巶 Joyeux anniversaire, {{name}} !",
+    "notification_body": "Aujourd'hui, c'est le jour sp茅cial de {{name}}. Donnez-lui un peu plus d'amour ! 馃惥",
+    "milestone_title": "馃┖ 脡tape de sant茅",
+    "turns_one": "{{name}} a 1 an ! C鈥檈st le moment id茅al pour programmer un bilan de sant茅 g茅n茅ral.",
+    "senior": "{{name}} entre dans ses ann茅es seniors 脿 7 ans. Envisagez un bilan de sant茅 senior avec votre v茅t茅rinaire.",
+    "ten_years": "{{name}} a 10 ans ! Des visites v茅t茅rinaires semestrielles sont recommand茅es pour les animaux de cet 芒ge."
+  },
+  "error_boundary": {
+    "title": "Quelque chose s'est mal pass茅",
+    "subtitle": "Une erreur inattendue s'est produite sur l'茅cran {{screen}}. Notre 茅quipe a 茅t茅 inform茅e.",
+    "report_retry": "Signaler et r茅essayer"
+  },
+  "accessibility": {
+    "close_button": "Fermer",
+    "menu_button": "Ouvrir le menu",
+    "back_button": "Revenir",
+    "loading_indicator": "Chargement",
+    "error_screen": "脡cran d鈥檈rreur",
+    "pet_image": "Photo de {{name}}"
+  }
+}
