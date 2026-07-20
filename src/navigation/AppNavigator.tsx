@@ -477,27 +477,12 @@ export const handleNotificationDeepLink = (data: Record<string, unknown>): void 
   const deepLink = extractDeepLinkParams(data);
   if (!deepLink) return;
 
-  // Get the current state to know if we're in the Main tab
-  const nav = navigationRef.current;
-
-  // Navigate to the appropriate tab/screen
-  const state = (nav as any)?.getRootState?.();
-  const isMainScreen = state?.routes?.[0]?.name === 'Main';
-
-  if (isMainScreen) {
-    // We're in Main, navigate within tabs
-    const mainState = state?.routes?.[0]?.state;
-    (nav as any)?.navigate?.('Main', {
-      screen: deepLink.route,
-      params: deepLink.params,
-    });
-  } else {
-    // App might be in cold start, navigate to Main first
-    (nav as any)?.navigate?.('Main', {
-      screen: deepLink.route,
-      params: deepLink.params,
-    });
-  }
+  const nav = navigationRef.current as any;
+  // Always go through Main tabs so cold-start and background taps land correctly (#46)
+  nav?.navigate?.('Main', {
+    screen: deepLink.route,
+    params: deepLink.params,
+  });
 };
 
 // ─── Root Navigator ───────────────────────────────────────────────────────────
@@ -545,10 +530,17 @@ export default function AppNavigator() {
     }
   }, []);
 
-  // Listen for notification responses (taps) with deep linking
+  // Listen for notification responses (taps) + cold-start deep link (#46)
   React.useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data;
+      const data = response.notification.request.content.data as Record<string, unknown>;
+      handleNotificationDeepLink(data);
+    });
+
+    // Cold start: app launched from a notification tap while not running
+    void Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (!response) return;
+      const data = response.notification.request.content.data as Record<string, unknown>;
       handleNotificationDeepLink(data);
     });
 
