@@ -297,59 +297,77 @@ export const openApp = async (notification: Notifications.Notification): Promise
 export const extractDeepLinkParams = (
   data: Record<string, unknown>,
 ): { route: string; params: Record<string, any> } | null => {
-  const type = data.type as NotificationGroup | undefined;
+  // Normalize type from either `type` or notification category aliases (#46)
+  const rawType = String(data.type ?? data.category ?? data.categoryIdentifier ?? '').toLowerCase();
+  const type = ((): string => {
+    if (rawType.includes('medication') || rawType === 'med') return 'medication';
+    if (rawType.includes('appointment')) return 'appointment';
+    if (rawType.includes('vaccination') || rawType === 'health') return 'vaccination';
+    if (rawType.includes('sos') || rawType.includes('emergency') || rawType.includes('lockscreen'))
+      return 'sos';
+    if (rawType.includes('birthday')) return 'birthday';
+    return rawType;
+  })();
 
-  if (type === 'medication' && data.medicationId) {
+  if (type === 'medication') {
+    const params: Record<string, any> = {};
+    if (data.medicationId) params.medicationId = data.medicationId;
+    if (data.petId) params.petId = data.petId;
+    // Care tab hosts MedicationScreen
+    return { route: 'Care', params: { careTab: 'Medications', ...params } };
+  }
+
+  if (type === 'appointment') {
+    const params: Record<string, any> = {};
+    if (data.appointmentId) params.appointmentId = data.appointmentId;
+    // Prefer detail-style params when id present (Schedule tab / AppointmentScreen)
     return {
-      route: 'Medications',
-      params: { medicationId: data.medicationId },
+      route: 'Schedule',
+      params: {
+        screen: data.appointmentId ? 'AppointmentDetail' : 'Appointments',
+        ...params,
+      },
     };
   }
 
-  if (type === 'appointment' && data.appointmentId) {
-    return {
-      route: 'Appointments',
-      params: { appointmentId: data.appointmentId },
-    };
-  }
-
-  if (type === 'vaccination' && data.vaccinationId) {
-    const params: Record<string, any> = { vaccinationId: data.vaccinationId };
+  if (type === 'vaccination') {
+    const params: Record<string, any> = { careTab: 'Vaccinations' };
+    if (data.vaccinationId) params.vaccinationId = data.vaccinationId;
     if (data.petId) params.petId = data.petId;
     if (data.dueDate) params.dueDate = data.dueDate;
+    return { route: 'Care', params };
+  }
+
+  if (type === 'sos') {
+    // EmergencyContactsScreen is under More stack as "Emergency"
     return {
-      route: 'Vaccinations',
-      params,
+      route: 'More',
+      params: {
+        screen: 'Emergency',
+        params: data.sosId ? { sosId: data.sosId } : {},
+      },
     };
   }
 
-  if (type === 'sos' && data.sosId) {
+  if (type === 'birthday' || (data.petId && data.event === 'birthday')) {
     return {
-      route: 'Emergency',
-      params: { sosId: data.sosId },
+      route: 'PetList',
+      params: {
+        screen: 'PetDetail',
+        params: { petId: data.petId },
+      },
     };
   }
 
   // Fallback to petId if available
   if (data.petId) {
     return {
-      route: 'PetDetail',
-      params: { petId: data.petId },
+      route: 'PetList',
+      params: {
+        screen: 'PetDetail',
+        params: { petId: data.petId },
+      },
     };
-  }
-
-  // Type-based fallback without specific ID
-  if (type === 'medication') {
-    return { route: 'Medications', params: {} };
-  }
-  if (type === 'appointment') {
-    return { route: 'Appointments', params: {} };
-  }
-  if (type === 'vaccination') {
-    return { route: 'Vaccinations', params: {} };
-  }
-  if (type === 'sos') {
-    return { route: 'Emergency', params: {} };
   }
 
   return null;

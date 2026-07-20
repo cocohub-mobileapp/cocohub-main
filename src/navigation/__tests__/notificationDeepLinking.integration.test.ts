@@ -25,7 +25,8 @@ describe('Notification Deep Linking - Navigation Integration', () => {
       const deepLink = extractDeepLinkParams(notificationData);
 
       expect(deepLink).toBeDefined();
-      expect(deepLink?.route).toBe('Medications');
+      expect(deepLink?.route).toBe('Care');
+      expect(deepLink?.params.careTab).toBe('Medications');
       expect(deepLink?.params.medicationId).toBe('med-123');
     });
 
@@ -39,7 +40,7 @@ describe('Notification Deep Linking - Navigation Integration', () => {
       const deepLink = extractDeepLinkParams(notificationData);
 
       expect(deepLink).toBeDefined();
-      expect(deepLink?.route).toBe('Appointments');
+      expect(deepLink?.route).toBe('Schedule');
     });
 
     it('handles vaccination notification on cold start', () => {
@@ -54,7 +55,8 @@ describe('Notification Deep Linking - Navigation Integration', () => {
       const deepLink = extractDeepLinkParams(notificationData);
 
       expect(deepLink).toBeDefined();
-      expect(deepLink?.route).toBe('Vaccinations');
+      expect(deepLink?.route).toBe('Care');
+      expect(deepLink?.params.careTab).toBe('Vaccinations');
       expect(deepLink?.params.vaccinationId).toBe('vac-789');
       expect(deepLink?.params.petId).toBe('pet-001');
     });
@@ -69,12 +71,26 @@ describe('Notification Deep Linking - Navigation Integration', () => {
       const deepLink = extractDeepLinkParams(notificationData);
 
       expect(deepLink).toBeDefined();
-      expect(deepLink?.route).toBe('Emergency');
-      expect(deepLink?.params.sosId).toBe('sos-911-emergency');
+      expect(deepLink?.route).toBe('More');
+      expect(deepLink?.params.screen).toBe('Emergency');
+    });
+  });
+
+  describe('Birthday + pet deep links', () => {
+    it('handles birthday notification to PetDetail', () => {
+      const notificationData = {
+        type: 'birthday',
+        petId: 'pet-42',
+      };
+      const deepLink = extractDeepLinkParams(notificationData);
+      expect(deepLink?.route).toBe('PetList');
+      expect(deepLink?.params.screen).toBe('PetDetail');
+      expect(deepLink?.params.params.petId).toBe('pet-42');
     });
   });
 
   describe('Background scenarios', () => {
+
     it('handles notification tap from background state', () => {
       // App is in background, user taps notification
       const notificationData = {
@@ -100,7 +116,7 @@ describe('Notification Deep Linking - Navigation Integration', () => {
       const deepLink = extractDeepLinkParams(notificationData);
 
       expect(deepLink).toBeDefined();
-      expect(deepLink?.route).toBe('Appointments');
+      expect(deepLink?.route).toBe('Schedule');
     });
   });
 
@@ -292,7 +308,7 @@ describe('Notification Deep Linking - Navigation Integration', () => {
 
       const deepLink = extractDeepLinkParams(notificationContent.data);
 
-      expect(deepLink?.route).toBe('Appointments');
+      expect(deepLink?.route).toBe('Schedule');
       expect(deepLink?.params.appointmentId).toBe('vet-checkup-2026-06-15');
     });
 
