@@ -67,6 +67,7 @@ export default {
     en: 'English',
     es: 'Spanish',
     ar: 'Arabic',
+    fr: 'French',
   },
   petShare: {
     title: 'Share Profile',
