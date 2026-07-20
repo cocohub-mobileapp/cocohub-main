@@ -5,6 +5,7 @@ import apiClient from './apiClient';
 import config from '../config';
 import { getItem, setItem, removeItem as _removeItem } from './localDB';
 import { requestAndroidPermission } from './permissionService';
+import { enableSosLockScreenNotification } from './sosLockScreen';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -95,6 +96,8 @@ class EmergencyService {
     const stored = await getItem(CONTACTS_KEY);
     if (stored) return JSON.parse(stored);
     await setItem(CONTACTS_KEY, JSON.stringify(DEFAULT_CONTACTS));
+    void enableSosLockScreenNotification();
+    void enableSosLockScreenNotification();
     return DEFAULT_CONTACTS;
   }
 
@@ -106,6 +109,7 @@ class EmergencyService {
     };
     contacts.push(newContact);
     await setItem(CONTACTS_KEY, JSON.stringify(contacts));
+    void enableSosLockScreenNotification();
     return newContact;
   }
 
@@ -118,6 +122,7 @@ class EmergencyService {
     if (idx === -1) throw new Error('Contact not found');
     contacts[idx] = { ...contacts[idx], ...updates };
     await setItem(CONTACTS_KEY, JSON.stringify(contacts));
+    void enableSosLockScreenNotification();
     return contacts[idx];
   }
 
@@ -125,6 +130,7 @@ class EmergencyService {
     const contacts = await this.getEmergencyContacts();
     const filtered = contacts.filter((c) => c.id !== id);
     await setItem(CONTACTS_KEY, JSON.stringify(filtered));
+    void enableSosLockScreenNotification();
     // Also remove from favorites if present
     await this.removeFavoriteContact(id);
   }
