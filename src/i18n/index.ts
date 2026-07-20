@@ -5,6 +5,8 @@ export const SUPPORTED_LANGUAGES = [
   { code: 'en', label: 'English', rtl: false },
   { code: 'es', label: 'Español', rtl: false },
   { code: 'ar', label: 'العربية', rtl: true },
+  { code: 'pt-BR', label: 'Português (Brasil)', rtl: false },
+  { code: 'fr', label: 'Français', rtl: false },
 ] as const;
 
 export type LanguageCode = (typeof SUPPORTED_LANGUAGES)[number]['code'];
@@ -29,6 +31,12 @@ async function loadLocale(lang: string): Promise<void> {
       break;
     case 'ar':
       bundle = await import('./locales/ar');
+      break;
+    case 'pt-BR':
+      bundle = await import('./locales/pt-BR');
+      break;
+    case 'fr':
+      bundle = await import('./locales/fr');
       break;
     default:
       return;
