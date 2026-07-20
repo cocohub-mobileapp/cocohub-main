@@ -175,6 +175,11 @@ export class SyncService {
     await this.push();
   }
 
+  /** Force-align pendingCount after offlineQueue drains (see issue #52). */
+  async setPendingCount(pendingCount: number): Promise<void> {
+    await this.patchStatus({ pendingCount, lastSync: Date.now(), isSyncing: false });
+  }
+
   // ── Conflict resolution ──
   async resolveConflict(
     type: SyncEntityType,

@@ -209,7 +209,19 @@ class OfflineQueue {
       }
     }
 
-    await setItem(QUEUE_KEY, JSON.stringify(stillPending));
+    // Persist only items that still need a server confirmation (failures / unresolved).
+    // Successful mutations are intentionally omitted from stillPending so they leave the queue.
+    if (stillPending.length === 0) {
+      await this.clearPersistentQueue();
+    } else {
+      await setItem(QUEUE_KEY, JSON.stringify(stillPending));
+    }
+
+    // Keep syncService status in lockstep so Settings > Sync Status does not show
+    // a stale pendingCount after offlineQueue already drained (issue #52).
+    await syncService.push();
+    const remainingQueue = await this.getPersistentQueue();
+    await syncService.setPendingCount(remainingQueue.length);
 
     const conflicts = await this.getPendingConflicts();
     if (conflicts.length > 0) {
@@ -217,12 +229,12 @@ class OfflineQueue {
         '⚠️ Sync conflict',
         `${conflicts.length} change(s) conflict with the server. Tap to resolve.`,
       );
-    } else if (stillPending.length === 0) {
+    } else if (remainingQueue.length === 0) {
       await this.notifyUser('✅ Sync complete', 'All offline changes have been synced.');
     } else {
       await this.notifyUser(
         '⚠️ Sync partially failed',
-        `${stillPending.length} change(s) could not be synced and will be retried.`,
+        `${remainingQueue.length} change(s) could not be synced and will be retried.`,
       );
     }
 
@@ -301,7 +313,9 @@ class OfflineQueue {
     const pendingConflicts = await this.getPendingConflicts();
     return {
       isOnline: this.isOnline,
-      pendingCount: Math.max(syncStatus.pendingCount, queue.length),
+      // Queue length is authoritative for offline mutations; do not keep inflated
+      // syncService.pendingCount after a successful clear (#52).
+      pendingCount: queue.length + (syncStatus.failedCount || 0),
       isSyncing: syncStatus.isSyncing,
       lastSync: syncStatus.lastSync,
       failedCount: syncStatus.failedCount,
