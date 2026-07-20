@@ -100,7 +100,11 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
     })();
   };
 
-  const toggleTorch = () => setTorchEnabled(!torchEnabled);
+  // Functional update avoids stale closure; iOS torch is flaky if the prop
+  // does not re-apply after a no-op re-render.
+  const toggleTorch = useCallback(() => {
+    setTorchEnabled((prev) => !prev);
+  }, []);
 
   const handlePermissionDenied = () => {
     Alert.alert(
@@ -137,6 +141,9 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
     return (
       <View style={styles.cameraContainer}>
         <CameraView
+          // Remount on iOS when torch toggles so enableTorch reliably re-applies
+          // (known expo-camera quirk: prop change alone sometimes no-ops on iOS).
+          key={Platform.OS === 'ios' ? `qr-cam-torch-${torchEnabled ? 'on' : 'off'}` : 'qr-cam'}
           style={styles.camera}
           facing="back"
           enableTorch={torchEnabled}
@@ -169,8 +176,10 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
           <TouchableOpacity
             style={[styles.controlButton, torchEnabled && styles.controlButtonActive]}
             onPress={toggleTorch}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityLabel="Toggle flashlight"
             accessibilityRole="button"
+            accessibilityState={{ selected: torchEnabled }}
           >
             <Text style={styles.controlButtonText}>💡</Text>
           </TouchableOpacity>
@@ -335,6 +344,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     width: '60%',
+    zIndex: 20,
+    elevation: 20,
   },
   controlButton: {
     width: 60,
