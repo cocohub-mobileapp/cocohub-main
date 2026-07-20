@@ -58,7 +58,11 @@ const VaccinationScreen = React.lazy(() => import('../screens/VaccinationScreen'
 const VetMapScreen = React.lazy(() => import('../screens/VetMapScreen'));
 import analyticsService from '../services/analyticsService';
 import { getSession } from '../services/authService';
-import { extractDeepLinkParams } from '../services/notificationService';
+import { extractDeepLinkParams } from '../services/notificationService'
+import {
+  attachSosNotificationListener,
+  enableSosLockScreenNotification,
+} from '../services/sosLockScreen';;
 import onboardingService from '../services/onboardingService';
 import performance from '../utils/performance';
 import CareNavigator from './CareNavigator';
