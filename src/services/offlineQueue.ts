@@ -1,4 +1,4 @@
-﻿import apiClient from './apiClient';
+import apiClient from './apiClient';
 import { executeSql, getItem, setItem } from './localDB';
 import { sendAlertNotification } from './notificationService';
 import syncService, { type SyncAction, type SyncEntityType, type SyncStatus } from './syncService';
@@ -201,7 +201,15 @@ class OfflineQueue {
               serverData,
             });
           } else {
-            stillPending.push(mutation);
+            // Cannot fetch server version — store conflict with local data only
+            // to prevent infinite retry loop on 409 conflicts
+            await this._storeConflict({
+              id: mutation.id,
+              type: mutation.type,
+              action: mutation.action,
+              localData: mutation.data,
+              serverData: mutation.data,
+            });
           }
         } else {
           stillPending.push(mutation);
