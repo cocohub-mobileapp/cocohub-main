@@ -83,14 +83,24 @@ cd cocohub-main
 npm install --legacy-peer-deps
 ```
 
-### 3. Set up environment
+### 3. Set up Stellar testnet account
+
+First, create a Stellar testnet account and fund it via Friendbot:
+
+```bash
+# See full guide: docs/STELLAR-SETUP.md
+curl "https://friendbot.stellar.org?addr=YOUR_PUBLIC_KEY"
+```
+
+### 4. Set up environment
 
 ```bash
 cp .env.example .env.development
 # Edit .env.development with your local values
+# (see docs/STELLAR-SETUP.md for Stellar environment variables)
 ```
 
-### 4. Start the backend
+### 5. Start the backend
 
 ```bash
 docker-compose up
@@ -98,7 +108,7 @@ npm run migrate
 npm run seed:dev
 ```
 
-### 5. Run the app
+### 6. Run the app
 
 ```bash
 # Web (fastest for development)

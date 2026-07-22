@@ -162,12 +162,15 @@ npx expo start --web
 # → open http://localhost:8081
 ```
 
-**Full stack with backend:**
+**Full stack with backend (with Stellar blockchain features):**
 ```bash
 docker-compose up          # PostgreSQL + Redis + API
 npm run migrate            # Run DB migrations
 npm run seed:dev           # Seed test data
 ```
+
+> Before running blockchain features, set up a Stellar testnet account:
+> [`docs/STELLAR-SETUP.md`](docs/STELLAR-SETUP.md)
 
 **Test credentials:** `owner1@example.com` / `Password123!`
 
