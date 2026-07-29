@@ -217,7 +217,7 @@ const WeightChart: React.FC<Props> = ({
               style={[
                 styles.filterText,
                 { color: colors.secondaryText },
-                selectedRange === range && styles.filterTextActive,
+                selectedRange === range && { color: colors.white },
               ]}
             >
               {range}
@@ -394,7 +394,7 @@ const WeightChart: React.FC<Props> = ({
       )}
 
       {vetRecommendedRange && (
-        <View style={styles.legend}>
+        <View style={[styles.legend, { borderTopColor: colors.border }]}>
           <View style={styles.legendItem}>
             <View
               style={[
@@ -417,7 +417,6 @@ const styles = StyleSheet.create({
   container: {
     borderRadius: 12,
     padding: 16,
-    shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
@@ -469,9 +468,6 @@ const styles = StyleSheet.create({
   filterText: {
     fontSize: 13,
     fontWeight: '600',
-  },
-  filterTextActive: {
-    color: '#fff',
   },
   chartSummary: {
     marginBottom: 12,
@@ -562,7 +558,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
   },
   legendItem: {
     flexDirection: 'row',
