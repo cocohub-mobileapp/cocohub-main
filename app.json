@@ -35,6 +35,15 @@
           "organization": "cocohub",
           "project": "mobile-app"
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#e53e3e",
+          "sounds": ["./assets/sounds/default.wav"],
+          "mode": "production"
+        }
       ]
     ],
     "extra": {
