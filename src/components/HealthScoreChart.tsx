@@ -72,12 +72,6 @@ function formatDateLabel(iso: string, compact = false): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function scoreColor(score: number): string {
-  if (score >= 80) return '#2e7d32';
-  if (score >= 60) return '#f57f17';
-  return '#c62828';
-}
-
 function describeTrend(data: HealthScoreDataPoint[]): string {
   if (data.length < 2) return 'Insufficient data';
   
@@ -143,6 +137,13 @@ const HealthScoreChart: React.FC<Props> = ({ data, medicalEvents = [], onExport,
   }, [filteredData, chartHeight, chartWidth]);
 
   const trendDescription = useMemo(() => describeTrend(filteredData), [filteredData]);
+
+  // Theme-aware score color function
+  const themeScoreColor = (score: number): string => {
+    if (score >= 80) return colors.success;
+    if (score >= 60) return colors.warning;
+    return colors.error;
+  };
 
   // ── Render empty state ────────────────────────────────────────────────────
 
@@ -211,7 +212,7 @@ const HealthScoreChart: React.FC<Props> = ({ data, medicalEvents = [], onExport,
               style={[
                 styles.filterText,
                 { color: colors.secondaryText },
-                selectedRange === range && styles.filterTextActive,
+                selectedRange === range && { color: colors.white },
               ]}
             >
               {range}
@@ -236,7 +237,8 @@ const HealthScoreChart: React.FC<Props> = ({ data, medicalEvents = [], onExport,
             y={CHART_PADDING.top + yScale(80)}
             width={chartWidth - CHART_PADDING.left - CHART_PADDING.right}
             height={yScale(0) - yScale(20)}
-            fill="rgba(76, 175, 80, 0.08)"
+            fill={colors.success} 
+            fillOpacity={0.08}
           />
 
           {/* Y-axis grid lines */}
@@ -317,7 +319,7 @@ const HealthScoreChart: React.FC<Props> = ({ data, medicalEvents = [], onExport,
             const x = CHART_PADDING.left + xScale(idx);
             const y = CHART_PADDING.top + yScale(point.score);
             const isSelected = selectedPoint === idx;
-            const pointColor = scoreColor(point.score);
+            const pointColor = themeScoreColor(point.score);
 
             return (
               <React.Fragment key={idx}>
@@ -376,7 +378,7 @@ const HealthScoreChart: React.FC<Props> = ({ data, medicalEvents = [], onExport,
             <Text
               style={[
                 styles.tooltipScore,
-                { color: scoreColor(filteredData[selectedPoint].score) },
+                { color: themeScoreColor(filteredData[selectedPoint].score) },
               ]}
             >
               {filteredData[selectedPoint].score} / 100
@@ -409,7 +411,6 @@ const styles = StyleSheet.create({
   container: {
     borderRadius: 12,
     padding: 16,
-    shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
@@ -445,9 +446,6 @@ const styles = StyleSheet.create({
   filterText: {
     fontSize: 13,
     fontWeight: '600',
-  },
-  filterTextActive: {
-    color: '#fff',
   },
   chartContainer: {
     position: 'relative',

@@ -66,19 +66,17 @@ const LoginScreen: React.FC<Props> = ({ onSuccess, onRegister, onForgotPassword 
         <Text style={[styles.title, { color: colors.text }]}>Welcome Back</Text>
         <Text style={[styles.subtitle, { color: colors.secondaryText }]}>Sign in to Cocohub</Text>
 
-        {/* General error */}
         {errors.general && (
-          <View style={[styles.generalError, { backgroundColor: '#fdecea' }]}>
-            <Text style={styles.generalErrorText}>⚠️ {errors.general}</Text>
+          <View style={[styles.generalError, { backgroundColor: colors.primaryMuted }]}>
+            <Text style={[styles.generalErrorText, { color: colors.error }]}>⚠️ {errors.general}</Text>
           </View>
         )}
 
-        {/* Email */}
         <View style={styles.fieldWrap}>
           <TextInput
             style={[
               styles.input,
-              { backgroundColor: colors.input, borderColor: errors.email ? '#D32F2F' : colors.border, color: colors.text },
+              { backgroundColor: colors.input, borderColor: errors.email ? colors.error : colors.border, color: colors.text },
             ]}
             placeholder="Email"
             placeholderTextColor={colors.placeholder}
@@ -90,17 +88,16 @@ const LoginScreen: React.FC<Props> = ({ onSuccess, onRegister, onForgotPassword 
             onSubmitEditing={() => passwordRef.current?.focus()}
             testID="login-email-input"
           />
-          {errors.email && <Text style={styles.fieldError}>{errors.email}</Text>}
+          {errors.email && <Text style={[styles.fieldError, { color: colors.error }]}>{errors.email}</Text>}
         </View>
 
-        {/* Password */}
         <View style={styles.fieldWrap}>
           <View style={styles.passwordRow}>
             <TextInput
               style={[
                 styles.input,
                 styles.passwordInput,
-                { backgroundColor: colors.input, borderColor: errors.password ? '#D32F2F' : colors.border, color: colors.text },
+                { backgroundColor: colors.input, borderColor: errors.password ? colors.error : colors.border, color: colors.text },
               ]}
               placeholder="Password"
               placeholderTextColor={colors.placeholder}
@@ -112,11 +109,14 @@ const LoginScreen: React.FC<Props> = ({ onSuccess, onRegister, onForgotPassword 
               onSubmitEditing={() => void handleLogin()}
               testID="login-password-input"
             />
-            <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPassword((s) => !s)}>
+            <TouchableOpacity
+              style={[styles.eyeBtn, { borderColor: colors.border }]}
+              onPress={() => setShowPassword((s) => !s)}
+            >
               <Text style={{ fontSize: 18 }}>{showPassword ? '🙈' : '👁️'}</Text>
             </TouchableOpacity>
           </View>
-          {errors.password && <Text style={styles.fieldError}>{errors.password}</Text>}
+          {errors.password && <Text style={[styles.fieldError, { color: colors.error }]}>{errors.password}</Text>}
         </View>
 
         <TouchableOpacity onPress={onForgotPassword} style={styles.forgotLink}>
@@ -130,8 +130,8 @@ const LoginScreen: React.FC<Props> = ({ onSuccess, onRegister, onForgotPassword 
           testID="login-submit-button"
         >
           {loading
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.btnText}>Sign In</Text>
+            ? <ActivityIndicator color={colors.white} />
+            : <Text style={[styles.btnText, { color: colors.white }]}>Sign In</Text>
           }
         </TouchableOpacity>
 
@@ -154,12 +154,10 @@ const styles = StyleSheet.create({
   logo: { fontSize: 56, textAlign: 'center', marginBottom: 12 },
   title: { fontSize: 26, fontWeight: '700', textAlign: 'center' },
   subtitle: { fontSize: 15, textAlign: 'center', marginBottom: 28, marginTop: 4 },
-  generalError: {
-    borderRadius: 10, padding: 12, marginBottom: 16,
-  },
-  generalErrorText: { color: '#C62828', fontSize: 14 },
+  generalError: { borderRadius: 10, padding: 12, marginBottom: 16 },
+  generalErrorText: { fontSize: 14 },
   fieldWrap: { marginBottom: 4 },
-  fieldError: { color: '#D32F2F', fontSize: 12, marginTop: 4, marginLeft: 4, marginBottom: 8 },
+  fieldError: { fontSize: 12, marginTop: 4, marginLeft: 4, marginBottom: 8 },
   input: {
     borderWidth: 1, borderRadius: 10,
     paddingHorizontal: 14, paddingVertical: 13,
@@ -171,15 +169,11 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderLeftWidth: 0, borderRadius: 10,
     borderTopLeftRadius: 0, borderBottomLeftRadius: 0,
     paddingHorizontal: 14, paddingVertical: 13,
-    borderColor: '#ddd',
   },
   forgotLink: { alignSelf: 'flex-end', marginVertical: 14 },
-  btn: {
-    borderRadius: 10, paddingVertical: 14,
-    alignItems: 'center', marginBottom: 20,
-  },
+  btn: { borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginBottom: 20 },
   btnDisabled: { opacity: 0.6 },
-  btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  btnText: { fontSize: 16, fontWeight: '700' },
   footer: { flexDirection: 'row', justifyContent: 'center' },
   footerText: { fontSize: 14 },
   link: { fontWeight: '600', fontSize: 14 },

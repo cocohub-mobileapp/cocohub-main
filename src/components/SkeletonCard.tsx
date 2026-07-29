@@ -75,7 +75,7 @@ export const SkeletonCard: React.FC<SkeletonCardProps> = ({
   const spacing = Math.max(12, (height - contentHeight) / 2);
 
   return (
-    <View style={[styles.container, isFullWidth && styles.fullWidth, { height }, style]}>
+    <View style={[styles.container, isFullWidth && styles.fullWidth, { height, backgroundColor: colors.surface, shadowColor: colors.shadow }, style]}>
       {/* Avatar/Image placeholder */}
       <Animated.View style={[styles.avatar, animatedStyle, { backgroundColor: colors.muted }]} />
 
@@ -104,12 +104,10 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 12,
     marginBottom: 10,
-    shadowColor: '#000',
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
