@@ -28,6 +28,11 @@ import {
   registerNotificationActions,
   watchNotificationActions,
 } from './src/services/notificationService';
+import {
+  registerSOSNotificationCategory,
+  startSOSNotificationIfReady,
+  handleSOSNotificationAction,
+} from './src/services/sosNotificationService';
 import updateService from './src/services/updateService';
 import { checkAppVersion } from './src/services/versionCheckService';
 import { initializeWidgetService } from './src/services/widgetService';
@@ -116,9 +121,11 @@ function App() {
 
   useEffect(() => {
     void registerNotificationActions();
+    void registerSOSNotificationCategory(); // Register SOS category for lock screen
     const subscription = watchNotificationActions();
     void registerBackgroundMedicationTask();
     void scheduleAllPetBirthdays(); // Schedule birthday + health milestone reminders
+    void startSOSNotificationIfReady(); // Show persistent SOS if contacts configured
 
     // Initialize widget service and update widgets
     const unsubscribeWidget = initializeWidgetService();

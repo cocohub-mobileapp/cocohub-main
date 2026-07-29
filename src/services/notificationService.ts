@@ -140,6 +140,8 @@ const ACTION_MARK_AS_READ = 'MARK_AS_READ';
 const ACTION_MARK_AS_TAKEN = 'MARK_AS_TAKEN';
 const ACTION_SNOOZE_30MIN = 'SNOOZE_30MIN';
 const ACTION_SKIP_DOSE = 'SKIP_DOSE';
+const ACTION_SOS_SEND = 'SOS_SEND';
+const ACTION_SOS_DISMISS = 'SOS_DISMISS';
 
 const DEFAULT_PREFS: NotificationPreferences = {
   medicationReminders: true,
@@ -240,11 +242,37 @@ export const registerNotificationActions = async (): Promise<void> => {
     },
   ];
 
+  const sosActions = [
+    {
+      identifier: ACTION_SOS_SEND,
+      buttonTitle: '🚨 Send SOS',
+      options: {
+        opensAppToForeground: false,
+        isAuthenticationRequired: false, // Allow from lock screen
+        isDestructive: false,
+      },
+    },
+    {
+      identifier: ACTION_SOS_DISMISS,
+      buttonTitle: 'Dismiss',
+      options: {
+        opensAppToForeground: false,
+        isAuthenticationRequired: false,
+      },
+    },
+    {
+      identifier: ACTION_OPEN,
+      buttonTitle: 'Open',
+      options: { opensAppToForeground: true },
+    },
+  ];
+
   await Promise.all([
     Notifications.setNotificationCategoryAsync('medication', medicationActions),
     ...['appointment', 'vaccination', 'alert', 'scheduled'].map((category) =>
       Notifications.setNotificationCategoryAsync(category, defaultActions),
     ),
+    Notifications.setNotificationCategoryAsync('sos', sosActions),
   ]);
 };
 
@@ -412,6 +440,28 @@ export const handleNotificationAction = async (
   response: Notifications.NotificationResponse,
 ): Promise<void> => {
   const { actionIdentifier, notification } = response;
+
+  // Handle SOS actions (lock screen)
+  if (actionIdentifier === ACTION_SOS_SEND) {
+    try {
+      const emergencyServiceModule = await import('./emergencyService');
+      await emergencyServiceModule.default.triggerSOS(
+        'Pet emergency - need immediate help (lock screen SOS)',
+      );
+    } catch (error) {
+      console.error('Lock screen SOS failed', error);
+    }
+    return;
+  }
+
+  if (actionIdentifier === ACTION_SOS_DISMISS) {
+    try {
+      await Notifications.dismissNotificationAsync(notification.request.identifier);
+    } catch {
+      // Ignore — notification may already be dismissed
+    }
+    return;
+  }
 
   if (actionIdentifier === ACTION_MARK_AS_TAKEN) {
     await handleMarkAsTaken(notification);

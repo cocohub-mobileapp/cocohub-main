@@ -33,6 +33,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
   const [torchEnabled, setTorchEnabled] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const [showRationale, setShowRationale] = useState(false);
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastScanRef = useRef<number>(0);
@@ -63,6 +64,18 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
       if (timeout) clearTimeout(timeout);
     };
   }, [requestCameraPermission]);
+
+  // Reset camera ready state when torch toggles to ensure re-application
+  useEffect(() => {
+    if (cameraReady) {
+      // Camera is already ready, torch prop change will be handled by CameraView
+      return;
+    }
+  }, [torchEnabled, cameraReady]);
+
+  const handleCameraReady = useCallback(() => {
+    setCameraReady(true);
+  }, []);
 
   const handleBarCodeScanned = ({ data }: BarCodeScannerResult) => {
     // Debounce: prevent multiple scans within 500ms
@@ -117,7 +130,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
   const renderCameraView = () => {
     if (hasPermission === null) {
       return (
-        <View style={styles.permissionContainer}>
+        <View style={styles.permissionContainer} testID="camera-permission-loading">
           <Text style={styles.permissionText}>Requesting camera permission...</Text>
         </View>
       );
@@ -125,9 +138,9 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
 
     if (hasPermission === false) {
       return (
-        <View style={styles.permissionContainer}>
+        <View style={styles.permissionContainer} testID="camera-permission-denied">
           <Text style={styles.permissionText}>Camera permission denied</Text>
-          <TouchableOpacity style={styles.permissionButton} onPress={handlePermissionDenied}>
+          <TouchableOpacity style={styles.permissionButton} onPress={handlePermissionDenied} testID="enable-camera-button">
             <Text style={styles.permissionButtonText}>Enable Camera</Text>
           </TouchableOpacity>
         </View>
@@ -140,6 +153,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
           style={styles.camera}
           facing="back"
           enableTorch={torchEnabled}
+          onCameraReady={handleCameraReady}
           onBarcodeScanned={
             scanned
               ? undefined
@@ -171,6 +185,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
             onPress={toggleTorch}
             accessibilityLabel="Toggle flashlight"
             accessibilityRole="button"
+            testID="toggle-flashlight-button"
           >
             <Text style={styles.controlButtonText}>💡</Text>
           </TouchableOpacity>
@@ -179,6 +194,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
             onPress={onManualEntry}
             accessibilityLabel="Manual entry"
             accessibilityRole="button"
+            testID="inline-manual-entry-button"
           >
             <Text style={styles.controlButtonText}>📝</Text>
           </TouchableOpacity>
@@ -188,7 +204,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} testID="qr-scanner-screen">
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
       <PermissionRationaleModal
         visible={showRationale}
@@ -209,6 +225,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
           onPress={onClose}
           accessibilityLabel="Close scanner"
           accessibilityRole="button"
+          testID="close-scanner-button"
         >
           <Text style={styles.closeButtonText}>✕</Text>
         </TouchableOpacity>
@@ -223,6 +240,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
           onPress={onManualEntry}
           accessibilityLabel="Enter code manually"
           accessibilityRole="button"
+          testID="manual-entry-button"
         >
           <Text style={styles.manualEntryButtonText}>Manual Entry</Text>
         </TouchableOpacity>

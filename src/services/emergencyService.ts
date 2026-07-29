@@ -5,6 +5,7 @@ import apiClient from './apiClient';
 import config from '../config';
 import { getItem, setItem, removeItem as _removeItem } from './localDB';
 import { requestAndroidPermission } from './permissionService';
+import { refreshSOSNotification } from './sosNotificationService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -106,6 +107,7 @@ class EmergencyService {
     };
     contacts.push(newContact);
     await setItem(CONTACTS_KEY, JSON.stringify(contacts));
+    await refreshSOSNotification(); // Update persistent SOS notification
     return newContact;
   }
 
@@ -118,6 +120,7 @@ class EmergencyService {
     if (idx === -1) throw new Error('Contact not found');
     contacts[idx] = { ...contacts[idx], ...updates };
     await setItem(CONTACTS_KEY, JSON.stringify(contacts));
+    await refreshSOSNotification(); // Update persistent SOS notification
     return contacts[idx];
   }
 
@@ -127,6 +130,7 @@ class EmergencyService {
     await setItem(CONTACTS_KEY, JSON.stringify(filtered));
     // Also remove from favorites if present
     await this.removeFavoriteContact(id);
+    await refreshSOSNotification(); // Update persistent SOS notification
   }
 
   // ── Favorites ────────────────────────────────────────────────────────────────
