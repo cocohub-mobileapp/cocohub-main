@@ -1,4 +1,4 @@
-﻿import type { BarCodeScannerResult } from 'expo-barcode-scanner';
+import type { BarCodeScannerResult } from 'expo-barcode-scanner';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -139,7 +139,8 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
         <CameraView
           style={styles.camera}
           facing="back"
-          enableTorch={torchEnabled}
+          enableTorch={Platform.OS === 'android' ? torchEnabled : undefined}
+          torch={Platform.OS === 'ios' ? (torchEnabled ? 'on' : 'off') : undefined}
           onBarcodeScanned={
             scanned
               ? undefined
