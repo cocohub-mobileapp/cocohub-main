@@ -1,4 +1,4 @@
-﻿import type { BarCodeScannerResult } from 'expo-barcode-scanner';
+import type { BarCodeScannerResult } from 'expo-barcode-scanner';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -33,6 +33,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
   const [torchEnabled, setTorchEnabled] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const [showRationale, setShowRationale] = useState(false);
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastScanRef = useRef<number>(0);
@@ -100,7 +101,14 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
     })();
   };
 
-  const toggleTorch = () => setTorchEnabled(!torchEnabled);
+  const toggleTorch = () => {
+    if (!cameraReady) return;
+    setTorchEnabled(!torchEnabled);
+  };
+
+  const handleCameraReady = () => {
+    setCameraReady(true);
+  };
 
   const handlePermissionDenied = () => {
     Alert.alert(
@@ -139,7 +147,9 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
         <CameraView
           style={styles.camera}
           facing="back"
+          flash="off"
           enableTorch={torchEnabled}
+          onCameraReady={handleCameraReady}
           onBarcodeScanned={
             scanned
               ? undefined
@@ -167,8 +177,13 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
 
         <View style={styles.controlsContainer}>
           <TouchableOpacity
-            style={[styles.controlButton, torchEnabled && styles.controlButtonActive]}
+            style={[
+              styles.controlButton,
+              torchEnabled && styles.controlButtonActive,
+              !cameraReady && styles.controlButtonDisabled,
+            ]}
             onPress={toggleTorch}
+            disabled={!cameraReady}
             accessibilityLabel="Toggle flashlight"
             accessibilityRole="button"
           >
@@ -349,6 +364,9 @@ const styles = StyleSheet.create({
   controlButtonActive: {
     backgroundColor: 'rgba(16, 185, 129, 0.3)',
     borderColor: '#10B981',
+  },
+  controlButtonDisabled: {
+    opacity: 0.4,
   },
   controlButtonText: { fontSize: 28 },
   permissionContainer: {
