@@ -8,7 +8,8 @@ import {
   upsertAppointment,
   deleteAppointmentById,
 } from './localDB';
-import { AppointmentStatus } from '../models/Appointment';
+import { getItem, setItem } from './localDB';
+import { AppointmentStatus, AppointmentType } from '../models/Appointment';
 import type { Appointment } from '../models/Appointment';
 import type { Medication } from '../models/Medication';
 
@@ -21,8 +22,10 @@ export { AppointmentStatus } from '../models/Appointment';
 
 const BASE_URL = '/appointments';
 
-/** Buffer window (ms) around each appointment that counts as a conflict */
-export const CONFLICT_BUFFER_MS = 60 * 60 * 1000; // 1 hour
+/** Default buffer (ms) between appointments: 30 minutes */
+export const DEFAULT_CONFLICT_BUFFER_MS = 30 * 60 * 1000;
+
+const BUFFER_PREF_KEY = '@appointment_conflict_buffer_ms';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -46,6 +49,25 @@ export interface AvailabilityResult {
   availableSlots: string[];
 }
 
+// ─── Conflict buffer preference ──────────────────────────────────────────────
+
+/** Get the user-configured conflict buffer (ms). Falls back to 30 min default. */
+export async function getConflictBufferMs(): Promise<number> {
+  try {
+    const raw = await getItem(BUFFER_PREF_KEY);
+    if (raw) {
+      const parsed = parseInt(raw, 10);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+  } catch { /* use default */ }
+  return DEFAULT_CONFLICT_BUFFER_MS;
+}
+
+/** Persist a new conflict buffer (in milliseconds). */
+export async function setConflictBufferMs(ms: number): Promise<void> {
+  await setItem(BUFFER_PREF_KEY, String(ms));
+}
+
 // ─── Availability ─────────────────────────────────────────────────────────────
 
 export async function getAvailability(vetId: string, date: string): Promise<AvailabilityResult> {
@@ -63,36 +85,82 @@ export async function detectConflicts(
   proposedTime: Date,
   medications: Medication[] = [],
   excludeId?: string,
+  proposedDurationMinutes?: number,
 ): Promise<ConflictDetectionResult> {
   const conflicts: AppointmentConflict[] = [];
+  const bufferMs = await getConflictBufferMs();
+  const durationMs = (proposedDurationMinutes ?? 30) * 60 * 1000;
+  const proposedEnd = new Date(proposedTime.getTime() + durationMs);
 
-  const windowStart = new Date(proposedTime.getTime() - CONFLICT_BUFFER_MS).toISOString();
-  const windowEnd = new Date(proposedTime.getTime() + CONFLICT_BUFFER_MS).toISOString();
+  // ── Same-day appointments (full-day scan) ──────────────────────────────
+  const dayStart = new Date(proposedTime);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(proposedTime);
+  dayEnd.setHours(23, 59, 59, 999);
 
-  const nearby = await getAppointmentsInWindow<Appointment>(petId, windowStart, windowEnd);
-  for (const appt of nearby) {
+  const todayAppointments = await getAppointmentsInWindow<Appointment>(
+    petId,
+    dayStart.toISOString(),
+    dayEnd.toISOString(),
+  );
+
+  for (const appt of todayAppointments) {
     if (excludeId && appt.id === excludeId) continue;
+    if (appt.status === AppointmentStatus.CANCELLED) continue;
+
     const apptTime = new Date(appt.date);
-    const diffMs = Math.abs(apptTime.getTime() - proposedTime.getTime());
-    if (diffMs <= CONFLICT_BUFFER_MS) {
+    const apptDurationMs = (appt.durationMinutes ?? 30) * 60 * 1000;
+    const apptEnd = new Date(apptTime.getTime() + apptDurationMs);
+
+    // Check for duration-based overlap (appointments overlapping in time)
+    const overlaps =
+      proposedTime < apptEnd && proposedEnd > apptTime;
+
+    // Check for buffer-based proximity (close but not overlapping)
+    const gapBefore = Math.abs(apptEnd.getTime() - proposedTime.getTime());
+    const gapAfter = Math.abs(apptTime.getTime() - proposedEnd.getTime());
+    const tooClose = gapBefore <= bufferMs || gapAfter <= bufferMs;
+
+    if (overlaps) {
+      const overlapDesc =
+        proposedTime >= apptTime && proposedEnd <= apptEnd
+          ? `Completely within "${appt.title ?? 'Appointment'}"`
+          : proposedTime < apptTime && proposedEnd > apptEnd
+            ? `"${appt.title ?? 'Appointment'}" is completely within the proposed time`
+            : `Overlaps with "${appt.title ?? 'Appointment'}"`;
       conflicts.push({
         type: 'appointment',
-        description: `"${appt.title ?? 'Appointment'}" is scheduled ${_formatTimeDiff(diffMs)} from the proposed time.`,
+        description: overlapDesc,
+        conflictingAppointment: appt,
+      });
+    } else if (tooClose) {
+      const gapMs = Math.min(gapBefore, gapAfter);
+      conflicts.push({
+        type: 'appointment',
+        description: `"${appt.title ?? 'Appointment'}" is scheduled ${_formatTimeDiff(gapMs)} from the proposed time (buffer: ${_formatTimeDiff(bufferMs)}).`,
         conflictingAppointment: appt,
       });
     }
   }
 
+  // ── Medication conflicts (with buffer) ────────────────────────────────
   const { getScheduleForRange } = await import('./medicationService');
-  const windowStartDate = new Date(proposedTime.getTime() - CONFLICT_BUFFER_MS);
-  const windowEndDate = new Date(proposedTime.getTime() + CONFLICT_BUFFER_MS);
+  const windowStartDate = new Date(proposedTime.getTime() - bufferMs);
+  const windowEndDate = new Date(proposedEnd.getTime() + bufferMs);
 
   for (const med of medications) {
     if (!isVetSupervised(med)) continue;
     const doseTimes = getScheduleForRange(med, windowStartDate, windowEndDate);
     for (const doseTime of doseTimes) {
-      const diffMs = Math.abs(doseTime.getTime() - proposedTime.getTime());
-      if (diffMs <= CONFLICT_BUFFER_MS) {
+      const doseEnd = new Date(doseTime.getTime() + 30 * 60 * 1000); // assume 30 min
+      const doseOverlaps =
+        proposedTime < doseEnd && proposedEnd > doseTime;
+      const diffMs = Math.min(
+        Math.abs(doseTime.getTime() - proposedTime.getTime()),
+        Math.abs(doseTime.getTime() - proposedEnd.getTime()),
+      );
+
+      if (doseOverlaps || diffMs <= bufferMs) {
         conflicts.push({
           type: 'medication',
           description: `"${med.name}" requires vet supervision at ${_formatTime(doseTime)} (within ${_formatTimeDiff(diffMs)} of the proposed time).`,
@@ -128,12 +196,13 @@ export async function findNextAvailableSlot(
   medications: Medication[] = [],
 ): Promise<Date | undefined> {
   const MAX_ITERATIONS = 14 * 24;
-  let candidate = new Date(from.getTime() + CONFLICT_BUFFER_MS);
+  const bufferMs = await getConflictBufferMs();
+  let candidate = new Date(from.getTime() + bufferMs);
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     const result = await detectConflicts(petId, candidate, medications);
     if (!result.hasConflicts) return candidate;
-    candidate = new Date(candidate.getTime() + CONFLICT_BUFFER_MS);
+    candidate = new Date(candidate.getTime() + bufferMs);
   }
   return undefined;
 }
