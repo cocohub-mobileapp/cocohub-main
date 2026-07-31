@@ -1,4 +1,4 @@
-﻿import apiClient from './apiClient';
+import apiClient from './apiClient';
 import { executeSql, getItem, setItem } from './localDB';
 import { sendAlertNotification } from './notificationService';
 import syncService, { type SyncAction, type SyncEntityType, type SyncStatus } from './syncService';
@@ -69,6 +69,8 @@ type ConflictListener = (conflict: ConflictItem) => void;
 
 const QUEUE_KEY = '@offline_queue';
 const CONFLICTS_KEY = '@offline_queue:conflicts';
+const SYNC_QUEUE_KEY = '@sync_queue';
+const SYNC_STATUS_KEY = '@sync_status';
 
 // ─── OfflineQueue ─────────────────────────────────────────────────────────────
 
@@ -158,6 +160,8 @@ class OfflineQueue {
   /**
    * Flush all pending mutations to the server.
    * Detects 409 conflicts via If-Match / ETag and queues them for resolution.
+   * After successful push, also cleans up the syncService queue to prevent
+   * duplicate sync attempts.
    */
   async processQueue(): Promise<void> {
     const online = await networkMonitor.isOnline();
@@ -167,6 +171,7 @@ class OfflineQueue {
     if (pending.length === 0) return;
 
     const stillPending: QueuedMutation[] = [];
+    const syncedIds = new Set<string>();
 
     for (const mutation of pending) {
       try {
@@ -175,6 +180,11 @@ class OfflineQueue {
 
         const endpoint = `/${mutation.type}s/${String(mutation.data.id ?? '')}`;
         const response = await apiClient.put(endpoint, mutation.data, { headers });
+
+        // Verify server confirmed success before clearing the record
+        if (response.status >= 200 && response.status < 300) {
+          syncedIds.add(mutation.data.id as string);
+        }
 
         // Capture updated ETag for future mutations on this entity
         const newEtag = (response.headers as Record<string, string>)?.['etag'];
@@ -211,6 +221,13 @@ class OfflineQueue {
 
     await setItem(QUEUE_KEY, JSON.stringify(stillPending));
 
+    // Clear syncService queue for items that were successfully synced.
+    // Without this, syncService retains stale entries and re-pushes them on
+    // the next sync cycle, causing duplicate records on the server.
+    if (syncedIds.size > 0) {
+      await this._cleanSyncServiceQueue(syncedIds);
+    }
+
     const conflicts = await this.getPendingConflicts();
     if (conflicts.length > 0) {
       await this.notifyUser(
@@ -227,6 +244,36 @@ class OfflineQueue {
     }
 
     await this.emitStatus();
+  }
+
+  /**
+   * Remove successfully-synced entries from syncService's internal queue
+   * so they are not re-pushed on the next sync cycle.
+   */
+  private async _cleanSyncServiceQueue(syncedIds: Set<string>): Promise<void> {
+    try {
+      const raw = await getItem(SYNC_QUEUE_KEY);
+      if (!raw) return;
+
+      const syncQueue = JSON.parse(raw) as Array<{ id: string; data: Record<string, unknown> }>;
+      const filtered = syncQueue.filter(
+        (item) => !syncedIds.has(item.data.id as string),
+      );
+
+      await setItem(SYNC_QUEUE_KEY, JSON.stringify(filtered));
+      await setItem(
+        SYNC_STATUS_KEY,
+        JSON.stringify({
+          isSyncing: false,
+          lastSync: Date.now(),
+          pendingCount: filtered.length,
+          failedCount: 0,
+          conflicts: [],
+        }),
+      );
+    } catch {
+      // Non-fatal: queue deduplication is best-effort
+    }
   }
 
   // ── Blockchain anchor queue ───────────────────────────────────────────────
@@ -402,10 +449,6 @@ class OfflineQueue {
   async getPersistentQueue(): Promise<QueuedMutation[]> {
     const stored = await getItem(QUEUE_KEY);
     return stored ? JSON.parse(stored) : [];
-  }
-
-  private async clearPersistentQueue(): Promise<void> {
-    await setItem(QUEUE_KEY, JSON.stringify([]));
   }
 
   private async _fetchServerVersion(
