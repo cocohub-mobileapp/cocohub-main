@@ -140,6 +140,9 @@ const ACTION_MARK_AS_READ = 'MARK_AS_READ';
 const ACTION_MARK_AS_TAKEN = 'MARK_AS_TAKEN';
 const ACTION_SNOOZE_30MIN = 'SNOOZE_30MIN';
 const ACTION_SKIP_DOSE = 'SKIP_DOSE';
+const ACTION_SOS = 'SEND_SOS';
+
+const SOS_NOTIFICATION_ID = 'cocohub-sos-foreground';
 
 const DEFAULT_PREFS: NotificationPreferences = {
   medicationReminders: true,
@@ -240,8 +243,22 @@ export const registerNotificationActions = async (): Promise<void> => {
     },
   ];
 
+  const sosActions = [
+    {
+      identifier: ACTION_SOS,
+      buttonTitle: 'Send SOS',
+      options: { opensAppToForeground: false },
+    },
+    {
+      identifier: ACTION_OPEN,
+      buttonTitle: 'Open App',
+      options: { opensAppToForeground: true },
+    },
+  ];
+
   await Promise.all([
     Notifications.setNotificationCategoryAsync('medication', medicationActions),
+    Notifications.setNotificationCategoryAsync('sos', sosActions),
     ...['appointment', 'vaccination', 'alert', 'scheduled'].map((category) =>
       Notifications.setNotificationCategoryAsync(category, defaultActions),
     ),
@@ -408,10 +425,24 @@ async function handleSkipDose(notification: Notifications.Notification): Promise
   }
 }
 
+async function handleSOSAction(): Promise<void> {
+  try {
+    const { default: emergencyService } = await import('./emergencyService');
+    await emergencyService.triggerSOS('Emergency SOS triggered from lock screen');
+  } catch {
+    // Non-fatal — user can still trigger SOS from within the app
+  }
+}
+
 export const handleNotificationAction = async (
   response: Notifications.NotificationResponse,
 ): Promise<void> => {
   const { actionIdentifier, notification } = response;
+
+  if (actionIdentifier === ACTION_SOS) {
+    await handleSOSAction();
+    return;
+  }
 
   if (actionIdentifier === ACTION_MARK_AS_TAKEN) {
     await handleMarkAsTaken(notification);
@@ -690,6 +721,57 @@ export const sendAlertNotification = async (
     trigger: null, // fire immediately
   });
   return notificationId;
+};
+
+// ─── SOS Foreground Notification ───────────────────────────────────────────────
+
+/**
+ * Show a persistent SOS notification on Android lock screen.
+ * When emergency contacts are configured, this notification provides a
+ * one-tap SOS action that works without unlocking the device.
+ */
+export const showSOSNotification = async (emergencyContactCount: number): Promise<void> => {
+  // Only meaningful on Android — foreground service notification is the mechanism
+  if (emergencyContactCount === 0) {
+    await hideSOSNotification();
+    return;
+  }
+
+  await Notifications.scheduleNotificationAsync({
+    identifier: SOS_NOTIFICATION_ID,
+    content: {
+      title: 'Emergency SOS',
+      body: `${emergencyContactCount} emergency contact${emergencyContactCount === 1 ? '' : 's'} configured — tap to send SOS`,
+      data: {
+        type: 'sos' as NotificationGroup,
+        category: resolveNotificationCategory('sos'),
+        sosId: SOS_NOTIFICATION_ID,
+      },
+      categoryIdentifier: 'sos',
+      // Android-specific: show on lock screen with full visibility
+      ...(Platform.OS === 'android' ? {
+        priority: Notifications.AndroidNotificationPriority.Max,
+        sticky: true,
+        autoDismiss: false,
+        // Show on lock screen
+        visibility: Notifications.AndroidNotificationVisibility.Public,
+      } : {}),
+    },
+    trigger: null as any, // fire immediately
+  });
+};
+
+/**
+ * Remove the persistent SOS notification.
+ * Call when emergency contacts are removed or the user signs out.
+ */
+export const hideSOSNotification = async (): Promise<void> => {
+  try {
+    await Notifications.cancelScheduledNotificationAsync(SOS_NOTIFICATION_ID);
+    await Notifications.dismissNotificationAsync(SOS_NOTIFICATION_ID);
+  } catch {
+    // Notification may not exist — ignore
+  }
 };
 
 // ─── Cancel helpers ───────────────────────────────────────────────────────────
