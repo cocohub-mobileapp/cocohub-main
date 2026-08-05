@@ -136,7 +136,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
 
     return (
       <View style={styles.cameraContainer}>
-        <CameraView
+         <CameraView key={torchEnabled ? "torch-on" : "torch-off"} 
           style={styles.camera}
           facing="back"
           enableTorch={torchEnabled}
