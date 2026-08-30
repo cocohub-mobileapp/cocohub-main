@@ -1,4 +1,4 @@
-﻿import * as StellarSdk from '@stellar/stellar-sdk';
+import * as StellarSdk from '@stellar/stellar-sdk';
 import axios, { type AxiosResponse } from 'axios';
 import CryptoJS from 'crypto-js';
 
@@ -48,6 +48,25 @@ export type MedicalRecordWithChainData = MedicalRecord & {
   [key: string]: unknown;
 };
 
+export interface SorobanPetRecord {
+  recordHash: string;
+  owner: string;
+  timestamp: number;
+}
+
+export interface SorobanContractConfig {
+  rpcUrl?: string;
+  contractId?: string;
+  networkPassphrase?: string;
+}
+
+export interface SorobanInvocationResult {
+  status: 'SUCCESS' | 'FAILED' | 'PENDING';
+  txHash: string;
+  returnValue?: unknown;
+  error?: string;
+}
+
 // ==============================
 // CONFIG
 // ==============================
@@ -64,6 +83,13 @@ const HORIZON_URL =
 
 // Initialize Stellar Server
 let stellarServer: StellarSdk.Horizon.Server | null = null;
+let sorobanRpcServer: StellarSdk.rpc.Server | null = null;
+
+export const SOROBAN_RPC_URL =
+  process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
+export const DEFAULT_PET_REGISTRY_CONTRACT_ID =
+  process.env.PET_REGISTRY_CONTRACT_ID ||
+  'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM';
 
 // Circuit breaker for Horizon API calls (3 failures = open, 8s timeout)
 const horizonCircuitBreaker = new CircuitBreaker({
@@ -80,6 +106,15 @@ const getStellarServer = (): StellarSdk.Horizon.Server => {
       STELLAR_NETWORK === 'PUBLIC' ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET;
   }
   return stellarServer;
+};
+
+export const getSorobanRpcServer = (rpcUrl = SOROBAN_RPC_URL): StellarSdk.rpc.Server => {
+  if (!sorobanRpcServer || (sorobanRpcServer as unknown as { serverURL: { toString(): string } }).serverURL?.toString() !== rpcUrl) {
+    sorobanRpcServer = new StellarSdk.rpc.Server(rpcUrl, {
+      allowHttp: rpcUrl.startsWith('http://'),
+    });
+  }
+  return sorobanRpcServer;
 };
 
 const responseCache = new Map<string, { data: unknown; expiresAt: number }>();
@@ -650,6 +685,7 @@ export const clearBlockchainCache = (): void => {
   responseCache.clear();
   inFlightRequests.clear();
   stellarServer = null; // Reset Stellar server instance
+  sorobanRpcServer = null; // Reset Soroban RPC instance
 };
 
 export const invalidateBlockchainCacheKey = (key: string): void => {
@@ -745,3 +781,560 @@ export async function getTransactionDetails(txHash: string): Promise<StellarTran
   }
   return match;
 }
+
+// ==============================
+// SOROBAN SMART CONTRACT CLIENT
+// ==============================
+
+/**
+ * Helper to parse a 32-byte hex hash into a Buffer and ScVal
+ */
+export const hashHexToScVal = (hashHex: string): StellarSdk.xdr.ScVal => {
+  const cleanHex = hashHex.startsWith('0x') ? hashHex.slice(2) : hashHex;
+  if (cleanHex.length !== 64) {
+    throw new BlockchainServiceError(
+      'Hash must be a 32-byte (64 hex characters) string',
+      'INVALID_HASH',
+    );
+  }
+  const buf = Buffer.from(cleanHex, 'hex');
+  return StellarSdk.xdr.ScVal.scvBytes(buf);
+};
+
+/**
+ * Register a new pet record hash on Soroban smart contract.
+ * Only the pet owner can register.
+ */
+export const registerPetRecordOnSoroban = async ({
+  ownerSecretKey,
+  petId,
+  recordHashHex,
+  contractId = DEFAULT_PET_REGISTRY_CONTRACT_ID,
+  rpcUrl = SOROBAN_RPC_URL,
+}: {
+  ownerSecretKey: string;
+  petId: string;
+  recordHashHex: string;
+  contractId?: string;
+  rpcUrl?: string;
+}): Promise<StellarTransactionDetails> => {
+  if (!ownerSecretKey?.trim()) {
+    throw new BlockchainServiceError('Owner secret key is required', 'INVALID_KEY');
+  }
+  if (!petId?.trim()) {
+    throw new BlockchainServiceError('Pet ID is required', 'INVALID_PET_ID');
+  }
+  if (!recordHashHex?.trim()) {
+    throw new BlockchainServiceError('Record hash is required', 'INVALID_HASH');
+  }
+
+  try {
+    const ownerKeypair = StellarSdk.Keypair.fromSecret(ownerSecretKey.trim());
+    const rpc = getSorobanRpcServer(rpcUrl);
+    const contract = new StellarSdk.Contract(contractId.trim());
+
+    const account = await rpc.getAccount(ownerKeypair.publicKey());
+    const networkPassphrase =
+      STELLAR_NETWORK === 'PUBLIC' ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET;
+
+    const op = contract.call(
+      'register_pet_record',
+      new StellarSdk.Address(ownerKeypair.publicKey()).toScVal(),
+      StellarSdk.xdr.ScVal.scvSymbol(petId.trim()),
+      hashHexToScVal(recordHashHex.trim()),
+    );
+
+    const tx = new StellarSdk.TransactionBuilder(account, {
+      fee: '100000',
+      networkPassphrase,
+    })
+      .addOperation(op)
+      .setTimeout(30)
+      .build();
+
+    const preparedTx = await rpc.prepareTransaction(tx);
+    preparedTx.sign(ownerKeypair);
+
+    const sendResponse = await rpc.sendTransaction(preparedTx);
+    if (sendResponse.status === 'ERROR') {
+      throw new BlockchainServiceError(
+        `Soroban transaction failed: ${sendResponse.errorResult?.toXDR('hex') || 'Unknown error'}`,
+        'SOROBAN_EXECUTION_FAILED',
+      );
+    }
+
+    return {
+      hash: sendResponse.hash,
+      successful: sendResponse.status === 'PENDING' || sendResponse.status === 'SUCCESS',
+      sourceAccount: ownerKeypair.publicKey(),
+      createdAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    handleBlockchainError(error);
+    throw error;
+  }
+};
+
+/**
+ * Update an existing pet record hash on Soroban smart contract.
+ * Only the pet owner can update.
+ */
+export const updatePetRecordOnSoroban = async ({
+  ownerSecretKey,
+  petId,
+  newRecordHashHex,
+  contractId = DEFAULT_PET_REGISTRY_CONTRACT_ID,
+  rpcUrl = SOROBAN_RPC_URL,
+}: {
+  ownerSecretKey: string;
+  petId: string;
+  newRecordHashHex: string;
+  contractId?: string;
+  rpcUrl?: string;
+}): Promise<StellarTransactionDetails> => {
+  if (!ownerSecretKey?.trim()) {
+    throw new BlockchainServiceError('Owner secret key is required', 'INVALID_KEY');
+  }
+  if (!petId?.trim()) {
+    throw new BlockchainServiceError('Pet ID is required', 'INVALID_PET_ID');
+  }
+  if (!newRecordHashHex?.trim()) {
+    throw new BlockchainServiceError('New record hash is required', 'INVALID_HASH');
+  }
+
+  try {
+    const ownerKeypair = StellarSdk.Keypair.fromSecret(ownerSecretKey.trim());
+    const rpc = getSorobanRpcServer(rpcUrl);
+    const contract = new StellarSdk.Contract(contractId.trim());
+
+    const account = await rpc.getAccount(ownerKeypair.publicKey());
+    const networkPassphrase =
+      STELLAR_NETWORK === 'PUBLIC' ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET;
+
+    const op = contract.call(
+      'update_pet_record',
+      new StellarSdk.Address(ownerKeypair.publicKey()).toScVal(),
+      StellarSdk.xdr.ScVal.scvSymbol(petId.trim()),
+      hashHexToScVal(newRecordHashHex.trim()),
+    );
+
+    const tx = new StellarSdk.TransactionBuilder(account, {
+      fee: '100000',
+      networkPassphrase,
+    })
+      .addOperation(op)
+      .setTimeout(30)
+      .build();
+
+    const preparedTx = await rpc.prepareTransaction(tx);
+    preparedTx.sign(ownerKeypair);
+
+    const sendResponse = await rpc.sendTransaction(preparedTx);
+    if (sendResponse.status === 'ERROR') {
+      throw new BlockchainServiceError(
+        `Soroban transaction failed: ${sendResponse.errorResult?.toXDR('hex') || 'Unknown error'}`,
+        'SOROBAN_EXECUTION_FAILED',
+      );
+    }
+
+    return {
+      hash: sendResponse.hash,
+      successful: sendResponse.status === 'PENDING' || sendResponse.status === 'SUCCESS',
+      sourceAccount: ownerKeypair.publicKey(),
+      createdAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    handleBlockchainError(error);
+    throw error;
+  }
+};
+
+/**
+ * Grant a vet read access to a specific pet's record.
+ * Only the pet owner can grant access.
+ */
+export const grantVetAccessOnSoroban = async ({
+  ownerSecretKey,
+  vetAddress,
+  petId,
+  contractId = DEFAULT_PET_REGISTRY_CONTRACT_ID,
+  rpcUrl = SOROBAN_RPC_URL,
+}: {
+  ownerSecretKey: string;
+  vetAddress: string;
+  petId: string;
+  contractId?: string;
+  rpcUrl?: string;
+}): Promise<StellarTransactionDetails> => {
+  if (!ownerSecretKey?.trim()) {
+    throw new BlockchainServiceError('Owner secret key is required', 'INVALID_KEY');
+  }
+  if (!vetAddress?.trim()) {
+    throw new BlockchainServiceError('Vet address is required', 'INVALID_ADDRESS');
+  }
+  if (!petId?.trim()) {
+    throw new BlockchainServiceError('Pet ID is required', 'INVALID_PET_ID');
+  }
+
+  try {
+    const ownerKeypair = StellarSdk.Keypair.fromSecret(ownerSecretKey.trim());
+    const rpc = getSorobanRpcServer(rpcUrl);
+    const contract = new StellarSdk.Contract(contractId.trim());
+
+    const account = await rpc.getAccount(ownerKeypair.publicKey());
+    const networkPassphrase =
+      STELLAR_NETWORK === 'PUBLIC' ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET;
+
+    const op = contract.call(
+      'grant_vet_access',
+      new StellarSdk.Address(ownerKeypair.publicKey()).toScVal(),
+      new StellarSdk.Address(vetAddress.trim()).toScVal(),
+      StellarSdk.xdr.ScVal.scvSymbol(petId.trim()),
+    );
+
+    const tx = new StellarSdk.TransactionBuilder(account, {
+      fee: '100000',
+      networkPassphrase,
+    })
+      .addOperation(op)
+      .setTimeout(30)
+      .build();
+
+    const preparedTx = await rpc.prepareTransaction(tx);
+    preparedTx.sign(ownerKeypair);
+
+    const sendResponse = await rpc.sendTransaction(preparedTx);
+    if (sendResponse.status === 'ERROR') {
+      throw new BlockchainServiceError(
+        `Soroban transaction failed: ${sendResponse.errorResult?.toXDR('hex') || 'Unknown error'}`,
+        'SOROBAN_EXECUTION_FAILED',
+      );
+    }
+
+    return {
+      hash: sendResponse.hash,
+      successful: sendResponse.status === 'PENDING' || sendResponse.status === 'SUCCESS',
+      sourceAccount: ownerKeypair.publicKey(),
+      createdAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    handleBlockchainError(error);
+    throw error;
+  }
+};
+
+/**
+ * Revoke a vet's read access to a specific pet's record.
+ * Only the pet owner can revoke access.
+ */
+export const revokeVetAccessOnSoroban = async ({
+  ownerSecretKey,
+  vetAddress,
+  petId,
+  contractId = DEFAULT_PET_REGISTRY_CONTRACT_ID,
+  rpcUrl = SOROBAN_RPC_URL,
+}: {
+  ownerSecretKey: string;
+  vetAddress: string;
+  petId: string;
+  contractId?: string;
+  rpcUrl?: string;
+}): Promise<StellarTransactionDetails> => {
+  if (!ownerSecretKey?.trim()) {
+    throw new BlockchainServiceError('Owner secret key is required', 'INVALID_KEY');
+  }
+  if (!vetAddress?.trim()) {
+    throw new BlockchainServiceError('Vet address is required', 'INVALID_ADDRESS');
+  }
+  if (!petId?.trim()) {
+    throw new BlockchainServiceError('Pet ID is required', 'INVALID_PET_ID');
+  }
+
+  try {
+    const ownerKeypair = StellarSdk.Keypair.fromSecret(ownerSecretKey.trim());
+    const rpc = getSorobanRpcServer(rpcUrl);
+    const contract = new StellarSdk.Contract(contractId.trim());
+
+    const account = await rpc.getAccount(ownerKeypair.publicKey());
+    const networkPassphrase =
+      STELLAR_NETWORK === 'PUBLIC' ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET;
+
+    const op = contract.call(
+      'revoke_vet_access',
+      new StellarSdk.Address(ownerKeypair.publicKey()).toScVal(),
+      new StellarSdk.Address(vetAddress.trim()).toScVal(),
+      StellarSdk.xdr.ScVal.scvSymbol(petId.trim()),
+    );
+
+    const tx = new StellarSdk.TransactionBuilder(account, {
+      fee: '100000',
+      networkPassphrase,
+    })
+      .addOperation(op)
+      .setTimeout(30)
+      .build();
+
+    const preparedTx = await rpc.prepareTransaction(tx);
+    preparedTx.sign(ownerKeypair);
+
+    const sendResponse = await rpc.sendTransaction(preparedTx);
+    if (sendResponse.status === 'ERROR') {
+      throw new BlockchainServiceError(
+        `Soroban transaction failed: ${sendResponse.errorResult?.toXDR('hex') || 'Unknown error'}`,
+        'SOROBAN_EXECUTION_FAILED',
+      );
+    }
+
+    return {
+      hash: sendResponse.hash,
+      successful: sendResponse.status === 'PENDING' || sendResponse.status === 'SUCCESS',
+      sourceAccount: ownerKeypair.publicKey(),
+      createdAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    handleBlockchainError(error);
+    throw error;
+  }
+};
+
+/**
+ * Check if a vet has read access to a pet's record.
+ * Read-only contract query.
+ */
+export const checkVetAccessOnSoroban = async ({
+  vetAddress,
+  petId,
+  contractId = DEFAULT_PET_REGISTRY_CONTRACT_ID,
+  rpcUrl = SOROBAN_RPC_URL,
+}: {
+  vetAddress: string;
+  petId: string;
+  contractId?: string;
+  rpcUrl?: string;
+}): Promise<boolean> => {
+  if (!vetAddress?.trim()) {
+    throw new BlockchainServiceError('Vet address is required', 'INVALID_ADDRESS');
+  }
+  if (!petId?.trim()) {
+    throw new BlockchainServiceError('Pet ID is required', 'INVALID_PET_ID');
+  }
+
+  try {
+    const rpc = getSorobanRpcServer(rpcUrl);
+    const contract = new StellarSdk.Contract(contractId.trim());
+    const networkPassphrase =
+      STELLAR_NETWORK === 'PUBLIC' ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET;
+
+    const dummySource = StellarSdk.Keypair.random();
+    const op = contract.call(
+      'check_vet_access',
+      new StellarSdk.Address(vetAddress.trim()).toScVal(),
+      StellarSdk.xdr.ScVal.scvSymbol(petId.trim()),
+    );
+
+    const tx = new StellarSdk.TransactionBuilder(
+      new StellarSdk.Account(dummySource.publicKey(), '0'),
+      {
+        fee: '100',
+        networkPassphrase,
+      },
+    )
+      .addOperation(op)
+      .setTimeout(30)
+      .build();
+
+    const sim = await rpc.simulateTransaction(tx);
+    if (StellarSdk.rpc.Api.isSimulationSuccess(sim) && sim.result?.retval) {
+      const nativeVal = StellarSdk.scValToNative(sim.result.retval);
+      return Boolean(nativeVal);
+    }
+    return false;
+  } catch (error) {
+    handleBlockchainError(error);
+    throw error;
+  }
+};
+
+/**
+ * Read pet record from Soroban.
+ * Callable by owner or authorized vet.
+ */
+export const getPetRecordFromSoroban = async ({
+  requesterSecretKey,
+  petId,
+  contractId = DEFAULT_PET_REGISTRY_CONTRACT_ID,
+  rpcUrl = SOROBAN_RPC_URL,
+}: {
+  requesterSecretKey: string;
+  petId: string;
+  contractId?: string;
+  rpcUrl?: string;
+}): Promise<SorobanPetRecord> => {
+  if (!requesterSecretKey?.trim()) {
+    throw new BlockchainServiceError('Requester secret key is required', 'INVALID_KEY');
+  }
+  if (!petId?.trim()) {
+    throw new BlockchainServiceError('Pet ID is required', 'INVALID_PET_ID');
+  }
+
+  try {
+    const requesterKeypair = StellarSdk.Keypair.fromSecret(requesterSecretKey.trim());
+    const rpc = getSorobanRpcServer(rpcUrl);
+    const contract = new StellarSdk.Contract(contractId.trim());
+    const networkPassphrase =
+      STELLAR_NETWORK === 'PUBLIC' ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET;
+
+    const op = contract.call(
+      'get_record',
+      new StellarSdk.Address(requesterKeypair.publicKey()).toScVal(),
+      StellarSdk.xdr.ScVal.scvSymbol(petId.trim()),
+    );
+
+    const account = await rpc.getAccount(requesterKeypair.publicKey());
+    const tx = new StellarSdk.TransactionBuilder(account, {
+      fee: '100000',
+      networkPassphrase,
+    })
+      .addOperation(op)
+      .setTimeout(30)
+      .build();
+
+    const sim = await rpc.simulateTransaction(tx);
+    if (!StellarSdk.rpc.Api.isSimulationSuccess(sim) || !sim.result?.retval) {
+      throw new BlockchainServiceError(
+        'Failed to read pet record or unauthorized requester',
+        'UNAUTHORIZED_OR_NOT_FOUND',
+      );
+    }
+
+    const nativeRecord = StellarSdk.scValToNative(sim.result.retval) as {
+      owner: string;
+      record_hash: Buffer | Uint8Array | string;
+      timestamp: number | bigint;
+    };
+
+    let hashHex: string;
+    if (Buffer.isBuffer(nativeRecord.record_hash)) {
+      hashHex = nativeRecord.record_hash.toString('hex');
+    } else if (nativeRecord.record_hash instanceof Uint8Array) {
+      hashHex = Buffer.from(nativeRecord.record_hash).toString('hex');
+    } else {
+      hashHex = String(nativeRecord.record_hash);
+    }
+
+    return {
+      recordHash: hashHex,
+      owner: String(nativeRecord.owner),
+      timestamp: Number(nativeRecord.timestamp),
+    };
+  } catch (error) {
+    handleBlockchainError(error);
+    throw error;
+  }
+};
+
+/**
+ * Get all pet IDs accessible by a vet.
+ */
+export const getVetPetsFromSoroban = async ({
+  vetAddress,
+  contractId = DEFAULT_PET_REGISTRY_CONTRACT_ID,
+  rpcUrl = SOROBAN_RPC_URL,
+}: {
+  vetAddress: string;
+  contractId?: string;
+  rpcUrl?: string;
+}): Promise<string[]> => {
+  if (!vetAddress?.trim()) {
+    throw new BlockchainServiceError('Vet address is required', 'INVALID_ADDRESS');
+  }
+
+  try {
+    const rpc = getSorobanRpcServer(rpcUrl);
+    const contract = new StellarSdk.Contract(contractId.trim());
+    const networkPassphrase =
+      STELLAR_NETWORK === 'PUBLIC' ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET;
+
+    const dummySource = StellarSdk.Keypair.random();
+    const op = contract.call(
+      'get_vet_pets',
+      new StellarSdk.Address(vetAddress.trim()).toScVal(),
+    );
+
+    const tx = new StellarSdk.TransactionBuilder(
+      new StellarSdk.Account(dummySource.publicKey(), '0'),
+      {
+        fee: '100',
+        networkPassphrase,
+      },
+    )
+      .addOperation(op)
+      .setTimeout(30)
+      .build();
+
+    const sim = await rpc.simulateTransaction(tx);
+    if (StellarSdk.rpc.Api.isSimulationSuccess(sim) && sim.result?.retval) {
+      const nativeVal = StellarSdk.scValToNative(sim.result.retval);
+      if (Array.isArray(nativeVal)) {
+        return nativeVal.map(String);
+      }
+    }
+    return [];
+  } catch (error) {
+    handleBlockchainError(error);
+    throw error;
+  }
+};
+
+/**
+ * Get all pet IDs registered by an owner.
+ */
+export const getOwnerPetsFromSoroban = async ({
+  ownerAddress,
+  contractId = DEFAULT_PET_REGISTRY_CONTRACT_ID,
+  rpcUrl = SOROBAN_RPC_URL,
+}: {
+  ownerAddress: string;
+  contractId?: string;
+  rpcUrl?: string;
+}): Promise<string[]> => {
+  if (!ownerAddress?.trim()) {
+    throw new BlockchainServiceError('Owner address is required', 'INVALID_ADDRESS');
+  }
+
+  try {
+    const rpc = getSorobanRpcServer(rpcUrl);
+    const contract = new StellarSdk.Contract(contractId.trim());
+    const networkPassphrase =
+      STELLAR_NETWORK === 'PUBLIC' ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET;
+
+    const dummySource = StellarSdk.Keypair.random();
+    const op = contract.call(
+      'get_owner_pets',
+      new StellarSdk.Address(ownerAddress.trim()).toScVal(),
+    );
+
+    const tx = new StellarSdk.TransactionBuilder(
+      new StellarSdk.Account(dummySource.publicKey(), '0'),
+      {
+        fee: '100',
+        networkPassphrase,
+      },
+    )
+      .addOperation(op)
+      .setTimeout(30)
+      .build();
+
+    const sim = await rpc.simulateTransaction(tx);
+    if (StellarSdk.rpc.Api.isSimulationSuccess(sim) && sim.result?.retval) {
+      const nativeVal = StellarSdk.scValToNative(sim.result.retval);
+      if (Array.isArray(nativeVal)) {
+        return nativeVal.map(String);
+      }
+    }
+    return [];
+  } catch (error) {
+    handleBlockchainError(error);
+    throw error;
+  }
+};
