@@ -7,6 +7,7 @@ module.exports = {
   transformIgnorePatterns: ['/node_modules/(?!(otplib|@otplib|expo-updates|expo-constants)/)'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   moduleNameMapper: {
+    '^test-renderer$': 'react-test-renderer',
     '^react-native$': '<rootDir>/src/__mocks__/react-native.ts',
     '^react-native-keychain$': '<rootDir>/src/__mocks__/react-native-keychain.ts',
     '^react-native-image-picker$': '<rootDir>/src/__mocks__/react-native-image-picker.ts',
@@ -18,6 +19,7 @@ module.exports = {
     '^expo-notifications$': '<rootDir>/src/__mocks__/expo-notifications.ts',
     '^expo-updates$': '<rootDir>/src/__mocks__/expo-updates.ts',
     '^expo-calendar$': '<rootDir>/src/__mocks__/expo-calendar.ts',
+    '^expo-crypto$': '<rootDir>/src/__mocks__/expo-crypto.ts',
     '^expo-secure-store$': '<rootDir>/src/__mocks__/expo-secure-store.ts',
     '^expo-in-app-purchases$': '<rootDir>/src/__mocks__/expo-in-app-purchases.ts',
     '^@sentry/react-native$': '<rootDir>/src/__mocks__/@sentry/react-native.ts',

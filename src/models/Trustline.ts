@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Trustline domain models
  * Issue #101 — Stellar Trustline Management UI
  */
@@ -64,4 +64,20 @@ export interface CocohubAssetDefinition {
   name: string;
   description: string;
   iconEmoji: string;
+}
+
+/** Aggregated Cocohub token status for UI dashboards */
+export interface CocohubAssetStatus extends CocohubAssetDefinition {
+  hasTrustline: boolean;
+  walletBalance: string;
+  earnedBalance: string;
+  limit?: string;
+}
+
+/** Backend earned token rewards */
+export interface EarnedTokenBalances {
+  PETC: string;
+  VETH: string;
+  PAWP: string;
+  [key: string]: string;
 }
