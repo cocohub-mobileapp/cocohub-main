@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Trustline Service
  * Issue #101 — Stellar Trustline Management UI
  *
@@ -8,6 +8,7 @@
 
 import * as StellarSdk from '@stellar/stellar-sdk';
 
+import apiClient from './apiClient';
 import type {
   TrustlineAsset,
   TrustlineState,
@@ -15,17 +16,36 @@ import type {
   AddTrustlineParams,
   RemoveTrustlineParams,
   CocohubAssetDefinition,
+  CocohubAssetStatus,
+  EarnedTokenBalances,
 } from '../models/Trustline';
 
 // ─── Network config ───────────────────────────────────────────────────────────
 
-const STELLAR_NETWORK = (process.env.STELLAR_NETWORK ?? 'TESTNET') as 'TESTNET' | 'PUBLIC';
+const STELLAR_NETWORK = (process.env.STELLAR_NETWORK ?? 'TESTNET').toUpperCase() as
+  | 'TESTNET'
+  | 'PUBLIC';
 const HORIZON_URL =
   STELLAR_NETWORK === 'PUBLIC'
     ? 'https://horizon.stellar.org'
     : 'https://horizon-testnet.stellar.org';
 const NETWORK_PASSPHRASE =
   STELLAR_NETWORK === 'PUBLIC' ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET;
+
+/** Whether current configuration is running against Stellar testnet */
+export function isTestnetMode(): boolean {
+  return STELLAR_NETWORK !== 'PUBLIC';
+}
+
+/** Get configured Horizon server endpoint */
+export function getHorizonUrl(): string {
+  return HORIZON_URL;
+}
+
+/** Get configured Stellar network passphrase */
+export function getNetworkPassphrase(): string {
+  return NETWORK_PASSPHRASE;
+}
 
 /** XLM reserve locked per trustline on Stellar */
 export const XLM_RESERVE_PER_TRUSTLINE = 0.5;
@@ -302,15 +322,147 @@ export function isValidSecretKey(key: string): boolean {
   }
 }
 
-// ─── Internal helpers ─────────────────────────────────────────────────────────
+/**
+ * Maps known Cocohub assets (PETC, VETH, PAWP) against an account's trustlines
+ * and backend earned balances to produce a unified status list.
+ */
+export function buildCocohubAssetStatuses(
+  trustlines: TrustlineAsset[],
+  earnedBalances?: Record<string, string>,
+): CocohubAssetStatus[] {
+  return COCOHUB_ASSETS.map((asset) => {
+    const tl = trustlines.find(
+      (t) =>
+        t.assetCode.toUpperCase() === asset.assetCode.toUpperCase() &&
+        (!t.issuerPublicKey || t.issuerPublicKey === asset.issuerPublicKey),
+    );
 
-function extractStellarError(err: unknown): string | null {
+    return {
+      ...asset,
+      hasTrustline: Boolean(tl),
+      walletBalance: tl ? tl.balance : '0.00',
+      earnedBalance: earnedBalances?.[asset.assetCode] ?? '0.00',
+      limit: tl?.limit,
+    };
+  });
+}
+
+/**
+ * Fetches token balances earned through in-app activities and rewards from the backend.
+ * Gracefully falls back to zero balances if the endpoint or network is unreachable.
+ */
+export async function getEarnedBalances(): Promise<EarnedTokenBalances> {
+  try {
+    const res = await apiClient.get<{
+      data?: {
+        earnedBalances?: Record<string, string>;
+        totalPoints?: number;
+        earnedPremiumDays?: number;
+      };
+    }>('/referrals/me');
+
+    const data = res.data?.data;
+    if (data?.earnedBalances) {
+      return {
+        PETC: data.earnedBalances.PETC ?? '0.00',
+        VETH: data.earnedBalances.VETH ?? '0.00',
+        PAWP: data.earnedBalances.PAWP ?? String(data.totalPoints ?? '0.00'),
+      };
+    }
+    const points = data?.totalPoints ?? (data?.earnedPremiumDays ? data.earnedPremiumDays * 10 : 0);
+    return {
+      PETC: '0.00',
+      VETH: '0.00',
+      PAWP: points > 0 ? points.toFixed(2) : '0.00',
+    };
+  } catch {
+    return {
+      PETC: '0.00',
+      VETH: '0.00',
+      PAWP: '0.00',
+    };
+  }
+}
+
+// ─── Internal helpers & Stellar error mapping ───────────────────────────────
+
+const STELLAR_HORIZON_ERROR_MESSAGES: Record<string, string> = {
+  op_underfunded: 'Account has insufficient XLM for transaction fees and reserves.',
+  op_low_reserve:
+    'Insufficient XLM balance to satisfy the trustline reserve requirement (0.5 XLM).',
+  op_no_issuer: 'The asset issuer account does not exist on the Stellar network.',
+  op_invalid_limit: 'The specified trustline limit is invalid.',
+  op_already_exists: 'A trustline for this asset already exists.',
+  op_not_authorized: 'Account is not authorized by the issuer to establish this trustline.',
+  op_not_authorized_to_maintain_liabilities:
+    'Account is not authorized to maintain liabilities for this asset.',
+  op_src_no_trust: 'Source account does not have a trustline for the asset.',
+  op_line_full: 'The trustline limit has been reached.',
+  tx_bad_auth: 'Invalid transaction signature or secret key.',
+  tx_insufficient_fee: 'Transaction fee is too low for current network conditions.',
+  tx_insufficient_balance: 'Insufficient XLM balance to cover transaction fees.',
+  tx_too_early: 'Transaction submitted before valid time window.',
+  tx_too_late: 'Transaction expired before it could be included in a ledger.',
+  tx_missing_operation: 'Transaction contains no operations.',
+  tx_bad_seq: 'Invalid transaction sequence number. Please refresh and try again.',
+  tx_internal_error: 'Stellar Horizon internal error. Please retry in a moment.',
+};
+
+/**
+ * Extracts and translates Stellar Horizon error responses into clear,
+ * human-readable error messages.
+ */
+export function extractStellarError(err: unknown): string | null {
+  if (!err) return null;
+
   try {
     const e = err as {
-      response?: { data?: { extras?: { result_codes?: { operations?: string[] } } } };
+      message?: string;
+      name?: string;
+      response?: {
+        status?: number;
+        data?: {
+          title?: string;
+          detail?: string;
+          extras?: {
+            result_codes?: {
+              transaction?: string;
+              operations?: string[];
+            };
+          };
+        };
+      };
     };
-    const codes = e?.response?.data?.extras?.result_codes?.operations;
-    if (codes?.length) return codes.join(', ');
+
+    if (err instanceof StellarSdk.NotFoundError || e.response?.status === 404) {
+      return 'Account not found on the Stellar network. Please fund it with testnet XLM first.';
+    }
+
+    const opCodes = e?.response?.data?.extras?.result_codes?.operations;
+    const txCode = e?.response?.data?.extras?.result_codes?.transaction;
+
+    if (opCodes?.length) {
+      const translated = opCodes
+        .map((code) => STELLAR_HORIZON_ERROR_MESSAGES[code] ?? code)
+        .join('; ');
+      return translated;
+    }
+
+    if (txCode && STELLAR_HORIZON_ERROR_MESSAGES[txCode]) {
+      return STELLAR_HORIZON_ERROR_MESSAGES[txCode];
+    }
+
+    if (e.response?.data?.detail) {
+      return e.response.data.detail;
+    }
+
+    if (e.response?.data?.title) {
+      return e.response.data.title;
+    }
+
+    if (e.message) {
+      return e.message;
+    }
   } catch {
     // ignore
   }
