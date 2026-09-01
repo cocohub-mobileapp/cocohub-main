@@ -116,6 +116,7 @@ const VideoConsultationScreen: React.FC<Props> = ({
 
   const socketRef = useRef<Socket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
+  const cachedIceServersRef = useRef<IceServer[]>([]);
   const qualityTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   /** Accumulated stats for Sentry post-call logging */
   const statsHistoryRef = useRef<NetworkStats[]>([]);
@@ -126,12 +127,12 @@ const VideoConsultationScreen: React.FC<Props> = ({
     let prevTimestamp = Date.now();
 
     qualityTimerRef.current = setInterval(() => {
-      void pc.getStats().then((stats) => {
+      void pc.getStats().then((statsReport) => {
         let packetLoss = 0;
         let rttMs = 0;
         let bitrateKbps = 0;
 
-        stats.forEach((report) => {
+        statsReport.forEach((report) => {
           const r = report as Record<string, unknown>;
 
           // Inbound RTP — packet loss
@@ -158,13 +159,13 @@ const VideoConsultationScreen: React.FC<Props> = ({
           }
         });
 
-        const stats: NetworkStats = {
+        const netStats: NetworkStats = {
           packetLossPct: Math.round(packetLoss * 10) / 10,
           rttMs: Math.round(rttMs),
           bitrateKbps: Math.round(bitrateKbps),
         };
-        setNetworkStats(stats);
-        statsHistoryRef.current.push(stats);
+        setNetworkStats(netStats);
+        statsHistoryRef.current.push(netStats);
 
         // Derive quality tier
         let quality: NetworkQuality;
@@ -267,6 +268,7 @@ const VideoConsultationScreen: React.FC<Props> = ({
   // ---- Connect to signaling server & join room ---------------------------
   const joinRoom = useCallback(
     async (iceServers: IceServer[]) => {
+      cachedIceServersRef.current = iceServers;
       const stream = await startLocalMedia();
       if (!stream) return;
 
@@ -274,9 +276,11 @@ const VideoConsultationScreen: React.FC<Props> = ({
       const pc = buildPeerConnection(iceServers, stream);
 
       // ---- Signaling event handlers -------------------------------------
+      socket.off('peer_joined');
       socket.on('peer_joined', async ({ role }: { role: string }) => {
+        setCallState('in_call');
         // Caller (owner) creates the offer
-        if (userRole === 'OWNER' || role === 'OWNER') {
+        if (userRole?.toUpperCase() === 'OWNER' || role?.toUpperCase() === 'OWNER') {
           try {
             const offer = await pc.createOffer({});
             await pc.setLocalDescription(new RTCSessionDescription(offer));
@@ -290,6 +294,7 @@ const VideoConsultationScreen: React.FC<Props> = ({
         }
       });
 
+      socket.off('offer');
       socket.on('offer', async ({ sdp }: { sdp: RTCSessionDescriptionInit }) => {
         try {
           await pc.setRemoteDescription(
@@ -306,6 +311,7 @@ const VideoConsultationScreen: React.FC<Props> = ({
         }
       });
 
+      socket.off('answer');
       socket.on('answer', async ({ sdp }: { sdp: RTCSessionDescriptionInit }) => {
         try {
           await pc.setRemoteDescription(
@@ -319,6 +325,7 @@ const VideoConsultationScreen: React.FC<Props> = ({
         }
       });
 
+      socket.off('ice_candidate');
       socket.on('ice_candidate', async ({ candidate }: { candidate: RTCIceCandidateInit }) => {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(candidate));
@@ -327,25 +334,26 @@ const VideoConsultationScreen: React.FC<Props> = ({
         }
       });
 
+      socket.off('peer_left');
       socket.on('peer_left', () => {
         setRemoteStream(null);
         setCallState('ended');
-        void endCall();
+        pcRef.current?.close();
+        onEnd();
       });
 
+      socket.off('screen_toggle');
       socket.on('screen_toggle', ({ enabled }: { enabled: boolean }) => {
         if (!enabled) setIsSharingScreen(false);
       });
 
+      socket.off('error');
       socket.on('error', ({ message }: { message: string }) => {
         Alert.alert('Connection Error', message);
         onEnd();
       });
-
-      // Emit join event
-      socket.emit('join_room', { consultationId, roomToken, userId, role: userRole });
     },
-    [consultationId, roomToken, userId, userRole, startLocalMedia, buildPeerConnection, onEnd],
+    [consultationId, userRole, startLocalMedia, buildPeerConnection, onEnd],
   );
 
   // ---- Initialise --------------------------------------------------------
@@ -359,9 +367,22 @@ const VideoConsultationScreen: React.FC<Props> = ({
 
     socketRef.current = socket;
 
+    const emitJoin = () => {
+      socket.emit('join_room', {
+        consultationId,
+        roomToken,
+        userId,
+        role: userRole?.toLowerCase(),
+      });
+    };
+
+    socket.on('connect', emitJoin);
+    emitJoin();
+
     socket.on(
       'joined',
       (data: { iceServers: IceServer[]; position?: number; estimatedWaitMinutes?: number }) => {
+        cachedIceServersRef.current = data.iceServers;
         if (data.position != null) {
           setCallState('waiting_room');
           setWaitPosition(data.position);
@@ -379,7 +400,7 @@ const VideoConsultationScreen: React.FC<Props> = ({
       socket.disconnect();
       if (qualityTimerRef.current) clearInterval(qualityTimerRef.current);
     };
-  }, [joinRoom]);
+  }, [consultationId, roomToken, userId, userRole, joinRoom]);
 
   // ---- Controls ----------------------------------------------------------
   const toggleMute = useCallback(() => {
@@ -454,8 +475,7 @@ const VideoConsultationScreen: React.FC<Props> = ({
         statsHistoryRef.current.reduce((s, r) => s + r.packetLossPct, 0) /
         statsHistoryRef.current.length;
       const avgRtt =
-        statsHistoryRef.current.reduce((s, r) => s + r.rttMs, 0) /
-        statsHistoryRef.current.length;
+        statsHistoryRef.current.reduce((s, r) => s + r.rttMs, 0) / statsHistoryRef.current.length;
       logError(new Error('WebRTC post-call stats'), {
         consultationId,
         avgPacketLossPct: Math.round(avgLoss * 10) / 10,
@@ -597,14 +617,22 @@ const VideoConsultationScreen: React.FC<Props> = ({
 
       {/* 4-bar network quality indicator */}
       {(() => {
-        const bars = networkQuality === 'excellent' ? 4
-          : networkQuality === 'good' ? 3
-          : networkQuality === 'poor' ? 2
-          : 1;
-        const barColor = networkQuality === 'excellent' ? '#4caf50'
-          : networkQuality === 'good' ? '#8bc34a'
-          : networkQuality === 'poor' ? '#ff9800'
-          : '#f44336';
+        const bars =
+          networkQuality === 'excellent'
+            ? 4
+            : networkQuality === 'good'
+              ? 3
+              : networkQuality === 'poor'
+                ? 2
+                : 1;
+        const barColor =
+          networkQuality === 'excellent'
+            ? '#4caf50'
+            : networkQuality === 'good'
+              ? '#8bc34a'
+              : networkQuality === 'poor'
+                ? '#ff9800'
+                : '#f44336';
         const label = networkQuality.charAt(0).toUpperCase() + networkQuality.slice(1);
         return (
           <View style={styles.qualityBadge}>
@@ -636,10 +664,7 @@ const VideoConsultationScreen: React.FC<Props> = ({
       {showUnstableBanner && (
         <View style={styles.unstableBanner}>
           <Text style={styles.unstableBannerText}>🚨 Connection unstable</Text>
-          <TouchableOpacity
-            style={styles.audioOnlyBtn}
-            onPress={() => void switchToAudioOnly()}
-          >
+          <TouchableOpacity style={styles.audioOnlyBtn} onPress={() => void switchToAudioOnly()}>
             <Text style={styles.audioOnlyBtnText}>Switch to audio only</Text>
           </TouchableOpacity>
         </View>

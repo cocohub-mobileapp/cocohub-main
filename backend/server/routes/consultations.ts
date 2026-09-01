@@ -10,6 +10,7 @@ import express from 'express';
 
 import type { AuditableRequest } from '../../middleware/auditLog';
 import { authenticateJWT, type AuthenticatedRequest } from '../../middleware/auth';
+import { AppointmentStatus } from '../../models/Appointment';
 import { UserRole } from '../../models/UserRole';
 import {
   createConsultation,
@@ -22,7 +23,7 @@ import {
   recordConsent,
 } from '../../services/webrtcService';
 import { ok, sendError } from '../response';
-import { store } from '../store';
+import { store, type StoredMedicalRecord } from '../store';
 
 const router = express.Router();
 
@@ -154,6 +155,98 @@ router.post('/:id/consent', (req: AuthenticatedRequest, res) => {
       consultationId: consultation.id,
       recordingConsent: updated.recordingConsent,
       recordingEnabled: bothConsented,
+    }),
+  );
+});
+
+// ---- POST /api/consultations/:id/notes — submit consultation SOAP notes ----
+router.post('/:id/notes', (req: AuthenticatedRequest, res) => {
+  let consultation = getConsultationById(req.params.id as string);
+  const appointment = store.appointments.get(req.params.id as string);
+  if (!consultation && appointment?.consultationId) {
+    consultation = getConsultationById(appointment.consultationId);
+  }
+  if (!consultation && !appointment) {
+    return sendError(res, 404, 'NOT_FOUND', 'Consultation not found');
+  }
+
+  const userId = req.user!.id;
+  const vetId = consultation?.vetId || appointment?.vetId;
+  if (req.user!.role === UserRole.VET && vetId !== userId) {
+    return sendError(res, 403, 'FORBIDDEN', 'Only the attending vet can add consultation notes');
+  }
+
+  const petId = consultation?.petId || appointment!.petId;
+
+  const body = req.body as {
+    diagnosis?: string;
+    treatment?: string;
+    notes?: string;
+    subjective?: string;
+    objective?: string;
+    assessment?: string;
+    plan?: string;
+    prescription?: string;
+  };
+
+  const structuredNotes =
+    [
+      body.notes,
+      body.subjective ? `Subjective: ${body.subjective}` : '',
+      body.objective ? `Objective: ${body.objective}` : '',
+      body.assessment ? `Assessment: ${body.assessment}` : '',
+      body.plan ? `Plan: ${body.plan}` : '',
+      body.prescription ? `Prescription: ${body.prescription}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n') || 'Telemedicine Consultation Notes';
+
+  const recordId = store.newId();
+  const medicalRecord: StoredMedicalRecord = {
+    id: recordId,
+    petId,
+    vetId: vetId || userId,
+    type: 'telemedicine_consultation',
+    diagnosis: body.diagnosis || body.assessment || 'Telemedicine Consultation',
+    treatment: body.treatment || body.plan,
+    notes: structuredNotes,
+    visitDate: appointment?.date || new Date().toISOString().slice(0, 10),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  store.medicalRecords.set(recordId, medicalRecord);
+
+  if (consultation) {
+    consultation.status = 'completed';
+    consultation.endedAt = new Date().toISOString();
+    consultation.updatedAt = new Date().toISOString();
+  }
+
+  if (appointment) {
+    appointment.status = AppointmentStatus.COMPLETED;
+    appointment.updatedAt = new Date().toISOString();
+    store.appointments.set(appointment.id, appointment);
+  } else if (consultation) {
+    for (const appt of store.appointments.values()) {
+      if (appt.consultationId === consultation.id || appt.id === consultation.id) {
+        appt.status = AppointmentStatus.COMPLETED;
+        appt.updatedAt = new Date().toISOString();
+        store.appointments.set(appt.id, appt);
+        break;
+      }
+    }
+  }
+
+  (req as AuditableRequest).audit?.('consultation.notes_recorded', 'pet', petId, {
+    consultationId: consultation?.id,
+    recordId,
+  });
+
+  return res.status(201).json(
+    ok({
+      consultation: consultation ? toResponse(consultation) : null,
+      medicalRecord,
     }),
   );
 });

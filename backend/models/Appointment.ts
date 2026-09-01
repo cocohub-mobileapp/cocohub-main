@@ -164,6 +164,12 @@ export interface Appointment {
 
   /** Previous appointment date/time when rescheduled */
   rescheduledFrom?: string;
+
+  /** Associated WebRTC consultation ID */
+  consultationId?: string;
+
+  /** WebRTC room token for authenticating in the consultation */
+  roomToken?: string;
 }
 
 export type CreateAppointmentPayload = Omit<
