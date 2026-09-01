@@ -2,6 +2,7 @@ import express from 'express';
 
 import importRouter from './import';
 import lostFoundRouter from './lostFound';
+import predictionsRouter from './predictions';
 import petsRouterV2 from './v2/pets';
 import { deprecationHeaders } from '../../middleware/deprecation';
 import analyticsRouter from '../../server/routes/analytics';
@@ -29,6 +30,7 @@ export function createV1Router() {
   v1.use('/appointments', appointmentsRouter);
   v1.use('/medications', medicationsRouter);
   v1.use('/import', importRouter);
+  v1.use('/predictions', predictionsRouter);
 
   return v1;
 }
@@ -50,6 +52,7 @@ export function createV2Router() {
   v2.use('/appointments', appointmentsRouter);
   v2.use('/medications', medicationsRouter);
   v2.use('/import', importRouter);
+  v2.use('/predictions', predictionsRouter);
 
   return v2;
 }
