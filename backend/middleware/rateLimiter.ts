@@ -80,7 +80,10 @@ function userOrIpKey(req: Request): string {
 // Shared store factory
 // ---------------------------------------------------------------------------
 
-function makeStore(prefix: string): RedisStore {
+function makeStore(prefix: string): RedisStore | undefined {
+  if (process.env.NODE_ENV === 'test') {
+    return undefined;
+  }
   return new RedisStore({
     // @ts-expect-error — ioredis is compatible but types differ slightly
     sendCommand: (...args: string[]) => redisClient.call(...args),

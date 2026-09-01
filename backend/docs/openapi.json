@@ -56,12 +56,18 @@
     {
       "name": "Blockchain",
       "description": "Stellar blockchain integration for tamper-proof medical record anchoring"
+    },
+    {
+      "name": "Predictions",
+      "description": "AI-assisted veterinary triage and symptom analysis"
     }
   ],
   "paths": {
     "/auth/login": {
       "post": {
-        "tags": ["Authentication"],
+        "tags": [
+          "Authentication"
+        ],
         "summary": "Login with email and password",
         "description": "Authenticates a user with email/password credentials. Returns a short-lived JWT access token and a long-lived refresh token. Store both tokens securely (Keychain on iOS, SecureStore on Android).",
         "operationId": "loginUser",
@@ -130,7 +136,9 @@
     },
     "/auth/register": {
       "post": {
-        "tags": ["Authentication"],
+        "tags": [
+          "Authentication"
+        ],
         "summary": "Register a new user account",
         "description": "Creates a new user account. Sends a verification email to the provided address. Returns JWT tokens immediately so the user can start using the app before verifying their email.",
         "operationId": "registerUser",
@@ -191,7 +199,9 @@
     },
     "/auth/refresh": {
       "post": {
-        "tags": ["Authentication"],
+        "tags": [
+          "Authentication"
+        ],
         "summary": "Refresh access token",
         "description": "Exchanges a valid refresh token for a new access token. The old refresh token is invalidated. Called automatically by the API client interceptor on 401 responses.",
         "operationId": "refreshToken",
@@ -245,7 +255,9 @@
     },
     "/auth/logout": {
       "post": {
-        "tags": ["Authentication"],
+        "tags": [
+          "Authentication"
+        ],
         "summary": "Logout and invalidate session",
         "description": "Invalidates the server-side session. The client should also clear locally stored tokens. This is a best-effort call — local token cleanup always proceeds even if this request fails.",
         "operationId": "logoutUser",
@@ -269,7 +281,9 @@
     },
     "/auth/verify-email": {
       "post": {
-        "tags": ["Authentication"],
+        "tags": [
+          "Authentication"
+        ],
         "summary": "Verify email address",
         "description": "Verifies the user's email address using the token sent to their inbox.",
         "operationId": "verifyEmail",
@@ -314,7 +328,9 @@
     },
     "/auth/forgot-password": {
       "post": {
-        "tags": ["Authentication"],
+        "tags": [
+          "Authentication"
+        ],
         "summary": "Request password reset email",
         "description": "Sends a password reset link to the provided email address. Always returns 200 to prevent email enumeration attacks.",
         "operationId": "forgotPassword",
@@ -359,7 +375,9 @@
     },
     "/auth/reset-password": {
       "post": {
-        "tags": ["Authentication"],
+        "tags": [
+          "Authentication"
+        ],
         "summary": "Reset password with token",
         "description": "Resets the user's password using the token from the reset email.",
         "operationId": "resetPassword",
@@ -398,7 +416,9 @@
     },
     "/auth/oauth/{provider}": {
       "post": {
-        "tags": ["Authentication"],
+        "tags": [
+          "Authentication"
+        ],
         "summary": "OAuth login/register via social provider",
         "description": "Authenticates or registers a user via a social OAuth provider (Google, Apple, Facebook). The client obtains an authorization code from the provider and passes it here.",
         "operationId": "oauthLogin",
@@ -409,7 +429,11 @@
             "required": true,
             "schema": {
               "type": "string",
-              "enum": ["google", "apple", "facebook"]
+              "enum": [
+                "google",
+                "apple",
+                "facebook"
+              ]
             },
             "example": "google"
           }
@@ -449,7 +473,9 @@
     },
     "/users": {
       "get": {
-        "tags": ["Users"],
+        "tags": [
+          "Users"
+        ],
         "summary": "List all users",
         "description": "Returns a paginated list of users. Requires admin role.",
         "operationId": "listUsers",
@@ -476,7 +502,11 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["owner", "vet", "admin"]
+              "enum": [
+                "owner",
+                "vet",
+                "admin"
+              ]
             },
             "description": "Filter by user role"
           },
@@ -529,7 +559,9 @@
     },
     "/users/me": {
       "get": {
-        "tags": ["Users"],
+        "tags": [
+          "Users"
+        ],
         "summary": "Get current authenticated user",
         "description": "Returns the profile of the currently authenticated user.",
         "operationId": "getCurrentUser",
@@ -571,7 +603,9 @@
     },
     "/users/{id}": {
       "get": {
-        "tags": ["Users"],
+        "tags": [
+          "Users"
+        ],
         "summary": "Get user by ID",
         "description": "Returns a user profile by ID. Admins can access any user; regular users can only access their own profile.",
         "operationId": "getUserById",
@@ -622,7 +656,9 @@
         }
       },
       "put": {
-        "tags": ["Users"],
+        "tags": [
+          "Users"
+        ],
         "summary": "Update user profile",
         "description": "Updates editable user profile fields. Admins can update any user; regular users can only update their own profile.",
         "operationId": "updateUser",
@@ -690,7 +726,9 @@
         }
       },
       "delete": {
-        "tags": ["Users"],
+        "tags": [
+          "Users"
+        ],
         "summary": "Delete user account",
         "description": "Permanently deletes a user account. Requires admin role.",
         "operationId": "deleteUser",
@@ -725,7 +763,9 @@
     },
     "/pets": {
       "get": {
-        "tags": ["Pets"],
+        "tags": [
+          "Pets"
+        ],
         "summary": "List pets",
         "description": "Returns a paginated list of pets. Owners see only their own pets; vets and admins can see all pets.",
         "operationId": "listPets",
@@ -762,7 +802,13 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["dog", "cat", "bird", "rabbit", "other"]
+              "enum": [
+                "dog",
+                "cat",
+                "bird",
+                "rabbit",
+                "other"
+              ]
             },
             "description": "Filter by species"
           },
@@ -810,7 +856,9 @@
         }
       },
       "post": {
-        "tags": ["Pets"],
+        "tags": [
+          "Pets"
+        ],
         "summary": "Create a new pet",
         "description": "Registers a new pet. The `ownerId` must match the authenticated user's ID (or the user must be an admin).",
         "operationId": "createPet",
@@ -876,7 +924,9 @@
     },
     "/pets/{id}": {
       "get": {
-        "tags": ["Pets"],
+        "tags": [
+          "Pets"
+        ],
         "summary": "Get pet by ID",
         "description": "Returns full pet details including owner summary.",
         "operationId": "getPetById",
@@ -927,7 +977,9 @@
         }
       },
       "put": {
-        "tags": ["Pets"],
+        "tags": [
+          "Pets"
+        ],
         "summary": "Update pet details",
         "description": "Updates editable pet fields. Only the pet owner or an admin can update a pet.",
         "operationId": "updatePet",
@@ -995,7 +1047,9 @@
         }
       },
       "delete": {
-        "tags": ["Pets"],
+        "tags": [
+          "Pets"
+        ],
         "summary": "Delete a pet",
         "description": "Permanently deletes a pet and all associated records. Only the pet owner or an admin can delete a pet.",
         "operationId": "deletePet",
@@ -1030,7 +1084,9 @@
     },
     "/pets/qr/{qrCode}": {
       "get": {
-        "tags": ["Pets"],
+        "tags": [
+          "Pets"
+        ],
         "summary": "Look up pet by QR code",
         "description": "Retrieves a pet profile by scanning its QR code. Used by the QRScannerScreen. The QR code value is a URL-encoded string containing the pet ID and a CryptoJS checksum for tamper detection.",
         "operationId": "getPetByQRCode",
@@ -1105,7 +1161,9 @@
     },
     "/pets/owner/{ownerId}": {
       "get": {
-        "tags": ["Pets"],
+        "tags": [
+          "Pets"
+        ],
         "summary": "List pets by owner",
         "description": "Returns all pets belonging to a specific owner.",
         "operationId": "getPetsByOwner",
@@ -1169,7 +1227,9 @@
     },
     "/medical-records": {
       "get": {
-        "tags": ["Medical Records"],
+        "tags": [
+          "Medical Records"
+        ],
         "summary": "List medical records",
         "description": "Returns a paginated list of medical records with optional filters.",
         "operationId": "listMedicalRecords",
@@ -1214,7 +1274,13 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["checkup", "vaccination", "surgery", "treatment", "other"]
+              "enum": [
+                "checkup",
+                "vaccination",
+                "surgery",
+                "treatment",
+                "other"
+              ]
             },
             "description": "Filter by record type"
           },
@@ -1273,7 +1339,9 @@
         }
       },
       "post": {
-        "tags": ["Medical Records"],
+        "tags": [
+          "Medical Records"
+        ],
         "summary": "Create a medical record",
         "description": "Creates a new medical record for a pet. After creation, the record hash is automatically anchored on the Stellar blockchain asynchronously. The `isBlockchainVerified` field will be `false` until anchoring completes.",
         "operationId": "createMedicalRecord",
@@ -1361,7 +1429,9 @@
     },
     "/medical-records/{id}": {
       "get": {
-        "tags": ["Medical Records"],
+        "tags": [
+          "Medical Records"
+        ],
         "summary": "Get medical record by ID",
         "description": "Returns a single medical record with full details including blockchain verification status.",
         "operationId": "getMedicalRecordById",
@@ -1412,7 +1482,9 @@
         }
       },
       "put": {
-        "tags": ["Medical Records"],
+        "tags": [
+          "Medical Records"
+        ],
         "summary": "Update a medical record",
         "description": "Updates a medical record. Note: blockchain-verified records (`isBlockchainVerified: true`) cannot be modified — any update attempt will return 409.",
         "operationId": "updateMedicalRecord",
@@ -1494,7 +1566,9 @@
         }
       },
       "delete": {
-        "tags": ["Medical Records"],
+        "tags": [
+          "Medical Records"
+        ],
         "summary": "Delete a medical record",
         "description": "Deletes a medical record. Blockchain-verified records cannot be deleted.",
         "operationId": "deleteMedicalRecord",
@@ -1539,7 +1613,9 @@
     },
     "/medical-records/pet/{petId}": {
       "get": {
-        "tags": ["Medical Records"],
+        "tags": [
+          "Medical Records"
+        ],
         "summary": "Get all medical records for a pet",
         "description": "Returns all medical records for a specific pet, ordered by visit date descending.",
         "operationId": "getMedicalRecordsByPet",
@@ -1557,7 +1633,13 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["checkup", "vaccination", "surgery", "treatment", "other"]
+              "enum": [
+                "checkup",
+                "vaccination",
+                "surgery",
+                "treatment",
+                "other"
+              ]
             }
           },
           {
@@ -1627,7 +1709,9 @@
     },
     "/pets/{petId}/medical-records": {
       "get": {
-        "tags": ["Medical Records"],
+        "tags": [
+          "Medical Records"
+        ],
         "summary": "Get medical records for a pet (nested route)",
         "description": "Alias for GET /medical-records/pet/{petId}. Supports the same query parameters.",
         "operationId": "getPetMedicalRecords",
@@ -1645,7 +1729,13 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["checkup", "vaccination", "surgery", "treatment", "other"]
+              "enum": [
+                "checkup",
+                "vaccination",
+                "surgery",
+                "treatment",
+                "other"
+              ]
             }
           },
           {
@@ -1713,7 +1803,9 @@
     },
     "/appointments": {
       "get": {
-        "tags": ["Appointments"],
+        "tags": [
+          "Appointments"
+        ],
         "summary": "List appointments",
         "description": "Returns appointments. Owners see their pets' appointments; vets see their own appointments; admins see all.",
         "operationId": "listAppointments",
@@ -1746,7 +1838,14 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED", "NO_SHOW", "RESCHEDULED"]
+              "enum": [
+                "PENDING",
+                "CONFIRMED",
+                "CANCELLED",
+                "COMPLETED",
+                "NO_SHOW",
+                "RESCHEDULED"
+              ]
             },
             "description": "Filter by appointment status"
           },
@@ -1816,7 +1915,9 @@
         }
       },
       "post": {
-        "tags": ["Appointments"],
+        "tags": [
+          "Appointments"
+        ],
         "summary": "Create an appointment",
         "description": "Books a new appointment for a pet with a veterinarian.",
         "operationId": "createAppointment",
@@ -1916,7 +2017,9 @@
     },
     "/appointments/{id}": {
       "get": {
-        "tags": ["Appointments"],
+        "tags": [
+          "Appointments"
+        ],
         "summary": "Get appointment by ID",
         "description": "Returns full appointment details including vet and pet summaries.",
         "operationId": "getAppointmentById",
@@ -1965,7 +2068,9 @@
         }
       },
       "put": {
-        "tags": ["Appointments"],
+        "tags": [
+          "Appointments"
+        ],
         "summary": "Update an appointment",
         "description": "Updates appointment details. To cancel, set `status` to `CANCELLED` and provide `cancellationReason`.",
         "operationId": "updateAppointment",
@@ -2052,7 +2157,9 @@
     },
     "/medications": {
       "get": {
-        "tags": ["Medications"],
+        "tags": [
+          "Medications"
+        ],
         "summary": "List medications",
         "description": "Returns medications for a pet. The `petId` query parameter is required.",
         "operationId": "listMedications",
@@ -2078,7 +2185,12 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["active", "paused", "completed", "discontinued"]
+              "enum": [
+                "active",
+                "paused",
+                "completed",
+                "discontinued"
+              ]
             },
             "description": "Filter by medication status"
           }
@@ -2127,7 +2239,9 @@
         }
       },
       "post": {
-        "tags": ["Medications"],
+        "tags": [
+          "Medications"
+        ],
         "summary": "Create a medication schedule",
         "description": "Creates a new medication schedule for a pet.",
         "operationId": "createMedication",
@@ -2206,7 +2320,9 @@
     },
     "/medications/{id}": {
       "put": {
-        "tags": ["Medications"],
+        "tags": [
+          "Medications"
+        ],
         "summary": "Update a medication",
         "description": "Updates a medication schedule. Use `status: \"discontinued\"` to stop a medication early.",
         "operationId": "updateMedication",
@@ -2292,7 +2408,9 @@
         }
       },
       "delete": {
-        "tags": ["Medications"],
+        "tags": [
+          "Medications"
+        ],
         "summary": "Delete a medication",
         "description": "Permanently deletes a medication record.",
         "operationId": "deleteMedication",
@@ -2327,7 +2445,9 @@
     },
     "/blockchain/records/store": {
       "post": {
-        "tags": ["Blockchain"],
+        "tags": [
+          "Blockchain"
+        ],
         "summary": "Anchor a record hash on Stellar",
         "description": "Stores a SHA-256 hash of a medical record on the Stellar blockchain. The hash is embedded in a Stellar transaction memo field. Returns the transaction details once confirmed.",
         "operationId": "storeRecordOnChain",
@@ -2421,7 +2541,9 @@
     },
     "/blockchain/records/verify": {
       "post": {
-        "tags": ["Blockchain"],
+        "tags": [
+          "Blockchain"
+        ],
         "summary": "Verify a record hash against Stellar",
         "description": "Verifies that a given SHA-256 hash matches the hash anchored on the Stellar blockchain for the specified record. Returns `verified: true` if the hashes match (record is untampered).",
         "operationId": "verifyRecordOnChain",
@@ -2519,7 +2641,9 @@
     },
     "/blockchain/records/batch-verify": {
       "post": {
-        "tags": ["Blockchain"],
+        "tags": [
+          "Blockchain"
+        ],
         "summary": "Batch verify multiple record hashes",
         "description": "Verifies up to 50 record hashes in a single request. Useful for bulk integrity checks.",
         "operationId": "batchVerifyRecords",
@@ -2592,7 +2716,9 @@
     },
     "/blockchain/records/{id}/hash": {
       "get": {
-        "tags": ["Blockchain"],
+        "tags": [
+          "Blockchain"
+        ],
         "summary": "Retrieve anchored hash for a record",
         "description": "Fetches the hash and transaction details that were anchored on Stellar for a specific record.",
         "operationId": "retrieveRecordHash",
@@ -2650,7 +2776,9 @@
     },
     "/blockchain/transactions/{txHash}": {
       "get": {
-        "tags": ["Blockchain"],
+        "tags": [
+          "Blockchain"
+        ],
         "summary": "Get Stellar transaction details",
         "description": "Fetches full details of a Stellar transaction by its hash.",
         "operationId": "getTransactionDetails",
@@ -2707,7 +2835,9 @@
     },
     "/blockchain/transactions/history": {
       "get": {
-        "tags": ["Blockchain"],
+        "tags": [
+          "Blockchain"
+        ],
         "summary": "Get transaction history",
         "description": "Returns Stellar transaction history, optionally filtered by record or account.",
         "operationId": "getTransactionHistory",
@@ -2782,7 +2912,9 @@
     },
     "/blockchain/network/info": {
       "get": {
-        "tags": ["Blockchain"],
+        "tags": [
+          "Blockchain"
+        ],
         "summary": "Get Stellar network info",
         "description": "Returns current Stellar network status including the active ledger number.",
         "operationId": "getStellarNetworkInfo",
@@ -2842,6 +2974,78 @@
           }
         }
       }
+    },
+    "/predictions/symptoms": {
+      "post": {
+        "tags": [
+          "Predictions"
+        ],
+        "summary": "Analyze pet symptoms with AI triage engine",
+        "description": "Analyzes natural language pet symptoms and generates a veterinary triage assessment with ranked probable conditions, confidence scores, urgency level, and clinical recommendations. Free tier is rate limited to 10 requests per user per day.",
+        "operationId": "predictSymptoms",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SymptomPredictionRequest"
+              },
+              "example": {
+                "petId": "p-demo-1",
+                "species": "dog",
+                "breed": "Golden Retriever",
+                "symptoms": "Continuous dry coughing, gagging, and lethargy for 2 days after visiting dog park"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Symptom analysis generated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/SymptomPrediction"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2862,7 +3066,11 @@
     "schemas": {
       "ApiResponse": {
         "type": "object",
-        "required": ["success", "data", "timestamp"],
+        "required": [
+          "success",
+          "data",
+          "timestamp"
+        ],
         "properties": {
           "success": {
             "type": "boolean",
@@ -2882,7 +3090,11 @@
       },
       "ApiError": {
         "type": "object",
-        "required": ["success", "error", "timestamp"],
+        "required": [
+          "success",
+          "error",
+          "timestamp"
+        ],
         "properties": {
           "success": {
             "type": "boolean",
@@ -2890,7 +3102,10 @@
           },
           "error": {
             "type": "object",
-            "required": ["code", "message"],
+            "required": [
+              "code",
+              "message"
+            ],
             "properties": {
               "code": {
                 "type": "string",
@@ -2919,7 +3134,14 @@
       },
       "PaginationMeta": {
         "type": "object",
-        "required": ["page", "limit", "total", "totalPages", "hasNext", "hasPrev"],
+        "required": [
+          "page",
+          "limit",
+          "total",
+          "totalPages",
+          "hasNext",
+          "hasPrev"
+        ],
         "properties": {
           "page": {
             "type": "integer",
@@ -2954,7 +3176,12 @@
       },
       "PaginatedResponse": {
         "type": "object",
-        "required": ["success", "data", "pagination", "timestamp"],
+        "required": [
+          "success",
+          "data",
+          "pagination",
+          "timestamp"
+        ],
         "properties": {
           "success": {
             "type": "boolean",
@@ -2991,7 +3218,10 @@
       },
       "LoginRequest": {
         "type": "object",
-        "required": ["email", "password"],
+        "required": [
+          "email",
+          "password"
+        ],
         "properties": {
           "email": {
             "type": "string",
@@ -3010,7 +3240,11 @@
       },
       "RegisterRequest": {
         "type": "object",
-        "required": ["email", "name", "password"],
+        "required": [
+          "email",
+          "name",
+          "password"
+        ],
         "properties": {
           "email": {
             "type": "string",
@@ -3038,7 +3272,11 @@
           },
           "role": {
             "type": "string",
-            "enum": ["owner", "vet", "admin"],
+            "enum": [
+              "owner",
+              "vet",
+              "admin"
+            ],
             "default": "owner",
             "example": "owner"
           }
@@ -3046,7 +3284,9 @@
       },
       "RefreshTokenRequest": {
         "type": "object",
-        "required": ["refreshToken"],
+        "required": [
+          "refreshToken"
+        ],
         "properties": {
           "refreshToken": {
             "type": "string",
@@ -3057,7 +3297,9 @@
       },
       "ForgotPasswordRequest": {
         "type": "object",
-        "required": ["email"],
+        "required": [
+          "email"
+        ],
         "properties": {
           "email": {
             "type": "string",
@@ -3068,7 +3310,10 @@
       },
       "ResetPasswordRequest": {
         "type": "object",
-        "required": ["token", "newPassword"],
+        "required": [
+          "token",
+          "newPassword"
+        ],
         "properties": {
           "token": {
             "type": "string",
@@ -3086,7 +3331,9 @@
       },
       "VerifyEmailRequest": {
         "type": "object",
-        "required": ["token"],
+        "required": [
+          "token"
+        ],
         "properties": {
           "token": {
             "type": "string",
@@ -3097,7 +3344,9 @@
       },
       "OAuthCallbackRequest": {
         "type": "object",
-        "required": ["code"],
+        "required": [
+          "code"
+        ],
         "properties": {
           "code": {
             "type": "string",
@@ -3113,7 +3362,12 @@
       },
       "AuthUserSummary": {
         "type": "object",
-        "required": ["id", "email", "name", "role"],
+        "required": [
+          "id",
+          "email",
+          "name",
+          "role"
+        ],
         "properties": {
           "id": {
             "$ref": "#/components/schemas/UUID"
@@ -3129,14 +3383,22 @@
           },
           "role": {
             "type": "string",
-            "enum": ["owner", "vet", "admin"],
+            "enum": [
+              "owner",
+              "vet",
+              "admin"
+            ],
             "example": "owner"
           }
         }
       },
       "LoginResponse": {
         "type": "object",
-        "required": ["user", "token", "expiresIn"],
+        "required": [
+          "user",
+          "token",
+          "expiresIn"
+        ],
         "properties": {
           "user": {
             "$ref": "#/components/schemas/AuthUserSummary"
@@ -3160,7 +3422,10 @@
       },
       "RegisterResponse": {
         "type": "object",
-        "required": ["user", "token"],
+        "required": [
+          "user",
+          "token"
+        ],
         "properties": {
           "user": {
             "$ref": "#/components/schemas/AuthUserSummary"
@@ -3177,7 +3442,10 @@
       },
       "RefreshTokenResponse": {
         "type": "object",
-        "required": ["token", "expiresIn"],
+        "required": [
+          "token",
+          "expiresIn"
+        ],
         "properties": {
           "token": {
             "type": "string",
@@ -3225,13 +3493,21 @@
           },
           "role": {
             "type": "string",
-            "enum": ["owner", "vet", "admin"],
+            "enum": [
+              "owner",
+              "vet",
+              "admin"
+            ],
             "example": "owner",
             "description": "User role controlling access permissions"
           },
           "authProvider": {
             "type": "string",
-            "enum": ["local", "google", "apple"],
+            "enum": [
+              "local",
+              "google",
+              "apple"
+            ],
             "example": "local"
           },
           "isEmailVerified": {
@@ -3258,7 +3534,9 @@
       },
       "PetReference": {
         "type": "object",
-        "required": ["id"],
+        "required": [
+          "id"
+        ],
         "properties": {
           "id": {
             "$ref": "#/components/schemas/UUID"
@@ -3284,14 +3562,24 @@
           },
           "role": {
             "type": "string",
-            "enum": ["owner", "vet", "admin"],
+            "enum": [
+              "owner",
+              "vet",
+              "admin"
+            ],
             "example": "vet"
           }
         }
       },
       "UpdateUserResponse": {
         "type": "object",
-        "required": ["id", "email", "name", "role", "updatedAt"],
+        "required": [
+          "id",
+          "email",
+          "name",
+          "role",
+          "updatedAt"
+        ],
         "properties": {
           "id": {
             "$ref": "#/components/schemas/UUID"
@@ -3311,7 +3599,11 @@
           },
           "role": {
             "type": "string",
-            "enum": ["owner", "vet", "admin"],
+            "enum": [
+              "owner",
+              "vet",
+              "admin"
+            ],
             "example": "vet"
           },
           "updatedAt": {
@@ -3321,7 +3613,14 @@
       },
       "Pet": {
         "type": "object",
-        "required": ["id", "name", "species", "ownerId", "createdAt", "updatedAt"],
+        "required": [
+          "id",
+          "name",
+          "species",
+          "ownerId",
+          "createdAt",
+          "updatedAt"
+        ],
         "properties": {
           "id": {
             "$ref": "#/components/schemas/UUID"
@@ -3334,7 +3633,13 @@
           },
           "species": {
             "type": "string",
-            "enum": ["dog", "cat", "bird", "rabbit", "other"],
+            "enum": [
+              "dog",
+              "cat",
+              "bird",
+              "rabbit",
+              "other"
+            ],
             "example": "dog"
           },
           "breed": {
@@ -3384,7 +3689,11 @@
       },
       "CreatePetRequest": {
         "type": "object",
-        "required": ["name", "species", "ownerId"],
+        "required": [
+          "name",
+          "species",
+          "ownerId"
+        ],
         "properties": {
           "name": {
             "type": "string",
@@ -3394,7 +3703,13 @@
           },
           "species": {
             "type": "string",
-            "enum": ["dog", "cat", "bird", "rabbit", "other"],
+            "enum": [
+              "dog",
+              "cat",
+              "bird",
+              "rabbit",
+              "other"
+            ],
             "example": "dog"
           },
           "breed": {
@@ -3430,7 +3745,13 @@
           },
           "species": {
             "type": "string",
-            "enum": ["dog", "cat", "bird", "rabbit", "other"]
+            "enum": [
+              "dog",
+              "cat",
+              "bird",
+              "rabbit",
+              "other"
+            ]
           },
           "breed": {
             "type": "string",
@@ -3451,7 +3772,15 @@
       },
       "MedicalRecord": {
         "type": "object",
-        "required": ["id", "petId", "vetId", "type", "visitDate", "createdAt", "updatedAt"],
+        "required": [
+          "id",
+          "petId",
+          "vetId",
+          "type",
+          "visitDate",
+          "createdAt",
+          "updatedAt"
+        ],
         "properties": {
           "id": {
             "$ref": "#/components/schemas/UUID"
@@ -3464,7 +3793,13 @@
           },
           "type": {
             "type": "string",
-            "enum": ["checkup", "vaccination", "surgery", "treatment", "other"],
+            "enum": [
+              "checkup",
+              "vaccination",
+              "surgery",
+              "treatment",
+              "other"
+            ],
             "example": "vaccination"
           },
           "diagnosis": {
@@ -3539,7 +3874,9 @@
       },
       "Diagnosis": {
         "type": "object",
-        "required": ["diagnosisText"],
+        "required": [
+          "diagnosisText"
+        ],
         "properties": {
           "diagnosisText": {
             "type": "string",
@@ -3552,14 +3889,21 @@
           },
           "severity": {
             "type": "string",
-            "enum": ["mild", "moderate", "severe", "unknown"],
+            "enum": [
+              "mild",
+              "moderate",
+              "severe",
+              "unknown"
+            ],
             "example": "mild"
           }
         }
       },
       "Treatment": {
         "type": "object",
-        "required": ["treatmentText"],
+        "required": [
+          "treatmentText"
+        ],
         "properties": {
           "treatmentText": {
             "type": "string",
@@ -3577,7 +3921,9 @@
       },
       "Prescription": {
         "type": "object",
-        "required": ["medicationName"],
+        "required": [
+          "medicationName"
+        ],
         "properties": {
           "id": {
             "$ref": "#/components/schemas/UUID"
@@ -3613,7 +3959,9 @@
       },
       "VaccinationRecord": {
         "type": "object",
-        "required": ["vaccineName"],
+        "required": [
+          "vaccineName"
+        ],
         "properties": {
           "vaccineName": {
             "type": "string",
@@ -3641,7 +3989,13 @@
       },
       "MedicalDocument": {
         "type": "object",
-        "required": ["id", "name", "mimeType", "type", "url"],
+        "required": [
+          "id",
+          "name",
+          "mimeType",
+          "type",
+          "url"
+        ],
         "properties": {
           "id": {
             "$ref": "#/components/schemas/UUID"
@@ -3656,7 +4010,11 @@
           },
           "type": {
             "type": "string",
-            "enum": ["pdf", "image", "other"],
+            "enum": [
+              "pdf",
+              "image",
+              "other"
+            ],
             "example": "pdf"
           },
           "url": {
@@ -3675,7 +4033,11 @@
       },
       "Veterinarian": {
         "type": "object",
-        "required": ["id", "name", "email"],
+        "required": [
+          "id",
+          "name",
+          "email"
+        ],
         "properties": {
           "id": {
             "$ref": "#/components/schemas/UUID"
@@ -3718,7 +4080,12 @@
       },
       "CreateMedicalRecordRequest": {
         "type": "object",
-        "required": ["petId", "vetId", "type", "visitDate"],
+        "required": [
+          "petId",
+          "vetId",
+          "type",
+          "visitDate"
+        ],
         "properties": {
           "petId": {
             "$ref": "#/components/schemas/UUID"
@@ -3728,7 +4095,13 @@
           },
           "type": {
             "type": "string",
-            "enum": ["checkup", "vaccination", "surgery", "treatment", "other"],
+            "enum": [
+              "checkup",
+              "vaccination",
+              "surgery",
+              "treatment",
+              "other"
+            ],
             "example": "vaccination"
           },
           "diagnosis": {
@@ -3780,7 +4153,13 @@
         "properties": {
           "type": {
             "type": "string",
-            "enum": ["checkup", "vaccination", "surgery", "treatment", "other"]
+            "enum": [
+              "checkup",
+              "vaccination",
+              "surgery",
+              "treatment",
+              "other"
+            ]
           },
           "diagnosis": {
             "type": "string"
@@ -3883,7 +4262,14 @@
           },
           "status": {
             "type": "string",
-            "enum": ["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED", "NO_SHOW", "RESCHEDULED"],
+            "enum": [
+              "PENDING",
+              "CONFIRMED",
+              "CANCELLED",
+              "COMPLETED",
+              "NO_SHOW",
+              "RESCHEDULED"
+            ],
             "example": "CONFIRMED"
           },
           "notes": {
@@ -3916,7 +4302,11 @@
       },
       "AppointmentVetSummary": {
         "type": "object",
-        "required": ["vetId", "name", "clinicName"],
+        "required": [
+          "vetId",
+          "name",
+          "clinicName"
+        ],
         "properties": {
           "vetId": {
             "$ref": "#/components/schemas/UUID"
@@ -3945,7 +4335,11 @@
       },
       "AppointmentPetSummary": {
         "type": "object",
-        "required": ["petId", "name", "species"],
+        "required": [
+          "petId",
+          "name",
+          "species"
+        ],
         "properties": {
           "petId": {
             "$ref": "#/components/schemas/UUID"
@@ -3970,7 +4364,11 @@
       },
       "AppointmentReminder": {
         "type": "object",
-        "required": ["isEnabled", "minutesBefore", "notificationMethod"],
+        "required": [
+          "isEnabled",
+          "minutesBefore",
+          "notificationMethod"
+        ],
         "properties": {
           "isEnabled": {
             "type": "boolean",
@@ -3984,14 +4382,25 @@
           },
           "notificationMethod": {
             "type": "string",
-            "enum": ["push", "email", "sms"],
+            "enum": [
+              "push",
+              "email",
+              "sms"
+            ],
             "example": "push"
           }
         }
       },
       "CreateAppointmentRequest": {
         "type": "object",
-        "required": ["petId", "vetId", "date", "time", "type", "status"],
+        "required": [
+          "petId",
+          "vetId",
+          "date",
+          "time",
+          "type",
+          "status"
+        ],
         "properties": {
           "petId": {
             "$ref": "#/components/schemas/UUID"
@@ -4034,7 +4443,14 @@
           },
           "status": {
             "type": "string",
-            "enum": ["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED", "NO_SHOW", "RESCHEDULED"],
+            "enum": [
+              "PENDING",
+              "CONFIRMED",
+              "CANCELLED",
+              "COMPLETED",
+              "NO_SHOW",
+              "RESCHEDULED"
+            ],
             "default": "PENDING",
             "example": "PENDING"
           },
@@ -4082,7 +4498,14 @@
           },
           "status": {
             "type": "string",
-            "enum": ["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED", "NO_SHOW", "RESCHEDULED"]
+            "enum": [
+              "PENDING",
+              "CONFIRMED",
+              "CANCELLED",
+              "COMPLETED",
+              "NO_SHOW",
+              "RESCHEDULED"
+            ]
           },
           "notes": {
             "type": "string"
@@ -4098,7 +4521,11 @@
       },
       "AppointmentListResponse": {
         "type": "object",
-        "required": ["success", "data", "total"],
+        "required": [
+          "success",
+          "data",
+          "total"
+        ],
         "properties": {
           "success": {
             "type": "boolean",
@@ -4183,7 +4610,12 @@
           },
           "status": {
             "type": "string",
-            "enum": ["active", "paused", "completed", "discontinued"],
+            "enum": [
+              "active",
+              "paused",
+              "completed",
+              "discontinued"
+            ],
             "example": "active"
           },
           "instructions": {
@@ -4200,7 +4632,14 @@
       },
       "CreateMedicationRequest": {
         "type": "object",
-        "required": ["petId", "name", "dosage", "frequency", "durationDays", "startDate"],
+        "required": [
+          "petId",
+          "name",
+          "dosage",
+          "frequency",
+          "durationDays",
+          "startDate"
+        ],
         "properties": {
           "petId": {
             "$ref": "#/components/schemas/UUID"
@@ -4240,7 +4679,12 @@
           },
           "status": {
             "type": "string",
-            "enum": ["active", "paused", "completed", "discontinued"],
+            "enum": [
+              "active",
+              "paused",
+              "completed",
+              "discontinued"
+            ],
             "default": "active",
             "example": "active"
           },
@@ -4284,7 +4728,12 @@
           },
           "status": {
             "type": "string",
-            "enum": ["active", "paused", "completed", "discontinued"]
+            "enum": [
+              "active",
+              "paused",
+              "completed",
+              "discontinued"
+            ]
           },
           "instructions": {
             "type": "string"
@@ -4293,7 +4742,10 @@
       },
       "StellarTransactionDetails": {
         "type": "object",
-        "required": ["hash", "successful"],
+        "required": [
+          "hash",
+          "successful"
+        ],
         "properties": {
           "hash": {
             "type": "string",
@@ -4333,7 +4785,10 @@
       },
       "StellarRecordVerification": {
         "type": "object",
-        "required": ["verified", "recordId"],
+        "required": [
+          "verified",
+          "recordId"
+        ],
         "properties": {
           "verified": {
             "type": "boolean",
@@ -4363,7 +4818,10 @@
       },
       "StoreRecordRequest": {
         "type": "object",
-        "required": ["recordId", "hash"],
+        "required": [
+          "recordId",
+          "hash"
+        ],
         "properties": {
           "recordId": {
             "$ref": "#/components/schemas/UUID"
@@ -4388,7 +4846,10 @@
       },
       "VerifyRecordRequest": {
         "type": "object",
-        "required": ["recordId", "hash"],
+        "required": [
+          "recordId",
+          "hash"
+        ],
         "properties": {
           "recordId": {
             "$ref": "#/components/schemas/UUID"
@@ -4403,7 +4864,11 @@
       },
       "RetrieveRecordHashResponse": {
         "type": "object",
-        "required": ["hash", "txHash", "timestamp"],
+        "required": [
+          "hash",
+          "txHash",
+          "timestamp"
+        ],
         "properties": {
           "hash": {
             "type": "string",
@@ -4424,7 +4889,9 @@
       },
       "BatchVerifyRequest": {
         "type": "object",
-        "required": ["records"],
+        "required": [
+          "records"
+        ],
         "properties": {
           "records": {
             "type": "array",
@@ -4432,7 +4899,10 @@
             "maxItems": 50,
             "items": {
               "type": "object",
-              "required": ["recordId", "hash"],
+              "required": [
+                "recordId",
+                "hash"
+              ],
               "properties": {
                 "recordId": {
                   "$ref": "#/components/schemas/UUID"
@@ -4450,11 +4920,20 @@
       },
       "NetworkInfoResponse": {
         "type": "object",
-        "required": ["network", "horizonUrl", "passphrase", "currentLedger", "latestLedger"],
+        "required": [
+          "network",
+          "horizonUrl",
+          "passphrase",
+          "currentLedger",
+          "latestLedger"
+        ],
         "properties": {
           "network": {
             "type": "string",
-            "enum": ["mainnet", "testnet"],
+            "enum": [
+              "mainnet",
+              "testnet"
+            ],
             "example": "mainnet"
           },
           "horizonUrl": {
@@ -4473,6 +4952,126 @@
           "latestLedger": {
             "type": "integer",
             "example": 48234570
+          }
+        }
+      },
+      "SymptomPredictionRequest": {
+        "type": "object",
+        "required": [
+          "petId",
+          "symptoms"
+        ],
+        "properties": {
+          "petId": {
+            "type": "string",
+            "example": "p-demo-1",
+            "description": "ID of the pet experiencing symptoms"
+          },
+          "species": {
+            "type": "string",
+            "enum": [
+              "dog",
+              "cat",
+              "bird",
+              "rabbit",
+              "other"
+            ],
+            "example": "dog",
+            "description": "Pet species (optional, populated from pet record if omitted)"
+          },
+          "breed": {
+            "type": "string",
+            "example": "Golden Retriever",
+            "description": "Pet breed (optional, populated from pet record if omitted)"
+          },
+          "symptoms": {
+            "type": "string",
+            "minLength": 3,
+            "example": "Continuous coughing and low energy for the past 2 days",
+            "description": "Detailed natural language description of observed pet symptoms"
+          }
+        }
+      },
+      "ProbableCondition": {
+        "type": "object",
+        "required": [
+          "condition",
+          "confidence",
+          "description"
+        ],
+        "properties": {
+          "condition": {
+            "type": "string",
+            "example": "Infectious Tracheobronchitis (Kennel Cough)",
+            "description": "Name of the likely veterinary condition"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "example": 0.85,
+            "description": "Model confidence score between 0.0 and 1.0"
+          },
+          "description": {
+            "type": "string",
+            "example": "Contagious upper respiratory infection causing hacking cough and mild lethargy.",
+            "description": "Clinical explanation of the condition and its relation to symptoms"
+          }
+        }
+      },
+      "SymptomPrediction": {
+        "type": "object",
+        "required": [
+          "probableConditions",
+          "urgency",
+          "urgencyReason",
+          "recommendedActions",
+          "disclaimer"
+        ],
+        "properties": {
+          "probableConditions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProbableCondition"
+            },
+            "description": "Top probable conditions ranked by likelihood"
+          },
+          "urgency": {
+            "type": "string",
+            "enum": [
+              "low",
+              "moderate",
+              "high",
+              "emergency"
+            ],
+            "example": "moderate",
+            "description": "Urgency classification for veterinary triage"
+          },
+          "urgencyReason": {
+            "type": "string",
+            "example": "Symptoms suggest a moderate respiratory infection that should be evaluated if persistent.",
+            "description": "Clinical explanation justifying the assigned urgency triage tier"
+          },
+          "recommendedActions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "Schedule an examination with your veterinarian within 24 to 48 hours.",
+              "Ensure continuous access to fresh water and keep resting area clean."
+            ],
+            "description": "Actionable clinical next steps for pet owner"
+          },
+          "disclaimer": {
+            "type": "string",
+            "example": "This is an AI-assisted triage assessment and does not constitute a formal veterinary diagnosis.",
+            "description": "Standard medical triage and diagnostic disclaimer"
+          },
+          "modelVersion": {
+            "type": "string",
+            "example": "cocohub-symptom-v1.0",
+            "description": "Identifier of the underlying ML/LLM model version used for inference"
           }
         }
       }
@@ -4512,7 +5111,10 @@
         "in": "query",
         "schema": {
           "type": "string",
-          "enum": ["asc", "desc"],
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "default": "desc"
         },
         "description": "Sort direction"

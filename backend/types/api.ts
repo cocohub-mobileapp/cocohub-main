@@ -520,6 +520,9 @@ export const API_ENDPOINTS = {
   BLOCKCHAIN_TRANSACTIONS_HISTORY: '/blockchain/transactions/history',
   BLOCKCHAIN_NETWORK_INFO: '/blockchain/network/info',
 
+  // AI Predictions & Symptom Checker
+  PREDICTIONS_SYMPTOMS: '/predictions/symptoms',
+
   // Session Monitoring
   MONITORING_SESSION_START: '/monitoring/sessions/start',
   MONITORING_SESSION_END: '/monitoring/sessions/end',
