@@ -239,4 +239,118 @@ router.get('/pending-questionnaires', (_req: AuthenticatedRequest, res) => {
   return res.json(ok({ pendingQuestionnaires: dueSoon }));
 });
 
+// ─── Vet accept / decline ────────────────────────────────────────────────────
+
+router.patch('/:id/accept', (req: AuthenticatedRequest, res) => {
+  const appointment = store.appointments.get(req.params.id);
+  if (!appointment) return sendError(res, 404, 'NOT_FOUND', 'Appointment not found');
+
+  // Only vets can accept appointments
+  if (req.user!.role !== UserRole.VET) {
+    return sendError(res, 403, 'FORBIDDEN', 'Only vets can accept appointments');
+  }
+
+  if (appointment.vetId !== req.user!.id) {
+    return sendError(res, 403, 'FORBIDDEN', 'You can only accept your own appointments');
+  }
+
+  if (appointment.status !== AppointmentStatus.PENDING) {
+    return sendError(res, 400, 'INVALID_STATE', 'Only pending appointments can be accepted');
+  }
+
+  appointment.status = AppointmentStatus.CONFIRMED;
+  appointment.updatedAt = new Date().toISOString();
+  store.appointments.set(appointment.id, appointment);
+
+  return res.json(appointmentResponse(appointment));
+});
+
+router.patch('/:id/decline', (req: AuthenticatedRequest, res) => {
+  const appointment = store.appointments.get(req.params.id);
+  if (!appointment) return sendError(res, 404, 'NOT_FOUND', 'Appointment not found');
+
+  if (req.user!.role !== UserRole.VET) {
+    return sendError(res, 403, 'FORBIDDEN', 'Only vets can decline appointments');
+  }
+
+  if (appointment.vetId !== req.user!.id) {
+    return sendError(res, 403, 'FORBIDDEN', 'You can only decline your own appointments');
+  }
+
+  if (
+    appointment.status === AppointmentStatus.CANCELLED ||
+    appointment.status === AppointmentStatus.COMPLETED
+  ) {
+    return sendError(
+      res,
+      400,
+      'INVALID_STATE',
+      'Cannot decline a cancelled or completed appointment',
+    );
+  }
+
+  const { reason } = req.body as { reason?: string };
+  appointment.status = AppointmentStatus.CANCELLED;
+  appointment.cancelledAt = new Date().toISOString();
+  appointment.cancellationReason = reason?.trim() || 'Declined by vet';
+  appointment.updatedAt = new Date().toISOString();
+  store.appointments.set(appointment.id, appointment);
+
+  return res.json(appointmentResponse(appointment));
+});
+
+// ─── Call end + consultation note ─────────────────────────────────────────────
+
+router.post('/:id/complete', (req: AuthenticatedRequest, res) => {
+  const appointment = store.appointments.get(req.params.id);
+  if (!appointment) return sendError(res, 404, 'NOT_FOUND', 'Appointment not found');
+
+  if (!appointment.isTelemedicine) {
+    return sendError(res, 400, 'INVALID_STATE', 'Appointment is not a telemedicine consultation');
+  }
+
+  if (appointment.status === AppointmentStatus.CANCELLED) {
+    return sendError(res, 400, 'INVALID_STATE', 'Cannot complete a cancelled appointment');
+  }
+
+  // Only the vet or the pet owner can complete the call
+  const pet = store.pets.get(appointment.petId);
+  if (!pet) return sendError(res, 404, 'NOT_FOUND', 'Pet not found');
+  const isVet = req.user!.role === UserRole.VET && appointment.vetId === req.user!.id;
+  const isOwner = req.user!.role === UserRole.OWNER && pet.ownerId === req.user!.id;
+  if (!isVet && !isOwner) {
+    return sendError(res, 403, 'FORBIDDEN', 'Only the vet or pet owner can complete this call');
+  }
+
+  const body = req.body as { consultationNotes?: string; diagnosis?: string; treatment?: string };
+  const notes = body.consultationNotes?.trim() || '';
+
+  // Mark appointment as completed
+  appointment.status = AppointmentStatus.COMPLETED;
+  appointment.notes = notes || appointment.notes;
+  appointment.updatedAt = new Date().toISOString();
+  store.appointments.set(appointment.id, appointment);
+
+  // Save consultation note to the pet's medical record
+  const mrId = `mr-${appointment.id}-${Date.now()}`;
+  store.medicalRecords.set(mrId, {
+    id: mrId,
+    petId: appointment.petId,
+    vetId: appointment.vetId,
+    type: 'TELEMEDICINE_CONSULTATION',
+    diagnosis: body.diagnosis?.trim() || undefined,
+    treatment: body.treatment?.trim() || undefined,
+    notes: notes || 'Telemedicine consultation completed',
+    visitDate: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  return res.json({
+    success: true as const,
+    data: { appointment, medicalRecordId: mrId },
+    timestamp: new Date().toISOString(),
+  });
+});
+
 export default router;

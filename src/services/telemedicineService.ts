@@ -98,3 +98,40 @@ export async function rescheduleTelemedicineAppointment(
     throw new Error(error instanceof Error ? error.message : String(error));
   }
 }
+
+/** Vet accepts a pending appointment. */
+export async function acceptTelemedicineAppointment(appointmentId: string): Promise<Appointment> {
+  const response = await apiClient.patch<{ data: Appointment }>(
+    `${TELEMEDICINE_ENDPOINT}/${encodeURIComponent(appointmentId)}/accept`,
+  );
+  return response.data.data;
+}
+
+/** Vet declines a pending appointment. */
+export async function declineTelemedicineAppointment(
+  appointmentId: string,
+  reason?: string,
+): Promise<Appointment> {
+  const response = await apiClient.patch<{ data: Appointment }>(
+    `${TELEMEDICINE_ENDPOINT}/${encodeURIComponent(appointmentId)}/decline`,
+    { reason },
+  );
+  return response.data.data;
+}
+
+/** Marks a telemedicine call as complete and saves consultation notes. */
+export async function completeTelemedicineCall(
+  appointmentId: string,
+  consultationNotes: string,
+  diagnosis?: string,
+  treatment?: string,
+): Promise<{ appointment: Appointment; medicalRecordId: string }> {
+  const response = await apiClient.post<{
+    data: { appointment: Appointment; medicalRecordId: string };
+  }>(`${TELEMEDICINE_ENDPOINT}/${encodeURIComponent(appointmentId)}/complete`, {
+    consultationNotes,
+    diagnosis,
+    treatment,
+  });
+  return response.data.data;
+}
