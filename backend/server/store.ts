@@ -1,4 +1,4 @@
-﻿import { randomUUID } from 'crypto';
+import { randomUUID } from 'crypto';
 
 import type { ApiKey, ApiKeyUsageRecord } from '../models/ApiKey';
 import { AppointmentStatus, AppointmentType } from '../models/Appointment';
@@ -93,6 +93,8 @@ export interface StoredAppointment {
   questionnaireResponses?: Record<string, string>;
   noShowReportedAt?: string;
   rescheduledFrom?: string;
+  consultationId?: string;
+  roomToken?: string;
 }
 
 export interface StoredBackup {

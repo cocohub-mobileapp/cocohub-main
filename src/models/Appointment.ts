@@ -165,6 +165,12 @@ export interface Appointment {
   /** Previous appointment date/time when rescheduled */
   rescheduledFrom?: string;
 
+  /** Associated WebRTC consultation ID */
+  consultationId?: string;
+
+  /** WebRTC room token for authenticating in the consultation */
+  roomToken?: string;
+
   // ─── UI convenience fields ────────────────────────────────────────────────
   /** Human-readable title for the appointment (e.g. "Annual Checkup") */
   title?: string;

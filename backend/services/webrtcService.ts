@@ -118,8 +118,9 @@ export function createConsultation(
   vetId: string,
   scheduledAt: string,
   durationMinutes = 30,
+  customId?: string,
 ): Consultation {
-  const id = crypto.randomUUID();
+  const id = customId ?? crypto.randomUUID();
   const roomToken = crypto.randomBytes(32).toString('hex');
   const now = new Date().toISOString();
 
@@ -199,9 +200,10 @@ export function recordConsent(
   const c = consultations.get(consultationId);
   if (!c) return undefined;
 
-  if (role === UserRole.OWNER) {
+  const normalizedRole = role?.toLowerCase();
+  if (normalizedRole === UserRole.OWNER || normalizedRole === 'owner') {
     c.recordingConsent.ownerConsented = true;
-  } else if (role === UserRole.VET) {
+  } else if (normalizedRole === UserRole.VET || normalizedRole === 'vet') {
     c.recordingConsent.vetConsented = true;
   }
 
@@ -283,7 +285,7 @@ export function createSignalingServer(httpServer: http.Server): SocketIOServer {
         // Notify existing peers
         socket.to(consultationId).emit('peer_joined', { userId, role });
 
-        const isOwner = role === UserRole.OWNER;
+        const isOwner = role?.toLowerCase() === UserRole.OWNER || role === 'OWNER';
 
         // If owner is joining, put them in waiting room; vets skip the queue
         if (isOwner && c.status === 'scheduled') {

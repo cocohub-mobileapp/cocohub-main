@@ -19,11 +19,13 @@ import {
   View,
 } from 'react-native';
 
+import VideoConsultationScreen from './VideoConsultationScreen';
 import type { Appointment } from '../models/Appointment';
 import { pickDocument, uploadDocument, type DocumentMeta } from '../services/documentService';
 import petService, { type Pet } from '../services/petService';
 import {
   getTelemedicineAvailability,
+  joinTelemedicineConsultation,
   reportTelemedicineNoShow,
   scheduleTelemedicineAppointment,
   submitTelemedicineQuestionnaire,
@@ -89,6 +91,10 @@ const TelemedicineScreen: React.FC = () => {
   const [attachPickerVisible, setAttachPickerVisible] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [viewingImageUri, setViewingImageUri] = useState<string | null>(null);
+  const [activeConsultation, setActiveConsultation] = useState<{
+    consultationId: string;
+    roomToken: string;
+  } | null>(null);
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -166,6 +172,25 @@ const TelemedicineScreen: React.FC = () => {
       Alert.alert('Appointment confirmed', 'Your telemedicine consultation has been scheduled.');
     } catch (err) {
       Alert.alert('Schedule failed', String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleJoinVideoCall = async () => {
+    if (!appointment) return;
+    try {
+      setLoading(true);
+      const data = await joinTelemedicineConsultation(appointment.id);
+      setActiveConsultation({
+        consultationId: data.consultationId,
+        roomToken: data.roomToken,
+      });
+    } catch (err) {
+      Alert.alert(
+        'Error',
+        err instanceof Error ? err.message : 'Could not join video consultation',
+      );
     } finally {
       setLoading(false);
     }
@@ -473,6 +498,14 @@ const TelemedicineScreen: React.FC = () => {
             <Text style={styles.detailText}>Video link:</Text>
             <Text style={styles.linkText}>{appointment.videoCallUrl}</Text>
 
+            <Pressable
+              style={[styles.primaryBtn, { backgroundColor: '#10B981', marginTop: 8 }]}
+              onPress={handleJoinVideoCall}
+              disabled={loading}
+            >
+              <Text style={styles.primaryBtnText}>📹 Join Video Consultation</Text>
+            </Pressable>
+
             {!appointment.questionnaireRespondedAt ? (
               <>
                 <Text style={styles.sectionTitle}>Pre-consultation questionnaire</Text>
@@ -630,6 +663,24 @@ const TelemedicineScreen: React.FC = () => {
           )}
         </Pressable>
       </Modal>
+
+      {/* ── Active Video Consultation Modal ── */}
+      {activeConsultation ? (
+        <Modal
+          visible={true}
+          animationType="slide"
+          onRequestClose={() => setActiveConsultation(null)}
+        >
+          <VideoConsultationScreen
+            consultationId={activeConsultation.consultationId}
+            roomToken={activeConsultation.roomToken}
+            userId={selectedPet?.ownerId ?? 'current-user'}
+            userRole="OWNER"
+            petName={selectedPet?.name ?? appointment?.petName ?? 'Pet'}
+            onEnd={() => setActiveConsultation(null)}
+          />
+        </Modal>
+      ) : null}
     </KeyboardAvoidingView>
   );
 };

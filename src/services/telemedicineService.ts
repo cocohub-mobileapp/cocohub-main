@@ -98,3 +98,75 @@ export async function rescheduleTelemedicineAppointment(
     throw new Error(error instanceof Error ? error.message : String(error));
   }
 }
+
+export interface JoinConsultationResponse {
+  consultationId: string;
+  roomToken: string;
+  iceServers: Array<{ urls: string | string[]; username?: string; credential?: string }>;
+  waitingRoomPosition?: number;
+  estimatedWaitMinutes?: number;
+}
+
+export interface ConsultationNotesInput {
+  diagnosis?: string;
+  treatment?: string;
+  notes?: string;
+  subjective?: string;
+  objective?: string;
+  assessment?: string;
+  plan?: string;
+  prescription?: string;
+}
+
+export async function acceptTelemedicineAppointment(appointmentId: string): Promise<Appointment> {
+  try {
+    const response = await apiClient.post<{ data: Appointment }>(
+      `${TELEMEDICINE_ENDPOINT}/${encodeURIComponent(appointmentId)}/accept`,
+    );
+    return response.data.data;
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : String(error));
+  }
+}
+
+export async function declineTelemedicineAppointment(
+  appointmentId: string,
+  reason?: string,
+): Promise<Appointment> {
+  try {
+    const response = await apiClient.post<{ data: Appointment }>(
+      `${TELEMEDICINE_ENDPOINT}/${encodeURIComponent(appointmentId)}/decline`,
+      { reason },
+    );
+    return response.data.data;
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : String(error));
+  }
+}
+
+export async function joinTelemedicineConsultation(
+  appointmentId: string,
+): Promise<JoinConsultationResponse> {
+  try {
+    const response = await apiClient.post<{ data: JoinConsultationResponse }>(
+      `${TELEMEDICINE_ENDPOINT}/${encodeURIComponent(appointmentId)}/join`,
+    );
+    return response.data.data;
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : String(error));
+  }
+}
+
+export async function submitConsultationNotes(
+  appointmentId: string,
+  notes: ConsultationNotesInput,
+): Promise<{ appointment: Appointment; medicalRecord: any }> {
+  try {
+    const response = await apiClient.post<{
+      data: { appointment: Appointment; medicalRecord: any };
+    }>(`${TELEMEDICINE_ENDPOINT}/${encodeURIComponent(appointmentId)}/notes`, notes);
+    return response.data.data;
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : String(error));
+  }
+}
