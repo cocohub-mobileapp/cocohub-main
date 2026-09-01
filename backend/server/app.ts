@@ -1,4 +1,4 @@
-﻿import path from 'path';
+import path from 'path';
 
 import cors from 'cors';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
@@ -31,6 +31,7 @@ import medicationsRouter from './routes/medications';
 import paymentsRouter from './routes/payments';
 import petsRouter from './routes/pets';
 import photosRouter from './routes/photos';
+import predictionsRouter from './routes/predictions';
 import privacyRouter from './routes/privacy';
 import reconciliationRouter from './routes/reconciliation';
 import referralsRouter from './routes/referrals';
@@ -193,6 +194,7 @@ export function createApp(): Express {
   api.use('/privacy', dataRateLimiter, privacyRouter);
   api.use('/insurance', dataRateLimiter, insuranceRouter);
   api.use('/health-alerts', dataRateLimiter, healthAlertsRouter);
+  api.use('/predictions', dataRateLimiter, predictionsRouter);
   api.use('/search', dataRateLimiter, searchRouter);
   api.use('/shelter', shelterRouter);
   api.use('/vitals', vitalsRouter);

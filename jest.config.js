@@ -4,7 +4,9 @@ module.exports = {
   transform: {
     '^.+\\.[jt]sx?$': 'babel-jest',
   },
-  transformIgnorePatterns: ['/node_modules/(?!(otplib|@otplib|expo-updates|expo-constants)/)'],
+  transformIgnorePatterns: [
+    '/node_modules/(?!(otplib|@otplib|expo|expo-.*|@expo/.*|@expo-google-fonts/.*|react-native|@react-native|archiver|is-stream)/)',
+  ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   moduleNameMapper: {
     '^react-native$': '<rootDir>/src/__mocks__/react-native.ts',
@@ -19,6 +21,7 @@ module.exports = {
     '^expo-updates$': '<rootDir>/src/__mocks__/expo-updates.ts',
     '^expo-calendar$': '<rootDir>/src/__mocks__/expo-calendar.ts',
     '^expo-secure-store$': '<rootDir>/src/__mocks__/expo-secure-store.ts',
+    '^expo-crypto$': '<rootDir>/src/__mocks__/expo-crypto.ts',
     '^expo-in-app-purchases$': '<rootDir>/src/__mocks__/expo-in-app-purchases.ts',
     '^@sentry/react-native$': '<rootDir>/src/__mocks__/@sentry/react-native.ts',
     '^pg$': '<rootDir>/src/__mocks__/pg.js',
@@ -35,6 +38,9 @@ module.exports = {
     '^otplib$': '<rootDir>/src/__mocks__/otplib.ts',
     '^react-native-ssl-pinning$': '<rootDir>/src/__mocks__/react-native-ssl-pinning.ts',
     '^@storybook/addon-actions$': '<rootDir>/src/__mocks__/@storybook/addon-actions.ts',
+    '^archiver$': '<rootDir>/src/__mocks__/archiver.js',
+    '^stripe$': '<rootDir>/src/__mocks__/stripe.js',
+    '^pkce-challenge$': '<rootDir>/src/__mocks__/pkce-challenge.js',
   },
   collectCoverageFrom: [
     'src/**/*.ts',

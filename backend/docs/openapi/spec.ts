@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Cocohub API — OpenAPI 3.0 Specification
  *
  * This file assembles the complete OpenAPI spec from modular path and schema
@@ -15,6 +15,7 @@ import { blockchainPaths } from './paths/blockchain';
 import { medicalRecordPaths } from './paths/medicalRecords';
 import { medicationPaths } from './paths/medications';
 import { petPaths } from './paths/pets';
+import { predictionPaths } from './paths/predictions';
 import { userPaths } from './paths/users';
 import { appointmentSchemas } from '../schemas/appointment';
 import { authSchemas } from '../schemas/auth';
@@ -23,6 +24,7 @@ import { commonSchemas } from '../schemas/common';
 import { medicalRecordSchemas } from '../schemas/medicalRecord';
 import { medicationSchemas } from '../schemas/medication';
 import { petSchemas } from '../schemas/pet';
+import { predictionSchemas } from '../schemas/prediction';
 import { userSchemas } from '../schemas/user';
 
 export const openApiSpec = {
@@ -136,6 +138,10 @@ All errors follow a consistent shape:
       name: 'Blockchain',
       description: 'Stellar blockchain integration for tamper-proof medical record anchoring',
     },
+    {
+      name: 'Predictions',
+      description: 'AI-assisted veterinary triage and symptom analysis',
+    },
   ],
 
   // ─── Paths ─────────────────────────────────────────────────────────────────
@@ -148,6 +154,7 @@ All errors follow a consistent shape:
     ...appointmentPaths,
     ...medicationPaths,
     ...blockchainPaths,
+    ...predictionPaths,
   },
 
   // ─── Components ────────────────────────────────────────────────────────────
@@ -192,6 +199,7 @@ Tokens expire after 7 days. Use \`POST /auth/refresh\` to obtain a new token.
       ...appointmentSchemas,
       ...medicationSchemas,
       ...blockchainSchemas,
+      ...predictionSchemas,
     },
 
     // ── Reusable parameters ─────────────────────────────────────────────────
