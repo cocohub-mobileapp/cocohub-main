@@ -1,5 +1,7 @@
-﻿import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -9,6 +11,8 @@ import {
   Share,
   Platform,
 } from 'react-native';
+
+import { exportAndShareHealthReport } from '../services/pdfService';
 
 import HealthScoreChart, {
   type HealthScoreDataPoint,
@@ -264,16 +268,62 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
     void load();
   }, [load]);
 
-  const handleExportChart = useCallback(async () => {
+  const [exportingReport, setExportingReport] = useState<boolean>(false);
+
+  const handleExportReport = useCallback(async () => {
     try {
-      await Share.share({
-        message: `${petName}'s weight chart - exported from Cocohub`,
-        title: `${petName} Weight Chart`,
+      setExportingReport(true);
+      await exportAndShareHealthReport({
+        petId,
+        petName,
+        healthScore: data.healthScore,
+        healthStatus: data.healthScore !== null ? scoreLabel(data.healthScore) : undefined,
+        weightKg: data.latestMetric?.weightKg,
+        weightHistory: data.weightHistory.map((w) => ({
+          date: w.date,
+          weightKg: w.weightKg,
+          note: w.note,
+        })),
+        medications: data.activeMedications.map((m) => ({
+          id: m.id,
+          name: m.name,
+          dosage: m.dosage,
+          frequency: m.frequency,
+          startDate: m.startDate,
+          active: true,
+        })),
+        appointments: data.upcomingAppointments.map((a) => ({
+          id: a.id,
+          type: a.type,
+          date: a.date,
+          time: a.time,
+          status: a.status,
+          notes: a.notes,
+        })),
+        records: data.recentRecords.map((r) => ({
+          id: r.id,
+          type: r.type,
+          visitDate: r.visitDate,
+          diagnosis: r.diagnosis,
+          treatment: r.treatment,
+          notes: r.notes,
+          blockchainTxHash: r.blockchainTxHash,
+        })),
       });
     } catch (err) {
-      console.error('Failed to share chart:', err);
+      console.error('Failed to export health report:', err);
+      Alert.alert(
+        'Export Failed',
+        err instanceof Error ? err.message : 'Unable to generate and share report.',
+      );
+    } finally {
+      setExportingReport(false);
     }
-  }, [petName]);
+  }, [petId, petName, data]);
+
+  const handleExportChart = useCallback(() => {
+    void handleExportReport();
+  }, [handleExportReport]);
 
   if (loading) {
     return (
@@ -283,7 +333,7 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
             <Text style={[styles.backText, { color: colors.primary }]}>‹ Back</Text>
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{petName} · Dashboard</Text>
-          <View style={styles.metricsBtn} />
+          <View style={styles.headerRight} />
         </View>
         <View style={{ padding: 16 }}>
           {Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} height={80} />)}
@@ -309,9 +359,24 @@ const PetHealthDashboardScreen: React.FC<Props> = ({ petId, petName, onBack, onO
           <Text style={[styles.backText, { color: colors.primary }]}>‹ Back</Text>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{petName} · Dashboard</Text>
-        <TouchableOpacity onPress={onOpenMetrics} style={[styles.metricsBtn, { backgroundColor: colors.primaryMuted }]} accessibilityRole="button" accessibilityLabel="Open health metrics">
-          <Text style={[styles.metricsBtnText, { color: colors.primary }]}>Metrics</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            onPress={handleExportReport}
+            disabled={exportingReport}
+            style={[styles.exportBtn, { backgroundColor: colors.infoMuted ?? '#e0f2fe' }]}
+            accessibilityRole="button"
+            accessibilityLabel="Export PDF health report"
+          >
+            {exportingReport ? (
+              <ActivityIndicator size="small" color={colors.info ?? '#0284c7'} />
+            ) : (
+              <Text style={[styles.exportBtnText, { color: colors.info ?? '#0284c7' }]}>PDF</Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onOpenMetrics} style={[styles.metricsBtn, { backgroundColor: colors.primaryMuted }]} accessibilityRole="button" accessibilityLabel="Open health metrics">
+            <Text style={[styles.metricsBtnText, { color: colors.primary }]}>Metrics</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -518,6 +583,9 @@ const styles = StyleSheet.create({
   headerTitle: { flex: 1, fontSize: 16, fontWeight: '700', textAlign: 'center', marginHorizontal: 8 },
   metricsBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   metricsBtnText: { fontWeight: '700', fontSize: 13 },
+  headerRight: { flexDirection: 'row', alignItems: 'center' },
+  exportBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, marginRight: 8 },
+  exportBtnText: { fontWeight: '700', fontSize: 13 },
   scroll: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 32 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginTop: 16, marginBottom: 8 },

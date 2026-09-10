@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Report job queue — async PDF generation backed by Redis.
  *
  * Flow:
@@ -35,9 +35,21 @@ interface JobRecord {
   recordCount?: number;
   error?: string;
   createdAt: string;
+  healthScore?: number | null;
+  healthStatus?: string;
+  weightHistory?: Array<{ date: string; weightKg: number; note?: string }>;
+  appointments?: Array<{
+    id?: string;
+    type: string;
+    date: string;
+    time?: string;
+    status?: string;
+    notes?: string;
+    vetName?: string;
+  }>;
+  clinicName?: string;
 }
 
-// In-memory buffer store (keyed by jobId). In production, use cloud storage / signed URLs.
 const pdfBuffers = new Map<string, Buffer>();
 
 async function saveJob(job: JobRecord): Promise<void> {
@@ -69,6 +81,16 @@ function processJobAsync(jobId: string): void {
 
       const records = [...store.medicalRecords.values()].filter((r) => r.petId === job.petId);
       const medications = [...store.medications.values()].filter((m) => m.petId === job.petId);
+      const defaultAppointments = [...store.appointments.values()]
+        .filter((a) => a.petId === job.petId)
+        .map((a) => ({
+          id: a.id,
+          type: a.type,
+          date: a.date,
+          time: a.time,
+          status: a.status,
+          notes: a.notes,
+        }));
 
       const result = await generateHealthReport({
         pet,
@@ -76,6 +98,11 @@ function processJobAsync(jobId: string): void {
         records,
         medications,
         generatedBy: job.userId,
+        healthScore: job.healthScore,
+        healthStatus: job.healthStatus,
+        weightHistory: job.weightHistory,
+        appointments: job.appointments ?? defaultAppointments,
+        clinicName: job.clinicName,
       });
 
       pdfBuffers.set(jobId, result.buffer);
@@ -93,7 +120,7 @@ function processJobAsync(jobId: string): void {
 
 /**
  * POST /api/reports/pets/:petId/health
- * Enqueues a PDF generation job; returns { jobId } immediately.
+ * Enqueues a PDF generation job; returns { jobId } immediately, or streams PDF if sync requested.
  */
 router.post('/pets/:petId/health', async (req: AuthenticatedRequest, res) => {
   const { petId } = req.params as { petId: string };
@@ -104,22 +131,25 @@ router.post('/pets/:petId/health', async (req: AuthenticatedRequest, res) => {
     return sendError(res, 403, 'FORBIDDEN', 'Only the pet owner may generate reports');
   }
 
-  const jobId = randomUUID();
-  const job: JobRecord = {
-    jobId,
-    status: 'queued',
-    petId,
-    userId: req.user?.id ?? 'unknown',
-    createdAt: new Date().toISOString(),
-  };
+  const { healthScore, healthStatus, weightHistory, appointments, clinicName } = req.body ?? {};
+  const { dateFrom, dateTo, sync } = req.query as { dateFrom?: string; dateTo?: string; sync?: string };
+  const isSync = sync === 'true' || req.body?.sync === true;
 
-  try {
-    await saveJob(job);
-  } catch {
-    // Redis unavailable — fall back to synchronous generation
+  const defaultAppointments = [...store.appointments.values()]
+    .filter((a) => a.petId === petId)
+    .map((a) => ({
+      id: a.id,
+      type: a.type,
+      date: a.date,
+      time: a.time,
+      status: a.status,
+      notes: a.notes,
+    }));
+  const resolvedAppointments = appointments ?? defaultAppointments;
+
+  if (isSync) {
     const owner = store.users.get(pet.ownerId);
     if (!owner) return sendError(res, 404, 'NOT_FOUND', 'Owner not found');
-    const { dateFrom, dateTo } = req.query as { dateFrom?: string; dateTo?: string };
     const records = [...store.medicalRecords.values()].filter((r) => r.petId === petId);
     const medications = [...store.medications.values()].filter((m) => m.petId === petId);
     try {
@@ -131,6 +161,57 @@ router.post('/pets/:petId/health', async (req: AuthenticatedRequest, res) => {
         generatedBy: req.user?.id ?? 'unknown',
         dateFrom,
         dateTo,
+        healthScore,
+        healthStatus,
+        weightHistory,
+        appointments: resolvedAppointments,
+        clinicName,
+      });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+      res.setHeader('X-Record-Count', String(result.recordCount));
+      return res.send(result.buffer);
+    } catch (err) {
+      console.error('[reports] sync PDF generation failed:', err);
+      return sendError(res, 500, 'REPORT_FAILED', 'Failed to generate health report');
+    }
+  }
+
+  const jobId = randomUUID();
+  const job: JobRecord = {
+    jobId,
+    status: 'queued',
+    petId,
+    userId: req.user?.id ?? 'unknown',
+    createdAt: new Date().toISOString(),
+    healthScore,
+    healthStatus,
+    weightHistory,
+    appointments: resolvedAppointments,
+    clinicName,
+  };
+
+  try {
+    await saveJob(job);
+  } catch {
+    const owner = store.users.get(pet.ownerId);
+    if (!owner) return sendError(res, 404, 'NOT_FOUND', 'Owner not found');
+    const records = [...store.medicalRecords.values()].filter((r) => r.petId === petId);
+    const medications = [...store.medications.values()].filter((m) => m.petId === petId);
+    try {
+      const result = await generateHealthReport({
+        pet,
+        owner,
+        records,
+        medications,
+        generatedBy: req.user?.id ?? 'unknown',
+        dateFrom,
+        dateTo,
+        healthScore,
+        healthStatus,
+        weightHistory,
+        appointments: resolvedAppointments,
+        clinicName,
       });
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
