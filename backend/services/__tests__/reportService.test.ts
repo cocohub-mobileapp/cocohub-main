@@ -1,4 +1,4 @@
-﻿import { UserRole } from '../../models/UserRole';
+import { UserRole } from '../../models/UserRole';
 import type {
   StoredMedicalRecord,
   StoredMedication,
@@ -137,4 +137,35 @@ describe('generateHealthReport', () => {
     const result = await generateHealthReport(baseOpts);
     expect(result.buffer.slice(0, 4).toString()).toBe('%PDF');
   });
+
+  it('generates report with health score, weight history, and upcoming appointments', async () => {
+    const fullOpts: ReportOptions = {
+      ...baseOpts,
+      healthScore: 88,
+      healthStatus: 'Optimal',
+      weightHistory: [
+        { date: '2024-06-15', weightKg: 28.5, note: 'Normal checkup' },
+        { date: '2024-03-10', weightKg: 27.8 },
+      ],
+      appointments: [
+        {
+          id: 'ap-1',
+          type: 'Annual Checkup',
+          date: '2024-12-01',
+          time: '14:00',
+          status: 'confirmed',
+          notes: 'Routine vaccination booster',
+          vetName: 'Dr. Johnson',
+        },
+      ],
+      clinicName: 'Downtown Veterinary Hospital',
+    };
+
+    const result = await generateHealthReport(fullOpts);
+    expect(Buffer.isBuffer(result.buffer)).toBe(true);
+    expect(result.buffer.length).toBeGreaterThan(0);
+    expect(result.buffer.slice(0, 4).toString()).toBe('%PDF');
+    expect(result.recordCount).toBe(1);
+  });
 });
+
