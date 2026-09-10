@@ -12,8 +12,8 @@ import {
   View,
 } from 'react-native';
 
-import { EmptyState } from '../components/EmptyState';
 import DatePickerInput from '../components/DatePickerInput';
+import { EmptyState } from '../components/EmptyState';
 import MultiStepFormHeader from '../components/MultiStepFormHeader';
 import { SkeletonCard } from '../components/SkeletonCard';
 import { useTheme } from '../context/ThemeContext';
@@ -85,6 +85,11 @@ function weekDates(): Date[] {
     d.setDate(today.getDate() - day + i);
     return d;
   });
+}
+
+function formatDrugPair(drugA: string, drugB: string): string {
+  const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+  return `${cap(drugA)} + ${cap(drugB)}`;
 }
 
 const MedicationScreen: React.FC = () => {
@@ -378,7 +383,7 @@ const MedicationScreen: React.FC = () => {
       };
 
       return (
-        <View style={styles.card}>
+        <View style={styles.card} testID={`medication-card-${item.name}`}>
           <View style={styles.cardHeader}>
             <Text style={styles.medName}>{item.name}</Text>
             <View style={styles.cardActions}>
@@ -392,12 +397,17 @@ const MedicationScreen: React.FC = () => {
                   <Text style={styles.refillBadgeText}>{refillBadgeLabel[refillStatus]}</Text>
                 </View>
               )}
-              <TouchableOpacity onPress={() => openEdit(item)} style={styles.actionBtn}>
+              <TouchableOpacity
+                onPress={() => openEdit(item)}
+                style={styles.actionBtn}
+                testID={`medication-edit-${item.name}`}
+              >
                 <Text style={styles.actionBtnText}>Edit</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => handleDelete(item.id)}
                 style={[styles.actionBtn, styles.deleteBtn]}
+                testID={`medication-delete-${item.name}`}
               >
                 <Text style={[styles.actionBtnText, styles.deleteBtnText]}>Delete</Text>
               </TouchableOpacity>
@@ -449,18 +459,21 @@ const MedicationScreen: React.FC = () => {
             <TouchableOpacity
               style={styles.logBtn}
               onPress={() => void handleLogDose(item.id, false)}
+              testID={`medication-log-dose-${item.name}`}
             >
               <Text style={styles.logBtnText}>✓ Log Dose</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.logBtn, styles.skipBtn]}
               onPress={() => void handleLogDose(item.id, true)}
+              testID={`medication-skip-dose-${item.name}`}
             >
               <Text style={styles.logBtnText}>✗ Skip</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.logBtn, styles.refillBtn]}
               onPress={() => openRefillModal(item)}
+              testID={`medication-refill-${item.name}`}
             >
               <Text style={styles.logBtnText}>+ Refill</Text>
             </TouchableOpacity>
@@ -471,7 +484,7 @@ const MedicationScreen: React.FC = () => {
     [openEdit, handleDelete, handleLogDose, openRefillModal],
   );
   const renderSchedule = (dates: Date[]) => (
-    <ScrollView style={styles.scheduleContainer}>
+    <ScrollView style={styles.scheduleContainer} testID="medication-schedule-container">
       {dates.map((date) => {
         const label =
           dates.length === 1
@@ -493,12 +506,17 @@ const MedicationScreen: React.FC = () => {
                   <View
                     key={`${med.id}-${time.toISOString()}`}
                     style={[styles.slotRow, taken && styles.slotTaken]}
+                    testID={`medication-schedule-slot-${med.name}`}
                   >
                     <Text style={styles.slotTime}>{formatLocalTime(time)}</Text>
                     <Text style={styles.slotName}>
                       {med.name} · {med.dosage}
                     </Text>
-                    {taken && <Text style={styles.takenBadge}>✓</Text>}
+                    {taken && (
+                      <Text style={styles.takenBadge} testID={`medication-dose-taken-${med.name}`}>
+                        ✓
+                      </Text>
+                    )}
                   </View>
                 );
               })
@@ -522,6 +540,7 @@ const MedicationScreen: React.FC = () => {
   ) => (
     <TextInput
       key={key}
+      testID={`medication-${key}-input`}
       ref={(ref) => {
         registerFormFieldRef(key, ref);
         if (options?.isFirstInteractive) {
@@ -541,7 +560,7 @@ const MedicationScreen: React.FC = () => {
   const renderModal = () => (
     <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={closeModal}>
       <View style={styles.modalOverlay}>
-        <ScrollView style={styles.modalContent}>
+        <ScrollView style={styles.modalContent} testID="medication-form-modal">
           <Text style={styles.modalTitle}>{editingMed ? 'Edit Medication' : 'Add Medication'}</Text>
           <MultiStepFormHeader
             stepHeadingRef={formHeadingRef}
@@ -694,7 +713,11 @@ const MedicationScreen: React.FC = () => {
             </>
           )}
           <View style={styles.modalActions}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={closeModal}>
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={closeModal}
+              testID="medication-form-cancel"
+            >
               <Text style={styles.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
             {!isFormFirstStep && (
@@ -703,6 +726,7 @@ const MedicationScreen: React.FC = () => {
                 onPress={goFormBack}
                 accessibilityRole="button"
                 accessibilityLabel="Go to previous step"
+                testID="medication-form-back"
               >
                 <Text style={styles.cancelBtnText}>Back</Text>
               </TouchableOpacity>
@@ -715,11 +739,16 @@ const MedicationScreen: React.FC = () => {
                 }}
                 accessibilityRole="button"
                 accessibilityLabel="Go to next step"
+                testID="medication-form-next"
               >
                 <Text style={styles.saveBtnText}>Next</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={styles.saveBtn} onPress={() => void handleSave()}>
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={() => void handleSave()}
+                testID="medication-form-save"
+              >
                 <Text style={styles.saveBtnText}>Save</Text>
               </TouchableOpacity>
             )}
@@ -727,8 +756,10 @@ const MedicationScreen: React.FC = () => {
 
           {/* Drug interaction warning */}
           {interactionResult?.hasInteractions && (
-            <View style={styles.interactionWarning}>
-              <Text style={styles.interactionTitle}>⚠️ Drug Interaction Detected</Text>
+            <View style={styles.interactionWarning} testID="medication-interaction-warning">
+              <Text style={styles.interactionTitle} testID="medication-interaction-title">
+                ⚠️ Drug Interaction Detected
+              </Text>
               {(['contraindicated', 'severe', 'moderate', 'mild'] as InteractionSeverity[]).map(
                 (severity) => {
                   const group = interactionResult.interactions.filter(
@@ -749,9 +780,16 @@ const MedicationScreen: React.FC = () => {
                         <Text style={styles.severityBadgeText}>{getSeverityLabel(severity)}</Text>
                       </View>
                       {group.map((i: DrugInteraction, idx: number) => (
-                        <View key={idx} style={styles.interactionItem}>
-                          <Text style={styles.interactionDrugs}>
-                            {i.drugA} + {i.drugB}
+                        <View
+                          key={idx}
+                          style={styles.interactionItem}
+                          testID="medication-interaction-item"
+                        >
+                          <Text
+                            style={styles.interactionDrugs}
+                            testID="medication-interaction-drugs"
+                          >
+                            {formatDrugPair(i.drugA, i.drugB)}
                           </Text>
                           <Text style={styles.interactionDesc}>{i.description}</Text>
                           <Text style={styles.interactionRec}>{i.recommendation}</Text>
@@ -858,10 +896,10 @@ const MedicationScreen: React.FC = () => {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="medication-screen">
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Medications</Text>
-        <TouchableOpacity style={styles.addBtn} onPress={openAdd}>
+        <TouchableOpacity style={styles.addBtn} onPress={openAdd} testID="add-medication-button">
           <Text style={styles.addBtnText}>+ Add</Text>
         </TouchableOpacity>
       </View>
@@ -871,6 +909,7 @@ const MedicationScreen: React.FC = () => {
             key={t}
             style={[styles.tab, tab === t && styles.activeTab]}
             onPress={() => setTab(t)}
+            testID={`medication-${t}-tab`}
           >
             <Text style={[styles.tabText, tab === t && styles.activeTabText]}>
               {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -886,6 +925,7 @@ const MedicationScreen: React.FC = () => {
         </View>
       ) : tab === 'list' ? (
         <FlatList
+          testID="medication-list"
           data={medications}
           keyExtractor={(item) => item.id}
           renderItem={renderMedItem}
