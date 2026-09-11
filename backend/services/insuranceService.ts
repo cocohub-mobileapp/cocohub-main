@@ -33,19 +33,21 @@ export interface InsuranceClaim {
 const policies = new Map<string, InsurancePolicy>();
 const claims = new Map<string, InsuranceClaim>();
 
-// ─── Mock provider OAuth token exchange ──────────────────────────────────────
+export function resetStores(): void {
+  policies.clear();
+  claims.clear();
+}
+
 export async function exchangeOAuthCode(
   provider: InsuranceProvider,
   code: string,
   userId: string,
 ): Promise<InsurancePolicy> {
-  // In production: call provider OAuth endpoint with code
-  // Mock: return a fake policy
   const policy: InsurancePolicy = {
     id: uuidv4(),
     userId,
     provider,
-    policyNumber: `${provider.toUpperCase()}-${code.slice(0, 8).toUpperCase()}`,
+    policyNumber: `${provider.toUpperCase()}-${code.slice(0, 16).toUpperCase()}`,
     coverageLimit: 10000,
     deductible: 250,
     premium: 49.99,

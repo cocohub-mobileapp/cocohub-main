@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tests for Vaccination Certificate PDF Generator — Issue #417
  */
 
@@ -9,7 +9,10 @@ import QRCode from 'qrcode';
 import {
   generateVaccinationCertificate,
   shareCertificate,
+  generateClaimSummaryPdf,
+  shareClaimSummary,
   type PetCertificateInfo,
+  type ClaimSummaryInfo,
 } from '../../services/pdfService';
 import type { VaccinationReminder } from '../../services/vaccinationService';
 
@@ -159,6 +162,84 @@ describe('pdfService — Vaccination Certificate PDF Generator (Issue #417)', ()
     it('throws when sharing is not available', async () => {
       mockIsAvailable.mockResolvedValue(false);
       await expect(shareCertificate('/mock/cert.txt')).rejects.toThrow(
+        'Sharing is not available on this device.',
+      );
+    });
+  });
+
+  describe('generateClaimSummaryPdf', () => {
+    const mockClaim: ClaimSummaryInfo = {
+      claimId: 'claim-12345678-abcd',
+      policyId: 'pol-999',
+      petId: 'pet-123',
+      petName: 'Buddy',
+      provider: 'trupanion',
+      policyNumber: 'TRUPANION-POL123',
+      amount: 450.75,
+      description: 'Emergency surgery and antibiotics',
+      status: 'under_review',
+      submittedAt: '2026-03-01T12:00:00.000Z',
+      updatedAt: '2026-03-02T15:00:00.000Z',
+      attachmentUrls: ['https://example.com/receipt1.pdf', 'https://example.com/invoice2.jpg'],
+    };
+
+    it('generates a claim summary text file and saves it', async () => {
+      const result = await generateClaimSummaryPdf(mockClaim);
+
+      expect(result.filePath).toContain('claim-summary-claim-12');
+      expect(result.hash).toBeDefined();
+      expect(result.hash.length).toBeGreaterThan(0);
+      expect(result.generatedAt).toBeDefined();
+      expect(mockWriteFile).toHaveBeenCalledTimes(1);
+
+      const writtenContent: string = mockWriteFile.mock.calls[0][1];
+      expect(writtenContent).toContain('PET INSURANCE CLAIM SUMMARY');
+      expect(writtenContent).toContain('TRUPANION-POL123');
+      expect(writtenContent).toContain('$450.75');
+      expect(writtenContent).toContain('Emergency surgery and antibiotics');
+      expect(writtenContent).toContain('UNDER REVIEW');
+      expect(writtenContent).toContain('https://example.com/receipt1.pdf');
+      expect(writtenContent).toContain('https://example.com/invoice2.jpg');
+      expect(writtenContent).toContain(result.hash);
+    });
+
+    it('handles claim summary without attachments gracefully', async () => {
+      const claimWithoutAttachments: ClaimSummaryInfo = {
+        ...mockClaim,
+        attachmentUrls: [],
+      };
+
+      const result = await generateClaimSummaryPdf(claimWithoutAttachments);
+      expect(result.filePath).toBeDefined();
+
+      const writtenContent: string = mockWriteFile.mock.calls[0][1];
+      expect(writtenContent).toContain('No attachments provided.');
+    });
+
+    it('creates QR code for claim verification', async () => {
+      await generateClaimSummaryPdf(mockClaim);
+      expect(mockQRCode).toHaveBeenCalledWith(
+        expect.stringContaining('cocohub.app/claims/claim-12345678-abcd'),
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe('shareClaimSummary', () => {
+    it('calls Sharing.shareAsync with the file path and claim title', async () => {
+      await shareClaimSummary('/mock/documents/claim-summary.txt');
+      expect(mockShare).toHaveBeenCalledWith(
+        '/mock/documents/claim-summary.txt',
+        expect.objectContaining({
+          mimeType: 'text/plain',
+          dialogTitle: 'Share Claim Summary',
+        }),
+      );
+    });
+
+    it('throws when sharing is not available', async () => {
+      mockIsAvailable.mockResolvedValue(false);
+      await expect(shareClaimSummary('/mock/claim.txt')).rejects.toThrow(
         'Sharing is not available on this device.',
       );
     });
