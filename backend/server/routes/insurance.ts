@@ -65,8 +65,21 @@ router.post('/claims', (req: AuthenticatedRequest, res) => {
     description: string;
     attachmentUrls?: string[];
   };
-  if (!policyId || !amount || !description) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'policyId, amount, and description required');
+  if (
+    !policyId ||
+    typeof amount !== 'number' ||
+    isNaN(amount) ||
+    amount <= 0 ||
+    !description ||
+    typeof description !== 'string' ||
+    !description.trim()
+  ) {
+    return sendError(
+      res,
+      400,
+      'VALIDATION_ERROR',
+      'Valid policyId, positive amount, and non-empty description required',
+    );
   }
   const policy = getPolicy(policyId);
   if (!policy || policy.userId !== req.user!.id) {

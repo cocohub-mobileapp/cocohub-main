@@ -5,6 +5,7 @@ import {
   submitClaim,
   getClaims,
   getClaim,
+  resetStores,
   type InsurancePolicy,
   type InsuranceClaim,
 } from '../insuranceService';
@@ -15,6 +16,12 @@ describe('insuranceService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers();
+    resetStores();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   describe('exchangeOAuthCode', () => {
@@ -267,7 +274,7 @@ describe('insuranceService', () => {
       expect(claims[1].id).toBe(claim1.id);
     });
 
-    it('should not include claims from other users', () => {
+    it('should not include claims from other users', async () => {
       submitClaim(policyId, testUserId, {
         amount: 500,
         description: 'Treatment',
