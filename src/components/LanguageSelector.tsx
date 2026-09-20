@@ -1,50 +1,59 @@
 import React from 'react';
-import { useTranslation } from 'react-i18next';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 
-import { SUPPORTED_LANGUAGES, type LanguageCode } from '../i18n';
-import { switchLanguage } from '../utils/locale';
+type LanguageOption = {
+  label: string;
+  value: string;
+};
 
-const LanguageSelector: React.FC = () => {
-  const { t, i18n } = useTranslation();
-  const current = i18n.language as LanguageCode;
+const LANGUAGES: LanguageOption[] = [
+  { label: 'English', value: 'en' },
+  { label: 'Español', value: 'es' },
+  { label: 'Français', value: 'fr' }, // Added French locale
+];
 
-  const handleSelect = (code: LanguageCode) => {
-    void switchLanguage(code);
+export const LanguageSelector: React.FC = () => {
+  const { t } = useTranslation();
+
+  const changeLanguage = (lang: string) => {
+    i18n.changeLanguage(lang);
   };
 
   return (
-    <View>
-      <Text style={styles.label}>{t('language.selectLanguage')}</Text>
-      <View style={styles.row}>
-        {SUPPORTED_LANGUAGES.map(({ code, label }) => (
-          <TouchableOpacity
-            key={code}
-            style={[styles.btn, current === code && styles.btnActive]}
-            onPress={() => handleSelect(code)}
-          >
-            <Text style={[styles.btnText, current === code && styles.btnTextActive]}>{label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+    <View style={styles.container}>
+      <Text style={styles.title}>{t('language')}</Text>
+      {LANGUAGES.map((lang) => (
+        <TouchableOpacity
+          key={lang.value}
+          style={styles.button}
+          onPress={() => changeLanguage(lang.value)}
+        >
+          <Text style={styles.buttonText}>{lang.label}</Text>
+        </TouchableOpacity>
+      ))}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  label: { fontSize: 13, color: '#666', marginTop: 12, marginBottom: 8 },
-  row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  btn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: '#ddd',
-    backgroundColor: '#f9f9f9',
+  container: {
+    padding: 16,
   },
-  btnActive: { borderColor: '#4CAF50', backgroundColor: '#e8f5e9' },
-  btnText: { fontSize: 14, color: '#555' },
-  btnTextActive: { color: '#2e7d32', fontWeight: '600' },
+  title: {
+    fontSize: 18,
+    marginBottom: 12,
+    fontWeight: '600',
+  },
+  button: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#eee',
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  buttonText: {
+    fontSize: 16,
+  },
 });
-
-export default LanguageSelector;
