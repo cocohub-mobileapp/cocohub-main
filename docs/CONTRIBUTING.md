@@ -1,4 +1,4 @@
-﻿# Contributing to Cocohub-MobileApp
+# Contributing to Cocohub-MobileApp
 
 Thank you for your interest in contributing to Cocohub-MobileApp! We welcome contributions from the community to help improve this pet management mobile application with blockchain integration.
 
@@ -115,6 +115,8 @@ Thank you for contributing to Cocohub-MobileApp!
 Cocohub uses the [Stellar](https://stellar.org) network for blockchain-verified medical records.
 This section guides you through the testnet setup required to work on any feature under
 `src/services/stellar*` or `backend/src/stellar*`.
+
+> For full details, Freighter wallet setup, Stellar Laboratory links, and blockchainService.ts test walkthroughs, see the comprehensive [Stellar Testnet Setup Guide](./STELLAR-SETUP.md).
 
 ### Prerequisites
 
