@@ -1,4 +1,4 @@
-﻿import * as StellarSdk from '@stellar/stellar-sdk';
+import * as StellarSdk from '@stellar/stellar-sdk';
 import axios, { type AxiosResponse } from 'axios';
 import CryptoJS from 'crypto-js';
 
@@ -745,3 +745,128 @@ export async function getTransactionDetails(txHash: string): Promise<StellarTran
   }
   return match;
 }
+
+// ==============================
+// SOROBAN PET RECORD REGISTRY (Issue #28)
+// ==============================
+
+export const SOROBAN_REGISTRY_CONTRACT_ID =
+  process.env.EXPO_PUBLIC_SOROBAN_REGISTRY_CONTRACT_ID ||
+  process.env.NEXT_PUBLIC_SOROBAN_REGISTRY_CONTRACT_ID ||
+  '';
+
+export const SOROBAN_RPC_URL =
+  process.env.EXPO_PUBLIC_SOROBAN_RPC_URL ||
+  process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ||
+  'https://soroban-testnet.stellar.org';
+
+export interface SorobanPetRecord {
+  recordId: string;
+  recordHash: string;
+  timestamp: number;
+  createdBy: string;
+}
+
+/**
+ * Register a pet on-chain via the Soroban Pet Record Registry contract.
+ */
+export async function registerPetOnSoroban(
+  ownerSecret: string,
+  petId: string,
+  contractId: string = SOROBAN_REGISTRY_CONTRACT_ID,
+): Promise<{ txHash: string; petId: string }> {
+  const keypair = StellarSdk.Keypair.fromSecret(ownerSecret);
+  const server = new StellarSdk.rpc.Server(SOROBAN_RPC_URL);
+  const account = await server.getAccount(keypair.publicKey());
+
+  const contract = new StellarSdk.Contract(contractId);
+  const tx = new StellarSdk.TransactionBuilder(account, {
+    fee: StellarSdk.BASE_FEE,
+    networkPassphrase: StellarSdk.Networks.TESTNET,
+  })
+    .addOperation(
+      contract.call(
+        'register_pet',
+        StellarSdk.nativeToScVal(keypair.publicKey(), { type: 'address' }),
+        StellarSdk.nativeToScVal(petId, { type: 'string' }),
+      ),
+    )
+    .setTimeout(30)
+    .build();
+
+  tx.sign(keypair);
+  const sendRes = await server.sendTransaction(tx);
+  return { txHash: sendRes.hash, petId };
+}
+
+/**
+ * Grant a licensed veterinarian read access to a pet's records.
+ */
+export async function grantVetAccessOnSoroban(
+  ownerSecret: string,
+  petId: string,
+  vetAddress: string,
+  contractId: string = SOROBAN_REGISTRY_CONTRACT_ID,
+): Promise<{ txHash: string; success: boolean }> {
+  const keypair = StellarSdk.Keypair.fromSecret(ownerSecret);
+  const server = new StellarSdk.rpc.Server(SOROBAN_RPC_URL);
+  const account = await server.getAccount(keypair.publicKey());
+
+  const contract = new StellarSdk.Contract(contractId);
+  const tx = new StellarSdk.TransactionBuilder(account, {
+    fee: StellarSdk.BASE_FEE,
+    networkPassphrase: StellarSdk.Networks.TESTNET,
+  })
+    .addOperation(
+      contract.call(
+        'grant_vet_access',
+        StellarSdk.nativeToScVal(keypair.publicKey(), { type: 'address' }),
+        StellarSdk.nativeToScVal(petId, { type: 'string' }),
+        StellarSdk.nativeToScVal(vetAddress, { type: 'address' }),
+      ),
+    )
+    .setTimeout(30)
+    .build();
+
+  tx.sign(keypair);
+  const sendRes = await server.sendTransaction(tx);
+  return { txHash: sendRes.hash, success: true };
+}
+
+/**
+ * Anchor a medical record cryptographic hash into the Soroban registry.
+ */
+export async function anchorRecordOnSoroban(
+  callerSecret: string,
+  petId: string,
+  recordId: string,
+  recordHashHex: string,
+  contractId: string = SOROBAN_REGISTRY_CONTRACT_ID,
+): Promise<{ txHash: string; recordId: string; recordHash: string }> {
+  const keypair = StellarSdk.Keypair.fromSecret(callerSecret);
+  const server = new StellarSdk.rpc.Server(SOROBAN_RPC_URL);
+  const account = await server.getAccount(keypair.publicKey());
+
+  const hashBuffer = Buffer.from(recordHashHex, 'hex');
+  const contract = new StellarSdk.Contract(contractId);
+  const tx = new StellarSdk.TransactionBuilder(account, {
+    fee: StellarSdk.BASE_FEE,
+    networkPassphrase: StellarSdk.Networks.TESTNET,
+  })
+    .addOperation(
+      contract.call(
+        'anchor_record',
+        StellarSdk.nativeToScVal(keypair.publicKey(), { type: 'address' }),
+        StellarSdk.nativeToScVal(petId, { type: 'string' }),
+        StellarSdk.nativeToScVal(recordId, { type: 'string' }),
+        StellarSdk.nativeToScVal(hashBuffer, { type: 'bytes' }),
+      ),
+    )
+    .setTimeout(30)
+    .build();
+
+  tx.sign(keypair);
+  const sendRes = await server.sendTransaction(tx);
+  return { txHash: sendRes.hash, recordId, recordHash: recordHashHex };
+}
+

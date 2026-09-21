@@ -60,6 +60,51 @@ export function describeWeightTrend(data: WeightDataPoint[]): string {
   return delta > 0 ? 'increasing' : 'decreasing';
 }
 
+
+
+export function buildDataPointAccessibilityLabel(point: WeightDataPoint): string {
+  const noteSuffix = point.note ? `. Note: ${point.note}` : '';
+  return `${formatDateLabel(point.date)}: ${point.weightKg.toFixed(1)} kilograms${noteSuffix}`;
+}
+
+/**
+ * Returns an accessibility label for a date-range filter button so that screen
+ * readers announce the action and current selection state together.
+ *
+ * @param range  - The filter value (e.g. '1M', '3M')
+ * @param active - Whether this filter is currently selected
+ */
+export function buildRangeFilterAccessibilityLabel(
+  range: DateRangeFilter,
+  active: boolean,
+): string {
+  const description = rangeLabel(range);
+  return active
+    ? `Show ${description}, currently selected`
+    : `Show ${description}`;
+}
+
+/**
+ * Returns a human-readable accessibility label for the vet-recommended weight
+ * range band shown on the chart.
+ *
+ * @param min - Lower bound in kg
+ * @param max - Upper bound in kg
+ * @param label - Optional custom label from the prop
+ */
+export function buildVetRangeAccessibilityLabel(
+  min: number,
+  max: number,
+  label?: string,
+): string {
+  const base = `Vet recommended weight range: ${min.toFixed(1)} to ${max.toFixed(1)} kilograms`;
+  return label ? `${base} (${label})` : base;
+}
+
+/**
+ * Builds the full chart container accessibility label, including the total
+ * number of recorded data points so screen readers can announce it.
+ */
 export function buildWeightChartAccessibilityLabel(
   petName: string | undefined,
   data: WeightDataPoint[],
@@ -73,11 +118,13 @@ export function buildWeightChartAccessibilityLabel(
   const current = sorted[sorted.length - 1].weightKg;
   const name = petName?.trim() || 'Pet';
   const trend = describeWeightTrend(sorted);
+  const pointCount = sorted.length;
+  const pointWord = pointCount === 1 ? 'entry' : 'entries';
 
-  return `Weight chart for ${name}. Current weight: ${current.toFixed(1)} kg. Trend: ${trend} over ${rangeLabel(range)}.`;
-}
-
-export function buildDataPointAccessibilityLabel(point: WeightDataPoint): string {
-  const noteSuffix = point.note ? `. Note: ${point.note}` : '';
-  return `${formatDateLabel(point.date)}: ${point.weightKg.toFixed(1)} kilograms${noteSuffix}`;
+  return (
+    `Weight chart for ${name}. ` +
+    `${pointCount} ${pointWord} over ${rangeLabel(range)}. ` +
+    `Current weight: ${current.toFixed(1)} kg. ` +
+    `Trend: ${trend}.`
+  );
 }

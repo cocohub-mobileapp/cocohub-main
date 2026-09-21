@@ -1,4 +1,4 @@
-﻿import apiClient from './apiClient';
+import apiClient from './apiClient';
 import { executeSql, getItem, setItem } from './localDB';
 import { sendAlertNotification } from './notificationService';
 import syncService, { type SyncAction, type SyncEntityType, type SyncStatus } from './syncService';
@@ -173,11 +173,25 @@ class OfflineQueue {
         const headers: Record<string, string> = {};
         if (mutation.etag) headers['If-Match'] = mutation.etag;
 
-        const endpoint = `/${mutation.type}s/${String(mutation.data.id ?? '')}`;
-        const response = await apiClient.put(endpoint, mutation.data, { headers });
+        let endpoint = `/${mutation.type}s`;
+        if (mutation.type === 'medicalRecord') {
+          const petId = mutation.data.petId as string | undefined;
+          endpoint = petId ? `/pets/${petId}/medical-records` : '/medical-records';
+        }
+
+        let response;
+        if (mutation.action === 'create') {
+          response = await apiClient.post(endpoint, mutation.data, { headers });
+        } else if (mutation.action === 'delete') {
+          const id = String(mutation.data.id ?? '');
+          response = await apiClient.delete(`${endpoint}/${id}`, { headers });
+        } else {
+          const id = String(mutation.data.id ?? '');
+          response = await apiClient.put(`${endpoint}/${id}`, mutation.data, { headers });
+        }
 
         // Capture updated ETag for future mutations on this entity
-        const newEtag = (response.headers as Record<string, string>)?.['etag'];
+        const newEtag = (response?.headers as Record<string, string> | undefined)?.['etag'];
         if (newEtag) {
           // Update stored ETag for subsequent mutations on the same entity
           const updated = stillPending.map((m) =>
@@ -210,6 +224,13 @@ class OfflineQueue {
     }
 
     await setItem(QUEUE_KEY, JSON.stringify(stillPending));
+
+    // Also flush syncService so its pendingCount and queue are kept in sync
+    try {
+      await syncService.push();
+    } catch {
+      /* ignore non-fatal syncService push error */
+    }
 
     const conflicts = await this.getPendingConflicts();
     if (conflicts.length > 0) {

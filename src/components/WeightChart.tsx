@@ -14,6 +14,8 @@ import Svg, {
 import { useAppTheme } from '../theme';
 import {
   buildDataPointAccessibilityLabel,
+  buildRangeFilterAccessibilityLabel,
+  buildVetRangeAccessibilityLabel,
   buildWeightChartAccessibilityLabel,
   filterDataByRange,
   formatDateLabel,
@@ -24,6 +26,8 @@ import {
 export type { DateRangeFilter, WeightDataPoint } from './weightChartAccessibility';
 export {
   buildDataPointAccessibilityLabel,
+  buildRangeFilterAccessibilityLabel,
+  buildVetRangeAccessibilityLabel,
   buildWeightChartAccessibilityLabel,
   describeWeightTrend,
   filterDataByRange,
