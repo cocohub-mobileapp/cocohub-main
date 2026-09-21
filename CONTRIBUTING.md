@@ -1,4 +1,4 @@
-﻿# Contributing to Cocohub 🐾
+# Contributing to Cocohub 🐾
 
 Thank you for your interest in contributing to Cocohub — the open-source pet health records app powered by the Stellar blockchain.
 
@@ -90,6 +90,8 @@ cp .env.example .env.development
 # Edit .env.development with your local values
 ```
 
+For generating a Stellar testnet keypair, funding with Friendbot, and setting up blockchain environment variables, see the [Stellar Testnet Setup Guide](docs/STELLAR-SETUP.md).
+
 ### 4. Start the backend
 
 ```bash
@@ -154,7 +156,7 @@ Or let the pre-commit hook handle it automatically (via Husky).
 - **TypeScript strict** — no `any`, proper return types
 - **No console.log** in production code — use `loggerService`
 - **Encryption** — never store sensitive data in plain AsyncStorage; use `encryptedAsyncStorage` or SecureStore
-- **Stellar** — all blockchain operations go through `src/services/blockchainService.ts`
+- **Stellar** — all blockchain operations go through `src/services/blockchainService.ts`. See [docs/STELLAR-SETUP.md](docs/STELLAR-SETUP.md) for local testnet setup and testing.
 - **Tests** — new features must include at least one unit test
 
 ---
@@ -174,7 +176,7 @@ Or let the pre-commit hook handle it automatically (via Husky).
 - [ ] Tests pass (or new tests added)
 - [ ] No `.env` secrets committed
 - [ ] UI changes include a screenshot or screen recording
-- [ ] Stellar-related changes tested on testnet first
+- [ ] Stellar-related changes tested on testnet first (see [docs/STELLAR-SETUP.md](docs/STELLAR-SETUP.md))
 
 ---
 

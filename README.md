@@ -1,4 +1,4 @@
-﻿# 🐾 Cocohub
+# 🐾 Cocohub
 
 > **The pet health app that works like a human medical record — but for your dog, cat, or any animal. Blockchain-verified. Offline-first. Free to start.**
 
@@ -191,6 +191,8 @@ Record → SHA-256 hash → Stellar manageData tx → tamper-evident audit trail
 - `VETH` — Vet Health Credits
 - `PAWP` — PawPoints loyalty rewards
 
+> For local development, keypair generation, Friendbot funding, and testing, see the [Stellar Testnet Setup Guide](docs/STELLAR-SETUP.md).
+
 ---
 
 ## 🧪 Testing
@@ -206,7 +208,7 @@ npm run e2e:test      # Maestro E2E smoke test
 
 ## 🤝 Contributing
 
-We welcome everyone — from first-timers to senior engineers. See [CONTRIBUTING.md](./CONTRIBUTING.md).
+We welcome everyone — from first-timers to senior engineers. See [CONTRIBUTING.md](./CONTRIBUTING.md) and the [Stellar Testnet Setup Guide](docs/STELLAR-SETUP.md).
 
 ### Good first issues
 Look for issues tagged [`good first issue`](https://github.com/cocohub-mobileapp/cocohub-main/labels/good%20first%20issue) — these are scoped, self-contained, and come with a bounty.
