@@ -1,4 +1,4 @@
-﻿import apiClient from './apiClient';
+import apiClient from './apiClient';
 import { executeSql, getItem, setItem } from './localDB';
 import { sendAlertNotification } from './notificationService';
 import syncService, { type SyncAction, type SyncEntityType, type SyncStatus } from './syncService';
@@ -139,9 +139,6 @@ class OfflineQueue {
     // Persist to our own queue key for resilience
     await this.persistToQueue({ type, action, data });
 
-    // Also enqueue in syncService (which manages retries + conflicts)
-    await syncService.enqueue(type, action, data);
-
     if (this.isOnline) {
       await this.processQueue();
     } else {
@@ -163,8 +160,17 @@ class OfflineQueue {
     const online = await networkMonitor.isOnline();
     if (!online) return;
 
+    try {
+      await syncService.push();
+    } catch (_err) {
+      void _err;
+    }
+
     const pending = await this.getPersistentQueue();
-    if (pending.length === 0) return;
+    if (pending.length === 0) {
+      await this.emitStatus();
+      return;
+    }
 
     const stillPending: QueuedMutation[] = [];
 
@@ -173,11 +179,44 @@ class OfflineQueue {
         const headers: Record<string, string> = {};
         if (mutation.etag) headers['If-Match'] = mutation.etag;
 
-        const endpoint = `/${mutation.type}s/${String(mutation.data.id ?? '')}`;
-        const response = await apiClient.put(endpoint, mutation.data, { headers });
+        let endpoint = `/${mutation.type}s`;
+        if (mutation.type === 'medicalRecord') {
+          const petId = mutation.data.petId as string;
+          if (petId) {
+            endpoint = `/pets/${petId}/medical-records`;
+          } else {
+            endpoint = '/medical-records';
+          }
+        }
+
+        const id = mutation.data.id ? String(mutation.data.id) : '';
+        let response;
+
+        switch (mutation.action) {
+          case 'create': {
+            const payload = { ...mutation.data };
+            if (typeof payload.id === 'string' && payload.id.startsWith('temp_')) {
+              delete payload.id;
+            }
+            response = await apiClient.post(endpoint, payload, { headers });
+            break;
+          }
+          case 'update': {
+            response = await apiClient.put(`${endpoint}/${id}`, mutation.data, { headers });
+            break;
+          }
+          case 'delete': {
+            response = await apiClient.delete(`${endpoint}/${id}`, { headers });
+            break;
+          }
+          default: {
+            response = await apiClient.put(`${endpoint}/${id}`, mutation.data, { headers });
+            break;
+          }
+        }
 
         // Capture updated ETag for future mutations on this entity
-        const newEtag = (response.headers as Record<string, string>)?.['etag'];
+        const newEtag = (response?.headers as Record<string, string>)?.['etag'];
         if (newEtag) {
           // Update stored ETag for subsequent mutations on the same entity
           const updated = stillPending.map((m) =>
@@ -301,9 +340,9 @@ class OfflineQueue {
     const pendingConflicts = await this.getPendingConflicts();
     return {
       isOnline: this.isOnline,
-      pendingCount: Math.max(syncStatus.pendingCount, queue.length),
+      pendingCount: queue.length + syncStatus.pendingCount,
       isSyncing: syncStatus.isSyncing,
-      lastSync: syncStatus.lastSync,
+      lastSync: syncStatus.lastSync ?? null,
       failedCount: syncStatus.failedCount,
       pendingConflicts,
     };
@@ -412,9 +451,16 @@ class OfflineQueue {
     mutation: QueuedMutation,
   ): Promise<Record<string, unknown> | null> {
     try {
-      const res = await apiClient.get<Record<string, unknown>>(
-        `/${mutation.type}s/${String(mutation.data.id ?? '')}`,
-      );
+      let endpoint = `/${mutation.type}s/${String(mutation.data.id ?? '')}`;
+      if (mutation.type === 'medicalRecord') {
+        const petId = mutation.data.petId as string;
+        if (petId) {
+          endpoint = `/pets/${petId}/medical-records/${String(mutation.data.id ?? '')}`;
+        } else {
+          endpoint = `/medical-records/${String(mutation.data.id ?? '')}`;
+        }
+      }
+      const res = await apiClient.get<Record<string, unknown>>(endpoint);
       return res.data;
     } catch {
       return null;
@@ -466,17 +512,9 @@ class OfflineQueue {
     this.statusListeners.forEach((l) => l(status));
   }
 
-  private async emitStatusFromSync(syncStatus: SyncStatus): Promise<void> {
-    const pendingConflicts = await this.getPendingConflicts();
-    const status: OfflineQueueStatus = {
-      isOnline: this.isOnline,
-      pendingCount: syncStatus.pendingCount,
-      isSyncing: syncStatus.isSyncing,
-      lastSync: syncStatus.lastSync,
-      failedCount: syncStatus.failedCount,
-      pendingConflicts,
-    };
-    this.statusListeners.forEach((l) => l(status));
+  private async emitStatusFromSync(_syncStatus: SyncStatus): Promise<void> {
+    void _syncStatus;
+    await this.emitStatus();
   }
 }
 
