@@ -67,6 +67,10 @@ export class SyncService {
     };
   }
 
+  subscribe(listener: (status: SyncStatus) => void): () => void {
+    return this.onStatusChange(listener);
+  }
+
   // ── Queue management ──
   async enqueue(
     type: SyncEntityType,
@@ -208,7 +212,11 @@ export class SyncService {
 
     switch (item.action) {
       case 'create': {
-        await apiClient.post(endpoint, item.data);
+        const payload = { ...item.data };
+        if (typeof payload.id === 'string' && payload.id.startsWith('temp_')) {
+          delete payload.id;
+        }
+        await apiClient.post(endpoint, payload);
         break;
       }
       case 'update': {
