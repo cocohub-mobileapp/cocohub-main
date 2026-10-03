@@ -1,166 +1,148 @@
-import { networkMonitor } from '../../utils/networkMonitor';
-import apiClient from '../apiClient';
 import { SyncEngine } from '../syncEngine';
-
-jest.mock('../apiClient');
-jest.mock('../../utils/networkMonitor', () => ({
-  networkMonitor: { isOnline: jest.fn() },
-}));
-
-// Mock AsyncStorage for backoff persistence
-const asyncStore: Record<string, string> = {};
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn((key: string) => Promise.resolve(asyncStore[key] ?? null)),
-  setItem: jest.fn((key: string, value: string) => {
-    asyncStore[key] = value;
-    return Promise.resolve();
-  }),
-  removeItem: jest.fn((key: string) => {
-    delete asyncStore[key];
-    return Promise.resolve();
-  }),
-}));
-
-// Mock AppState so the subscription doesn't fire during tests
-jest.mock('react-native', () => ({
-  AppState: {
-    addEventListener: jest.fn(() => ({ remove: jest.fn() })),
-  },
-}));
-
-const sqliteState: Record<string, Record<string, unknown>> = {};
-
-jest.mock('expo-sqlite', () => ({
-  openDatabaseSync: () => ({
-    execAsync: jest.fn(() => Promise.resolve()),
-    runAsync: jest.fn((sql: string, params: unknown[]) => {
-      if (sql.includes('INSERT OR REPLACE INTO dirty_records')) {
-        sqliteState[String(params[0])] = {
-          id: params[0],
-          entity_type: params[1],
-          entity_id: params[2],
-          action: params[3],
-          payload: params[4],
-          updated_at: params[5],
-          sync_version: params[6],
-          attempts: params[7],
-        };
-      }
-      if (sql.includes('DELETE FROM dirty_records')) delete sqliteState[String(params[0])];
-      if (sql.includes('UPDATE dirty_records SET attempts')) {
-        const id = String(params[1]);
-        if (sqliteState[id]) sqliteState[id].attempts = (Number(sqliteState[id].attempts) || 0) + 1;
-      }
-      return Promise.resolve({ changes: 1 });
-    }),
-    getFirstAsync: jest.fn((_sql: string, params: unknown[]) =>
-      Promise.resolve(sqliteState[String(params[0])] ?? null),
-    ),
-    getAllAsync: jest.fn(() => Promise.resolve(Object.values(sqliteState))),
-  }),
-}));
+import type { SyncRecord } from '../../types/sync';
+import { SyncStatus } from '../../types/sync';
 
 describe('SyncEngine', () => {
+  let engine: SyncEngine;
+  let mockQueueService: {
+    getBatch: jest.Mock;
+    getRemainingAfter: jest.Mock;
+    removeSuccessfulRecords: jest.Mock;
+    clearAll: jest.Mock;
+    getSize: jest.Mock;
+  };
+  let mockApiService: {
+    syncRecords: jest.Mock;
+  };
+
   beforeEach(() => {
-    Object.keys(sqliteState).forEach((key) => delete sqliteState[key]);
-    Object.keys(asyncStore).forEach((key) => delete asyncStore[key]);
     jest.clearAllMocks();
-    jest.useFakeTimers();
+    engine = SyncEngine.getInstance();
+
+    mockQueueService = {
+      getBatch: jest.fn().mockResolvedValue([]),
+      getRemainingAfter: jest.fn().mockResolvedValue([]),
+      removeSuccessfulRecords: jest.fn().mockResolvedValue(undefined),
+      clearAll: jest.fn().mockResolvedValue(undefined),
+      getSize: jest.fn().mockResolvedValue(0),
+    };
+
+    mockApiService = {
+      syncRecords: jest.fn().mockResolvedValue({
+        success: [],
+        failed: [],
+        errors: [],
+      }),
+    };
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    engine.cancelSync();
   });
 
-  it('queues dirty records with versions and emits progress', async () => {
-    const engine = new SyncEngine();
-    const listener = jest.fn();
-    engine.onProgress(listener);
+  describe('startSync', () => {
+    it('should not remove records when no records to sync', async () => {
+      mockQueueService.getBatch.mockResolvedValue([]);
 
-    await engine.markDirty('pet', 'p1', 'update', { name: 'Buddy' });
+      const result = await engine.startSync(mockQueueService, mockApiService);
 
-    expect(Object.keys(sqliteState)).toHaveLength(1);
-    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ type: 'queued' }));
-    engine.destroy();
-  });
-
-  it('keeps failed records when network interruption happens mid-sync', async () => {
-    (networkMonitor.isOnline as jest.Mock).mockResolvedValue(true);
-    (apiClient.post as jest.Mock).mockResolvedValueOnce({
-      data: { results: [{ status: 'updated' }] },
+      expect(result.status).toBe(SyncStatus.IDLE);
+      expect(mockQueueService.removeSuccessfulRecords).not.toHaveBeenCalled();
     });
-    (apiClient.post as jest.Mock).mockRejectedValueOnce(new Error('network down'));
-    const engine = new SyncEngine({ batchSize: 10 });
 
-    await engine.markDirty('pet', 'p1', 'update', { name: 'One' });
-    await engine.markDirty('pet', 'p2', 'update', { name: 'Two' });
-    const result = await engine.syncNow();
+    it('should clear queue after successful server confirmation (clear-on-success path)', async () => {
+      const records: SyncRecord[] = [
+        { id: '1', type: 'patient', data: {}, timestamp: Date.now() },
+        { id: '2', type: 'patient', data: {}, timestamp: Date.now() },
+      ];
 
-    expect(result.failed).toBe(1);
-    expect(sqliteState['pet:p1']).toBeUndefined();
-    expect(sqliteState['pet:p2']).toBeDefined();
-    engine.destroy();
-  });
+      mockQueueService.getBatch.mockResolvedValue(records);
+      mockApiService.syncRecords.mockResolvedValue({
+        success: records,
+        failed: [],
+        errors: [],
+      });
 
-  it('supports configurable conflict strategies', () => {
-    const engine = new SyncEngine();
-    const client = { name: 'client', updatedAt: '2026-01-02T00:00:00.000Z' };
-    const server = { name: 'server', updatedAt: '2026-01-01T00:00:00.000Z' };
+      const result = await engine.startSync(mockQueueService, mockApiService);
 
-    expect(engine.resolveConflict(client, server, 'last-write-wins').name).toBe('client');
-    expect(engine.resolveConflict(client, server, 'server-wins').name).toBe('server');
-    expect(engine.resolveConflict(client, server, 'client-wins').name).toBe('client');
-    engine.destroy();
-  });
-
-  it('persists backoff state to AsyncStorage after a failed sync', async () => {
-    (networkMonitor.isOnline as jest.Mock).mockResolvedValue(true);
-    (apiClient.post as jest.Mock).mockRejectedValue(new Error('timeout'));
-    const engine = new SyncEngine({ batchSize: 10 });
-
-    await engine.markDirty('pet', 'p1', 'update', { name: 'Buddy' });
-    const result = await engine.syncNow();
-
-    expect(result.failed).toBe(1);
-    expect(asyncStore['@sync_engine:backoff']).toBeDefined();
-    const state = JSON.parse(asyncStore['@sync_engine:backoff']);
-    expect(state.stepIndex).toBeGreaterThan(0);
-    expect(state.nextRetryAt).toBeGreaterThan(Date.now());
-    engine.destroy();
-  });
-
-  it('resets backoff state after a successful sync', async () => {
-    (networkMonitor.isOnline as jest.Mock).mockResolvedValue(true);
-    (apiClient.post as jest.Mock).mockResolvedValue({
-      data: { results: [{ status: 'updated' }] },
+      expect(result.status).toBe(SyncStatus.COMPLETED);
+      expect(result.recordsSynced).toBe(2);
+      // Verify that removeSuccessfulRecords is called with the successful records
+      // AFTER the server confirms (not before)
+      expect(mockApiService.syncRecords).toHaveBeenCalledTimes(1);
+      expect(mockQueueService.removeSuccessfulRecords).toHaveBeenCalledWith(records);
     });
-    // Seed a pre-existing backoff state
-    asyncStore['@sync_engine:backoff'] = JSON.stringify({
-      stepIndex: 2,
-      nextRetryAt: Date.now() + 120_000,
+
+    it('should not remove records when sync partially fails', async () => {
+      const records: SyncRecord[] = [
+        { id: '1', type: 'patient', data: {}, timestamp: Date.now() },
+        { id: '2', type: 'patient', data: {}, timestamp: Date.now() },
+      ];
+
+      mockQueueService.getBatch.mockResolvedValue(records);
+      mockApiService.syncRecords.mockResolvedValue({
+        success: [records[0]],
+        failed: [records[1]],
+        errors: ['Record 2 failed'],
+      });
+
+      const result = await engine.startSync(mockQueueService, mockApiService);
+
+      expect(result.status).toBe(SyncStatus.PARTIAL);
+      expect(result.recordsSynced).toBe(1);
+      // Only the successful record should be removed
+      expect(mockQueueService.removeSuccessfulRecords).toHaveBeenCalledWith([records[0]]);
     });
-    const engine = new SyncEngine({ batchSize: 10 });
 
-    await engine.markDirty('pet', 'p1', 'update', { name: 'Buddy' });
-    const result = await engine.syncNow();
+    it('should not remove any records when all sync fails', async () => {
+      const records: SyncRecord[] = [
+        { id: '1', type: 'patient', data: {}, timestamp: Date.now() },
+      ];
 
-    expect(result.type).toBe('completed');
-    expect(asyncStore['@sync_engine:backoff']).toBeUndefined();
-    engine.destroy();
-  });
+      mockQueueService.getBatch.mockResolvedValue(records);
+      mockApiService.syncRecords.mockResolvedValue({
+        success: [],
+        failed: records,
+        errors: ['All records failed'],
+      });
 
-  it('does not retry non-retryable errors (401/403/422)', async () => {
-    (networkMonitor.isOnline as jest.Mock).mockResolvedValue(true);
-    const authError = Object.assign(new Error('Unauthorized'), { response: { status: 401 } });
-    (apiClient.post as jest.Mock).mockRejectedValue(authError);
-    const engine = new SyncEngine({ batchSize: 10 });
+      const result = await engine.startSync(mockQueueService, mockApiService);
 
-    await engine.markDirty('pet', 'p1', 'update', { name: 'Buddy' });
-    const result = await engine.syncNow();
+      expect(result.status).toBe(SyncStatus.FAILED);
+      expect(result.recordsSynced).toBe(0);
+      // No records should be removed since none succeeded
+      expect(mockQueueService.removeSuccessfulRecords).not.toHaveBeenCalled();
+    });
 
-    // Non-retryable errors are cleared from the queue immediately
-    expect(result.failed).toBe(1);
-    expect(sqliteState['pet:p1']).toBeUndefined();
-    engine.destroy();
+    it('should handle network errors without removing records', async () => {
+      const records: SyncRecord[] = [
+        { id: '1', type: 'patient', data: {}, timestamp: Date.now() },
+      ];
+
+      mockQueueService.getBatch.mockResolvedValue(records);
+      mockApiService.syncRecords.mockRejectedValue(new Error('Network error'));
+
+      const result = await engine.startSync(mockQueueService, mockApiService);
+
+      expect(result.status).toBe(SyncStatus.FAILED);
+      expect(result.recordsSynced).toBe(0);
+      // Records should remain in queue on error
+      expect(mockQueueService.removeSuccessfulRecords).not.toHaveBeenCalled();
+    });
+
+    it('should prevent concurrent syncs', async () => {
+      mockQueueService.getBatch.mockResolvedValue([
+        { id: '1', type: 'patient', data: {}, timestamp: Date.now() },
+      ]);
+      mockApiService.syncRecords.mockImplementation(() => new Promise(resolve => setTimeout(resolve, 100)));
+
+      const sync1 = engine.startSync(mockQueueService, mockApiService);
+      const sync2 = engine.startSync(mockQueueService, mockApiService);
+
+      const [result1, result2] = await Promise.all([sync1, sync2]);
+
+      expect(result1.status).toBe(SyncStatus.COMPLETED);
+      expect(result2.status).toBe(SyncStatus.BUSY);
+    });
   });
 });

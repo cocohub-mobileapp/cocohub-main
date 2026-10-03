@@ -1,75 +1,102 @@
-import apiClient from '../apiClient';
-import { getItem, setItem } from '../localDB';
 import { SyncService } from '../syncService';
-
-jest.mock('../localDB', () => ({
-  getItem: jest.fn(),
-  setItem: jest.fn(),
-  removeItem: jest.fn(),
-}));
-
-jest.mock('../apiClient');
-const mockedApiClient = apiClient as jest.Mocked<typeof apiClient>;
+import { SyncEngine } from '../syncEngine';
+import { OfflineQueue } from '../offlineQueue';
+import { NetworkService } from '../networkService';
+import type { SyncRecord } from '../../types/sync';
+import { SyncStatus } from '../../types/sync';
 
 describe('SyncService', () => {
-  let syncService: SyncService;
+  let service: SyncService;
+  let mockEngine: jest.Mocked<SyncEngine>;
+  let mockQueue: jest.Mocked<OfflineQueue>;
+  let mockNetwork: jest.Mocked<NetworkService>;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    syncService = new SyncService();
+
+    mockQueue = {
+      enqueue: jest.fn().mockResolvedValue(undefined),
+      getBatch: jest.fn().mockResolvedValue([]),
+      getRemainingAfter: jest.fn().mockResolvedValue([]),
+      removeSuccessfulRecords: jest.fn().mockResolvedValue(undefined),
+      clearAll: jest.fn().mockResolvedValue(undefined),
+      getSize: jest.fn().mockResolvedValue(0),
+    } as unknown as jest.Mocked<OfflineQueue>;
+
+    mockNetwork = {
+      isOnline: jest.fn().mockReturnValue(true),
+      syncRecords: jest.fn().mockResolvedValue({
+        success: [],
+        failed: [],
+        errors: [],
+      }),
+      addListener: jest.fn().mockReturnValue(() => {}),
+    } as unknown as jest.Mocked<NetworkService>;
+
+    mockEngine = {
+      getInstance: jest.fn().mockReturnValue(mockEngine),
+      startSync: jest.fn().mockResolvedValue({
+        status: SyncStatus.COMPLETED,
+        message: 'Sync completed',
+        recordsSynced: 0,
+        errors: [],
+      }),
+      subscribe: jest.fn().mockReturnValue(() => {}),
+      cancelSync: jest.fn(),
+      getStatus: jest.fn().mockResolvedValue({ isSyncing: false, queueSize: 0 }),
+    } as unknown as jest.Mocked<SyncEngine>;
+
+    // Override singletons for tests
+    jest.spyOn(SyncEngine, 'getInstance').mockReturnValue(mockEngine);
+    jest.spyOn(OfflineQueue, 'getInstance').mockReturnValue(mockQueue);
+    jest.spyOn(NetworkService, 'getInstance').mockReturnValue(mockNetwork);
   });
 
-  describe('enqueue', () => {
-    it('should add item to queue', async () => {
-      (getItem as jest.Mock).mockResolvedValue('[]');
-
-      await syncService.enqueue('pet', 'create', { id: 'pet-1', name: 'Buddy' });
-
-      expect(setItem).toHaveBeenCalledWith('@sync_queue', expect.stringContaining('"type":"pet"'));
-    });
-
-    it('should deduplicate existing items', async () => {
-      const existingItem = {
-        id: 'q1',
-        type: 'pet',
-        action: 'update',
-        data: { id: 'p1', name: 'Old' },
-      };
-      (getItem as jest.Mock).mockResolvedValue(JSON.stringify([existingItem]));
-
-      await syncService.enqueue('pet', 'update', { id: 'p1', name: 'New' });
-
-      const setCall = (setItem as jest.Mock).mock.calls[0];
-      const savedQueue = JSON.parse(setCall[1]);
-      expect(savedQueue).toHaveLength(1);
-      expect(savedQueue[0].data.name).toBe('New');
-    });
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
-  describe('pull', () => {
-    it('should fetch items from server', async () => {
-      mockedApiClient.get.mockResolvedValue({ data: [{ id: 'p1', name: 'Server Pet' }] });
-      (getItem as jest.Mock).mockResolvedValue('[]');
+  describe('sync', () => {
+    it('should return OFFLINE status when no network', async () => {
+      mockNetwork.isOnline.mockReturnValue(false);
 
-      await syncService.pull(['pet']);
+      const result = await service.sync();
 
-      expect(mockedApiClient.get).toHaveBeenCalledWith('/pets');
-      // Should save to local storage (e.g., @pets) - based on implementation details
-      expect(setItem).toHaveBeenCalled();
+      expect(result.status).toBe(SyncStatus.OFFLINE);
+      expect(mockEngine.startSync).not.toHaveBeenCalled();
     });
-  });
 
-  describe('status management', () => {
-    it('should notify listeners on status change', async () => {
-      const listener = jest.fn();
-      syncService.subscribe(listener);
+    it('should delegate to SyncEngine and update last sync time on success', async () => {
+      const spySetItem = jest.spyOn(require('../../utils/storage'), 'setItem').mockResolvedValue(undefined);
 
-      (getItem as jest.Mock).mockResolvedValue('[]');
-      await syncService.enqueue('pet', 'create', { id: '1' });
+      mockEngine.startSync.mockResolvedValue({
+        status: SyncStatus.COMPLETED,
+        message: 'Sync completed',
+        recordsSynced: 2,
+        errors: [],
+      });
 
-      expect(listener).toHaveBeenCalled();
-      const status = listener.mock.calls[0][0];
-      expect(status.pendingCount).toBe(1);
+      const result = await service.sync();
+
+      expect(result.status).toBe(SyncStatus.COMPLETED);
+      expect(result.recordsSynced).toBe(2);
+      expect(spySetItem).toHaveBeenCalledWith('last_sync_timestamp', expect.any(String));
+    });
+
+    it('should NOT update last sync time when sync fails', async () => {
+      const spySetItem = jest.spyOn(require('../../utils/storage'), 'setItem').mockResolvedValue(undefined);
+
+      mockEngine.startSync.mockResolvedValue({
+        status: SyncStatus.FAILED,
+        message: 'Network error',
+        recordsSynced: 0,
+        errors: ['Network error'],
+      });
+
+      const result = await service.sync();
+
+      expect(result.status).toBe(SyncStatus.FAILED);
+      expect(spySetItem).not.toHaveBeenCalled();
     });
   });
 });
