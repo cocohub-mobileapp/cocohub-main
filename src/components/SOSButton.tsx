@@ -41,6 +41,15 @@ const SOSButton: React.FC<SOSButtonProps> = ({ onSOSSent, style }) => {
     }
   }, [onSOSSent]);
 
+  // Keep a persistent lock-screen SOS notification available (issue #50):
+  // visible as a notification action even when the device is locked.
+  useEffect(() => {
+    void sosNotificationService.refresh();
+    return () => {
+      sosNotificationService.teardown();
+    };
+  }, []);
+
   useEffect(() => {
     if (isCountdown) {
       // Pulsing animation during countdown
