@@ -68,6 +68,20 @@ export interface AppointmentReminder {
   notificationMethod: 'push' | 'email' | 'sms';
 }
 
+export interface AppointmentRecurrence {
+  /** Calendar frequency for this recurring appointment. */
+  frequency: 'daily' | 'weekly' | 'monthly';
+
+  /** Repeat every N frequency units. Defaults to 1. */
+  interval?: number;
+
+  /** Optional total number of occurrences, including the base appointment. */
+  count?: number;
+
+  /** Optional inclusive recurrence end date in YYYY-MM-DD form. */
+  until?: string;
+}
+
 export interface Appointment {
   /** Unique identifier for the appointment (UUID) */
   id: string;
@@ -95,6 +109,9 @@ export interface Appointment {
    * Defaults to 30 minutes if not specified.
    */
   durationMinutes?: number;
+
+  /** Optional recurrence metadata used by conflict detection. */
+  recurrence?: AppointmentRecurrence;
 
   /** Category/type of the appointment */
   type: AppointmentType;

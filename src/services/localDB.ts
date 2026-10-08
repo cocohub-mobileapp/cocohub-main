@@ -290,6 +290,100 @@ export async function deleteSoapDraft(petId: string, vetId: string): Promise<voi
 
 // ─── Appointments CRUD ────────────────────────────────────────────────────────
 
+export interface AppointmentSnapshot<T> {
+  appointments: T[];
+  unreadableRows: number;
+}
+
+/** Validate the fields actually consumed by the local conflict evaluator. */
+export function isReadableAppointmentForConflicts(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const appointment = value as Record<string, unknown>;
+  if (typeof appointment.id !== 'string' || typeof appointment.date !== 'string') return false;
+  const durationMinutes = appointment.durationMinutes ?? 30;
+  if (
+    typeof durationMinutes !== 'number' ||
+    !Number.isFinite(durationMinutes) ||
+    durationMinutes < 0
+  ) {
+    return false;
+  }
+  const recurrence = appointment.recurrence;
+  if (recurrence !== undefined) {
+    if (typeof recurrence !== 'object' || recurrence === null || Array.isArray(recurrence)) {
+      return false;
+    }
+    const rule = recurrence as Record<string, unknown>;
+    const supportedRecurrenceFrequencies = new Set(['daily', 'weekly', 'monthly']);
+    if (
+      typeof rule.frequency !== 'string' ||
+      !supportedRecurrenceFrequencies.has(rule.frequency)
+    ) {
+      return false;
+    }
+    if (
+      rule.interval !== undefined &&
+      (typeof rule.interval !== 'number' ||
+        !Number.isInteger(rule.interval) ||
+        rule.interval <= 0)
+    ) {
+      return false;
+    }
+    if (
+      rule.count !== undefined &&
+      (typeof rule.count !== 'number' || !Number.isInteger(rule.count) || rule.count <= 0)
+    ) {
+      return false;
+    }
+    if (rule.until !== undefined) {
+      if (typeof rule.until !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(rule.until)) {
+        return false;
+      }
+      if (!Number.isFinite(new Date(`${rule.until}T00:00:00`).getTime())) {
+        return false;
+      }
+    }
+  }
+
+  let start: Date;
+  if (appointment.date.includes('T')) {
+    start = new Date(appointment.date);
+  } else {
+    const time = appointment.time ?? '00:00';
+    if (typeof time !== 'string') return false;
+    start = new Date(`${appointment.date}T${time}:00`);
+  }
+  return (
+    Number.isFinite(start.getTime()) &&
+    Number.isFinite(start.getTime() + durationMinutes * 60_000)
+  );
+}
+
+/** Keep readable local appointments while reporting unusable stored rows. */
+export async function getAppointmentSnapshotByPetId<T = unknown>(
+  petId: string,
+): Promise<AppointmentSnapshot<T>> {
+  const rows = await db.getAllAsync<{ data: string }>(
+    `SELECT data FROM appointments WHERE pet_id = ? ORDER BY scheduled_at ASC`,
+    [petId],
+  );
+  const appointments: T[] = [];
+  let unreadableRows = 0;
+  for (const row of rows) {
+    try {
+      const value = await safeDecrypt<unknown>(row.data, 'localdb_appointments', true);
+      if (!isReadableAppointmentForConflicts(value)) {
+        unreadableRows++;
+        continue;
+      }
+      appointments.push(value as T);
+    } catch {
+      unreadableRows++;
+    }
+  }
+  return { appointments, unreadableRows };
+}
+
 export async function getAllAppointmentsByPetId<T = unknown>(petId: string): Promise<T[]> {
   const rows = await db.getAllAsync<{ data: string }>(
     `SELECT data FROM appointments WHERE pet_id = ? ORDER BY scheduled_at ASC`,

@@ -27,6 +27,8 @@ import type { Medication } from '../models/Medication';
 import type { MainTabParamList } from '../navigation/types';
 import {
   AppointmentStatus,
+  CONFLICT_BUFFER_MS,
+  DEFAULT_APPOINTMENT_BUFFER_MINUTES,
   type Appointment,
   cancelAppointmentReminder,
   cancelAllAppointmentReminders,
@@ -100,6 +102,9 @@ const AppointmentScreen: React.FC = () => {
   const [rescheduleVisible, setRescheduleVisible] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [rescheduleDate, setRescheduleDate] = useState('');
+  const [appointmentBuffer, setAppointmentBuffer] = useState(
+    String(DEFAULT_APPOINTMENT_BUFFER_MINUTES),
+  );
   const [bookingLoading, setBookingLoading] = useState(false);
   const [conflictState, setConflictState] = useState<ConflictCheckResponse | null>(null);
   const [archivedIds, setArchivedIds] = useState<Set<string>>(new Set());
@@ -111,6 +116,7 @@ const AppointmentScreen: React.FC = () => {
   // ── Conflict modal state ────────────────────────────────────────────────────
   const [conflictResult, setConflictResult] = useState<ConflictDetectionResult | null>(null);
   const [pendingAppointment, setPendingAppointment] = useState<Appointment | null>(null);
+  const [pendingAction, setPendingAction] = useState<'book' | 'reschedule' | null>(null);
   const [conflictModalVisible, setConflictModalVisible] = useState(false);
   const [isCheckingConflicts, setIsCheckingConflicts] = useState(false);
 
@@ -314,8 +320,31 @@ const AppointmentScreen: React.FC = () => {
     closeBookingModal();
     setConflictModalVisible(false);
     setPendingAppointment(null);
+    setPendingAction(null);
     setConflictResult(null);
     await load();
+  };
+
+  const readAppointmentBufferMinutes = (proposedTime: Date): number | undefined => {
+    const text = appointmentBuffer.trim();
+    const minutes = Number(text);
+    const bufferMs = minutes * 60_000;
+    const lookupBufferMs = Math.max(CONFLICT_BUFFER_MS, bufferMs);
+    if (
+      !/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(text) ||
+      !Number.isFinite(minutes) ||
+      minutes < 0 ||
+      !Number.isFinite(bufferMs) ||
+      !Number.isFinite(new Date(proposedTime.getTime() - lookupBufferMs).getTime()) ||
+      !Number.isFinite(new Date(proposedTime.getTime() + lookupBufferMs).getTime())
+    ) {
+      Alert.alert(
+        'Invalid appointment buffer',
+        'Enter a finite nonnegative number of minutes within the date range.',
+      );
+      return undefined;
+    }
+    return minutes;
   };
 
   // ─── Book: validate → conflict check → persist ───────────────────────────────
@@ -323,14 +352,25 @@ const AppointmentScreen: React.FC = () => {
   const handleBook = async () => {
     const appt = buildAppointment();
     if (!appt) return;
+    const appointmentBufferMinutes = readAppointmentBufferMinutes(new Date(appt.date));
+    if (appointmentBufferMinutes === undefined) return;
 
     setIsCheckingConflicts(true);
     try {
       const petMeds = medications.filter((m) => m.petId === appt.petId);
-      const result = await detectConflicts(appt.petId, new Date(appt.date), petMeds);
+      const result = await detectConflicts(
+        appt.petId,
+        new Date(appt.date),
+        petMeds,
+        undefined,
+        true,
+        appointmentBufferMinutes,
+        appt.durationMinutes ?? 30,
+      );
 
-      if (result.hasConflicts) {
+      if (result.hasConflicts || !result.appointmentReadComplete) {
         setPendingAppointment(appt);
+        setPendingAction('book');
         setConflictResult(result);
         setConflictModalVisible(true);
       } else {
@@ -343,27 +383,43 @@ const AppointmentScreen: React.FC = () => {
 
   // ─── Conflict modal actions ───────────────────────────────────────────────────
 
+  const persistConflictChoice = async (appt: Appointment, resolutionNote: string) => {
+    if (pendingAction === 'reschedule') {
+      await doReschedule(new Date(appt.date), resolutionNote, appt);
+    } else if (pendingAction === 'book') {
+      await persistAppointment(appt, resolutionNote);
+    }
+  };
+
   /** User chooses to proceed despite conflicts */
   const handleProceedAnyway = async () => {
     if (!pendingAppointment) return;
-    await persistAppointment(
+    await persistConflictChoice(
       pendingAppointment,
-      'User chose to proceed despite scheduling conflicts.',
+      conflictResult?.appointmentReadComplete === false
+        ? 'User chose to proceed despite an incomplete local appointment check and any listed conflicts.'
+        : 'User chose to proceed despite scheduling conflicts.',
     );
   };
 
-  /** User accepts the suggested conflict-free slot */
+  /** User accepts the time suggested by the local conflict check. */
   const handleUseSuggestedTime = async () => {
-    if (!pendingAppointment || !conflictResult?.suggestedTime) return;
+    if (
+      !pendingAppointment ||
+      !conflictResult?.appointmentReadComplete ||
+      !conflictResult.suggestedTime
+    ) {
+      return;
+    }
     const suggested = conflictResult.suggestedTime;
     const updated: Appointment = {
       ...pendingAppointment,
       date: suggested.toISOString(),
       time: suggested.toTimeString().slice(0, 5),
     };
-    await persistAppointment(
+    await persistConflictChoice(
       updated,
-      `Rescheduled to conflict-free slot: ${suggested.toLocaleString()}.`,
+      `Selected time from local conflict check: ${suggested.toLocaleString()}.`,
     );
   };
 
@@ -371,6 +427,7 @@ const AppointmentScreen: React.FC = () => {
   const handleCancelConflict = () => {
     setConflictModalVisible(false);
     setPendingAppointment(null);
+    setPendingAction(null);
     setConflictResult(null);
   };
 
@@ -404,6 +461,8 @@ const AppointmentScreen: React.FC = () => {
       Alert.alert('Invalid date', 'Use format YYYY-MM-DDTHH:MM');
       return;
     }
+    const appointmentBufferMinutes = readAppointmentBufferMinutes(dateObj);
+    if (appointmentBufferMinutes === undefined) return;
 
     setIsCheckingConflicts(true);
     try {
@@ -413,17 +472,22 @@ const AppointmentScreen: React.FC = () => {
         dateObj,
         petMeds,
         detailAppt.id, // exclude self
+        true,
+        appointmentBufferMinutes,
+        detailAppt.durationMinutes ?? 30,
       );
 
-      if (result.hasConflicts) {
+      if (result.hasConflicts || !result.appointmentReadComplete) {
         // Build a provisional updated appointment and show conflict modal
         const provisional: Appointment = {
           ...detailAppt,
           date: dateObj.toISOString(),
-          status: AppointmentStatus.PENDING,
+          time: dateObj.toTimeString().slice(0, 5),
+          status: AppointmentStatus.RESCHEDULED,
           notificationId: undefined,
         };
         setPendingAppointment(provisional);
+        setPendingAction('reschedule');
         setConflictResult(result);
         setRescheduleVisible(false);
         setConflictModalVisible(true);
@@ -435,27 +499,45 @@ const AppointmentScreen: React.FC = () => {
     }
   };
 
-  const doReschedule = async (dateObj: Date, resolutionNote?: string) => {
-    if (!detailAppt) return;
+  const doReschedule = async (
+    dateObj: Date,
+    resolutionNote?: string,
+    sourceAppointment: Appointment | null = detailAppt,
+  ) => {
+    if (!sourceAppointment) return;
     // Cancel old reminders and calendar event
-    await cancelAllAppointmentReminders(detailAppt.id).catch(() => {});
-    await removeAppointmentFromCalendar(detailAppt.id).catch(() => {});
+    await cancelAllAppointmentReminders(sourceAppointment.id).catch(() => {});
+    await removeAppointmentFromCalendar(sourceAppointment.id).catch(() => {});
 
-    const date = dateObj.toISOString().slice(0, 10);
+    const date = [
+      String(dateObj.getFullYear()).padStart(4, '0'),
+      String(dateObj.getMonth() + 1).padStart(2, '0'),
+      String(dateObj.getDate()).padStart(2, '0'),
+    ].join('-');
     const time = dateObj.toTimeString().slice(0, 5);
 
-    const updated = await rescheduleAppointment(detailAppt.id, date, time).catch(async () => {
+    const rescheduled = await rescheduleAppointment(
+      sourceAppointment.id,
+      date,
+      time,
+      sourceAppointment.durationMinutes ?? 30,
+    ).catch(async () => {
       // Offline fallback
       const fallback: Appointment = {
-        ...detailAppt,
-        date: dateObj.toISOString(),
+        ...sourceAppointment,
+        date,
         time,
         status: AppointmentStatus.RESCHEDULED,
         notificationId: undefined,
       };
-      await saveAppointment(fallback, resolutionNote);
+      await saveAppointment(fallback);
       return fallback;
     });
+
+    // Preserve the explicit conflict choice through the existing note-aware save path.
+    const updated = resolutionNote
+      ? await saveAppointment(rescheduled, resolutionNote)
+      : rescheduled;
 
     // Schedule new reminders and sync calendar
     await scheduleAppointmentReminders(updated).catch(() => {});
@@ -464,6 +546,7 @@ const AppointmentScreen: React.FC = () => {
     setRescheduleVisible(false);
     setConflictModalVisible(false);
     setPendingAppointment(null);
+    setPendingAction(null);
     setConflictResult(null);
     setDetailAppt(updated);
     await load();
@@ -515,6 +598,26 @@ const AppointmentScreen: React.FC = () => {
       </Swipeable>
     ),
     [renderItem, archivedIds],
+  );
+
+  const renderAppointmentBufferInput = () => (
+    <View style={styles.field}>
+      <Text style={styles.label}>Appointment gap warning (minutes)</Text>
+      <TextInput
+        style={styles.input}
+        value={appointmentBuffer}
+        onChangeText={setAppointmentBuffer}
+        keyboardType="decimal-pad"
+        editable={!isCheckingConflicts}
+        accessibilityLabel="Appointment gap warning in minutes"
+        placeholder={String(DEFAULT_APPOINTMENT_BUFFER_MINUTES)}
+        placeholderTextColor="#9CA3AF"
+      />
+      <Text style={styles.label}>
+        Warn when the free gap is this many minutes or less. Applies to checks and suggestions on
+        this screen; not saved. Medication warnings are unchanged.
+      </Text>
+    </View>
   );
 
   // ─── Render ──────────────────────────────────────────────────────────────────
@@ -687,6 +790,7 @@ const AppointmentScreen: React.FC = () => {
                   placeholderTextColor="#9CA3AF"
                   accessibilityLabel="Date and time"
                 />
+                {renderAppointmentBufferInput()}
               </View>
             )}
             {bookingStep === 2 && (
@@ -787,11 +891,18 @@ const AppointmentScreen: React.FC = () => {
             {/* Icon + title */}
             <View style={styles.conflictHeader}>
               <Text style={styles.conflictIcon}>⚠️</Text>
-              <Text style={styles.conflictTitle}>Scheduling Conflict</Text>
+              <Text style={styles.conflictTitle}>
+                {conflictResult?.appointmentReadComplete ? 'Scheduling Conflict' : 'Incomplete Check'}
+              </Text>
             </View>
 
+            {conflictResult?.checkWarning && (
+              <Text style={styles.conflictSubtitle}>{conflictResult.checkWarning}</Text>
+            )}
             <Text style={styles.conflictSubtitle}>
-              The selected time conflicts with the following:
+              {conflictResult?.hasConflicts
+                ? 'Known scheduling conflicts:'
+                : 'No conflicts were found in the available data. This check is incomplete.'}
             </Text>
 
             {/* Conflict list */}
@@ -807,9 +918,9 @@ const AppointmentScreen: React.FC = () => {
             </ScrollView>
 
             {/* Suggested time */}
-            {conflictResult?.suggestedTime && (
+            {conflictResult?.appointmentReadComplete && conflictResult.suggestedTime && (
               <View style={styles.suggestionBox}>
-                <Text style={styles.suggestionLabel}>💡 Next available slot:</Text>
+                <Text style={styles.suggestionLabel}>💡 Suggested time from local check:</Text>
                 <Text style={styles.suggestionTime}>
                   {conflictResult.suggestedTime.toLocaleString([], {
                     weekday: 'short',
@@ -823,7 +934,7 @@ const AppointmentScreen: React.FC = () => {
             )}
 
             {/* Actions */}
-            {conflictResult?.suggestedTime && (
+            {conflictResult?.appointmentReadComplete && conflictResult.suggestedTime && (
               <TouchableOpacity
                 style={styles.primaryBtn}
                 onPress={() => void handleUseSuggestedTime()}
@@ -901,6 +1012,7 @@ const AppointmentScreen: React.FC = () => {
                   placeholder="2026-06-01T10:00"
                   placeholderTextColor="#9CA3AF"
                 />
+                {renderAppointmentBufferInput()}
                 <TouchableOpacity
                   style={[styles.primaryBtn, isCheckingConflicts && styles.btnDisabled]}
                   onPress={() => void handleReschedule()}

@@ -17,6 +17,7 @@ import {
   findNextAvailableSlot,
   saveAppointment,
   getAppointments,
+  getUpcomingAppointments,
   deleteAppointment,
   getUpcoming,
   getPast,
@@ -31,6 +32,7 @@ jest.mock('../localDB', () => ({
   getAppointmentsInWindow: jest.fn().mockResolvedValue([]),
   getAllLocalAppointments: jest.fn().mockResolvedValue([]),
   getAllAppointmentsByPetId: jest.fn().mockResolvedValue([]),
+  getAppointmentSnapshotByPetId: jest.fn().mockResolvedValue({ appointments: [], unreadableRows: 0 }),
   upsertAppointment: jest.fn().mockResolvedValue(undefined),
   deleteAppointmentById: jest.fn().mockResolvedValue(undefined),
   getItem: jest.fn().mockResolvedValue(null),
@@ -60,23 +62,35 @@ jest.mock('../medicationService', () => ({
 
 import {
   getAppointmentsInWindow,
+  getAppointmentSnapshotByPetId,
   upsertAppointment,
   deleteAppointmentById,
   getAllLocalAppointments,
+  getAllAppointmentsByPetId,
 } from '../localDB';
+import apiClient from '../apiClient';
 import { getScheduleForRange } from '../medicationService';
 
 const mockGetInWindow = getAppointmentsInWindow as jest.MockedFunction<
   typeof getAppointmentsInWindow
 >;
+const mockGetSnapshot = getAppointmentSnapshotByPetId as jest.MockedFunction<
+  typeof getAppointmentSnapshotByPetId
+>;
 const mockUpsert = upsertAppointment as jest.MockedFunction<typeof upsertAppointment>;
 const mockDeleteById = deleteAppointmentById as jest.MockedFunction<typeof deleteAppointmentById>;
 const mockGetAll = getAllLocalAppointments as jest.MockedFunction<typeof getAllLocalAppointments>;
+const mockGetByPet = getAllAppointmentsByPetId as jest.MockedFunction<typeof getAllAppointmentsByPetId>;
+const mockApiGet = apiClient.get as jest.Mock;
 const mockGetSchedule = getScheduleForRange as jest.MockedFunction<typeof getScheduleForRange>;
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
 const BASE_TIME = new Date('2026-06-15T10:00:00.000Z');
+
+beforeEach(() => {
+  mockGetSnapshot.mockResolvedValue({ appointments: [], unreadableRows: 0 });
+});
 
 const makeAppt = (overrides: Partial<Appointment> = {}): Appointment => ({
   id: 'appt-1',
@@ -183,6 +197,126 @@ describe('detectConflicts — appointment buffer', () => {
     expect(result.hasConflicts).toBe(true);
   });
 
+  it('ignores legacy lowercase cancelled appointments during conflict checks', async () => {
+    const cancelled = makeAppt({
+      id: 'legacy-cancelled',
+      date: BASE_TIME.toISOString(),
+      status: 'cancelled' as Appointment['status'],
+    });
+    mockGetInWindow.mockResolvedValue([]);
+    mockGetSnapshot.mockResolvedValue({ appointments: [cancelled], unreadableRows: 0 });
+
+    const result = await detectConflicts('pet-1', BASE_TIME, []);
+    expect(result.hasConflicts).toBe(false);
+    expect(result.conflicts).toHaveLength(0);
+  });
+
+  it('flags back-to-back appointments as a warning even when only local records include the appointment', async () => {
+    const existing = makeAppt({
+      id: 'back-to-back',
+      date: '2026-06-15T10:00:00.000Z',
+      time: '10:00',
+      durationMinutes: 30,
+    });
+    const proposed = new Date('2026-06-15T10:30:00.000Z');
+    mockGetInWindow.mockResolvedValue([]);
+    mockGetSnapshot.mockResolvedValue({ appointments: [existing], unreadableRows: 0 });
+
+    const result = await detectConflicts('pet-1', proposed, []);
+    expect(result.hasConflicts).toBe(true);
+    expect(result.conflicts[0].conflictingAppointment?.id).toBe('back-to-back');
+  });
+
+  it('allows a touching appointment boundary when the configured buffer is zero', async () => {
+    const existing = makeAppt({
+      id: 'zero-buffer-boundary',
+      date: '2026-06-15T10:00:00.000Z',
+      time: '10:00',
+      durationMinutes: 30,
+    });
+    const proposed = new Date('2026-06-15T10:30:00.000Z');
+    mockGetInWindow.mockResolvedValue([]);
+    mockGetSnapshot.mockResolvedValue({ appointments: [existing], unreadableRows: 0 });
+
+    const result = await detectConflicts('pet-1', proposed, [], undefined, false, 0, 30);
+    expect(result.hasConflicts).toBe(false);
+    expect(result.conflicts).toHaveLength(0);
+  });
+
+  it('detects an appointment that spans midnight and overlaps the proposed time', async () => {
+    const overnight = makeAppt({
+      id: 'overnight',
+      date: '2026-06-15T23:30:00.000Z',
+      time: '23:30',
+      durationMinutes: 90,
+    });
+    const proposed = new Date('2026-06-16T00:45:00.000Z');
+    mockGetInWindow.mockResolvedValue([]);
+    mockGetSnapshot.mockResolvedValue({ appointments: [overnight], unreadableRows: 0 });
+
+    const result = await detectConflicts('pet-1', proposed, []);
+    expect(result.hasConflicts).toBe(true);
+    expect(result.conflicts[0].conflictingAppointment?.id).toBe('overnight');
+  });
+
+  it('detects a near miss after a midnight-spanning appointment ends', async () => {
+    const overnight = makeAppt({
+      id: 'overnight-gap',
+      date: '2026-06-15T23:30:00.000Z',
+      time: '23:30',
+      durationMinutes: 90,
+    });
+    const proposed = new Date('2026-06-16T01:15:00.000Z');
+    mockGetInWindow.mockResolvedValue([]);
+    mockGetSnapshot.mockResolvedValue({ appointments: [overnight], unreadableRows: 0 });
+
+    const result = await detectConflicts('pet-1', proposed, []);
+    expect(result.hasConflicts).toBe(true);
+    expect(result.conflicts[0].description).toContain('15 min');
+  });
+
+  it('detects a weekly recurring appointment occurrence', async () => {
+    const recurring = makeAppt({
+      id: 'weekly-recurring',
+      date: '2026-06-01T10:00:00.000Z',
+      time: '10:00',
+      durationMinutes: 30,
+      recurrence: { frequency: 'weekly' },
+    });
+    mockGetInWindow.mockResolvedValue([]);
+    mockGetSnapshot.mockResolvedValue({ appointments: [recurring], unreadableRows: 0 });
+
+    const result = await detectConflicts(
+      'pet-1',
+      new Date('2026-06-15T10:00:00.000Z'),
+      [],
+    );
+
+    expect(result.hasConflicts).toBe(true);
+    expect(result.conflicts[0].conflictingAppointment?.id).toBe('weekly-recurring');
+    expect(result.conflicts[0].description).toContain('Recurring');
+  });
+
+  it('respects the recurrence interval when no occurrence lands near the proposed time', async () => {
+    const recurring = makeAppt({
+      id: 'biweekly-recurring',
+      date: '2026-06-01T10:00:00.000Z',
+      time: '10:00',
+      durationMinutes: 30,
+      recurrence: { frequency: 'weekly', interval: 2 },
+    });
+    mockGetInWindow.mockResolvedValue([]);
+    mockGetSnapshot.mockResolvedValue({ appointments: [recurring], unreadableRows: 0 });
+
+    const result = await detectConflicts(
+      'pet-1',
+      new Date('2026-06-08T10:00:00.000Z'),
+      [],
+    );
+
+    expect(result.hasConflicts).toBe(false);
+  });
+
   it('does not flag an appointment outside the 1-hour buffer', async () => {
     // 90 min away is outside the buffer
     const ninetyMinLater = new Date(BASE_TIME.getTime() + 90 * 60_000);
@@ -213,7 +347,7 @@ describe('detectConflicts — appointment buffer', () => {
     const result = await detectConflicts('pet-1', BASE_TIME, []);
     expect(result.suggestedTime).toBeInstanceOf(Date);
     // Suggested time should be after the proposed time
-    expect(result.suggestedTime!.getTime()).toBeGreaterThan(BASE_TIME.getTime());
+    expect(result.suggestedTime?.getTime()).toBeGreaterThan(BASE_TIME.getTime());
   });
 });
 
@@ -234,6 +368,50 @@ describe('detectConflicts — vet-supervised medication', () => {
     expect(result.hasConflicts).toBe(true);
     expect(result.conflicts[0].type).toBe('medication');
     expect(result.conflicts[0].medicationName).toBe('Amoxicillin');
+  });
+
+  it('checks the full two-hour appointment for supervised medication doses', async () => {
+    const med = makeMed({ instructions: 'Vet injection required' });
+    const dose = new Date(BASE_TIME.getTime() + 90 * 60_000);
+    // The schedule helper honors its requested date range. A start-only
+    // plus/minus-one-hour lookup would omit this legitimate in-visit dose.
+    mockGetSchedule.mockImplementation((_med, from, to) =>
+      dose >= from && dose <= to ? [dose] : [],
+    );
+
+    const result = await detectConflicts('pet-1', BASE_TIME, [med], undefined, false, 30, 120);
+    expect(mockGetSchedule).toHaveBeenCalledWith(
+      med,
+      new Date(BASE_TIME.getTime() - CONFLICT_BUFFER_MS),
+      new Date(BASE_TIME.getTime() + 120 * 60_000 + CONFLICT_BUFFER_MS),
+    );
+    expect(result.hasConflicts).toBe(true);
+    expect(result.conflicts[0].type).toBe('medication');
+    expect(result.conflicts[0].medicationTime).toEqual(dose);
+  });
+
+  it('preserves a one-hour warning after the end of a long appointment', async () => {
+    const med = makeMed({ instructions: 'Vet injection required' });
+    const dose = new Date(BASE_TIME.getTime() + 150 * 60_000); // 30m after 2h visit
+    mockGetSchedule.mockImplementation((_med, from, to) =>
+      dose >= from && dose <= to ? [dose] : [],
+    );
+
+    const result = await detectConflicts('pet-1', BASE_TIME, [med], undefined, false, 30, 120);
+    expect(result.hasConflicts).toBe(true);
+    expect(result.conflicts[0].type).toBe('medication');
+  });
+
+  it('does not warn for a supervised dose more than one hour after the visit ends', async () => {
+    const med = makeMed({ instructions: 'Vet injection required' });
+    const dose = new Date(BASE_TIME.getTime() + 210 * 60_000); // 90m after visit
+    mockGetSchedule.mockImplementation((_med, from, to) =>
+      dose >= from && dose <= to ? [dose] : [],
+    );
+
+    const result = await detectConflicts('pet-1', BASE_TIME, [med], undefined, false, 30, 120);
+    expect(result.hasConflicts).toBe(false);
+    expect(result.conflicts).toHaveLength(0);
   });
 
   it('ignores non-supervised medication doses', async () => {
@@ -264,27 +442,29 @@ describe('findNextAvailableSlot', () => {
   });
 
   it('returns the very next hour when that slot is clear', async () => {
-    const blocker = makeAppt({ id: 'b1', date: BASE_TIME.toISOString() });
-    // First candidate (+1h) is clear
-    mockGetInWindow
-      .mockResolvedValueOnce([blocker]) // proposed slot itself blocked
-      .mockResolvedValue([]); // +1h is free
+    mockGetInWindow.mockResolvedValue([]);
 
     const slot = await findNextAvailableSlot('pet-1', BASE_TIME, []);
     expect(slot).toBeInstanceOf(Date);
-    expect(slot!.getTime()).toBe(BASE_TIME.getTime() + CONFLICT_BUFFER_MS);
+    expect(slot?.getTime()).toBe(BASE_TIME.getTime() + CONFLICT_BUFFER_MS);
   });
 
   it('skips multiple blocked slots to find a free one', async () => {
-    const block = makeAppt({ id: 'b1', date: BASE_TIME.toISOString() });
-    // First two candidate slots are blocked, third is free
-    mockGetInWindow
-      .mockResolvedValueOnce([block]) // +1h blocked
-      .mockResolvedValueOnce([block]) // +2h blocked
-      .mockResolvedValue([]); // +3h free
+    const firstBlock = makeAppt({
+      id: 'b1',
+      date: new Date(BASE_TIME.getTime() + CONFLICT_BUFFER_MS).toISOString(),
+    });
+    const secondBlock = makeAppt({
+      id: 'b2',
+      date: new Date(BASE_TIME.getTime() + 2 * CONFLICT_BUFFER_MS).toISOString(),
+    });
+    mockGetSnapshot.mockResolvedValue({
+      appointments: [firstBlock, secondBlock],
+      unreadableRows: 0,
+    });
 
     const slot = await findNextAvailableSlot('pet-1', BASE_TIME, []);
-    expect(slot!.getTime()).toBe(BASE_TIME.getTime() + 3 * CONFLICT_BUFFER_MS);
+    expect(slot?.getTime()).toBe(BASE_TIME.getTime() + 4 * CONFLICT_BUFFER_MS);
   });
 });
 
@@ -325,6 +505,46 @@ describe('saveAppointment — conflict resolution note', () => {
     await saveAppointment(appt);
 
     expect(mockUpsert).toHaveBeenCalledWith(expect.objectContaining({ notes: 'Original note' }));
+  });
+});
+
+// ─── getUpcomingAppointments — ISO and same-day offline booking ───────────────
+
+describe('getUpcomingAppointments — stored appointment interval', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-10-08T06:00:00.000Z'));
+    mockApiGet.mockRejectedValue(new Error('offline'));
+    mockGetByPet.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.clearAllMocks();
+  });
+
+  it('keeps and sorts upcoming ISO timestamps from the API without appending another time', async () => {
+    const later = makeAppt({ id: 'api-later', date: '2026-10-08T17:00:00.000Z', time: '13:00' });
+    const earlier = makeAppt({ id: 'api-earlier', date: '2026-10-08T14:30:00.000Z', time: '10:30' });
+    const past = makeAppt({ id: 'api-past', date: '2026-10-07T14:30:00.000Z' });
+    const cancelled = makeAppt({ id: 'api-cancelled', date: later.date, status: 'CANCELLED' as Appointment['status'] });
+    mockApiGet.mockResolvedValueOnce({ data: { data: [later, past, cancelled, earlier] } });
+
+    const result = await getUpcomingAppointments('pet-1');
+    expect(result.map((appt) => appt.id)).toEqual(['api-earlier', 'api-later']);
+    expect(mockUpsert).toHaveBeenCalledTimes(2);
+  });
+
+  it('preserves same-day future local HH:mm appointments instead of comparing midnight', async () => {
+    const evening = makeAppt({ id: 'local-evening', date: '2026-10-08', time: '18:00' });
+    const morning = makeAppt({ id: 'local-morning', date: '2026-10-08', time: '01:00' });
+    const cancelled = makeAppt({ id: 'local-cancelled', date: '2026-10-08', time: '20:00', status: 'cancelled' as Appointment['status'] });
+    mockGetByPet.mockResolvedValue([morning, cancelled, evening]);
+
+    const result = await getUpcomingAppointments('pet-1');
+    expect(result.map((appt) => appt.id)).toEqual(['local-evening']);
+    expect(mockGetByPet).toHaveBeenCalledWith('pet-1');
   });
 });
 
