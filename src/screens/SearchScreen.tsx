@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 
+import { useTheme } from '../context/ThemeContext';
 import { resilientRequest } from '../services/apiClient';
 
 interface SearchHit {
@@ -33,6 +34,7 @@ const INDEX_LABELS: Record<string, string> = {
 const DEBOUNCE_MS = 350;
 
 const SearchScreen: React.FC = () => {
+  const { colors } = useTheme();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchHit[]>([]);
   const [total, setTotal] = useState(0);
@@ -83,14 +85,17 @@ const SearchScreen: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Search</Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Text style={[styles.title, { color: colors.text }]}>Search</Text>
 
-      <View style={styles.searchBar}>
-        <Text style={styles.searchIcon}>🔍</Text>
+      <View
+        style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}
+      >
+        <Text style={[styles.searchIcon, { color: colors.secondaryText }]}>🔍</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { color: colors.text }]}
           placeholder="Search records, medications, appointments…"
+          placeholderTextColor={colors.placeholder}
           value={query}
           onChangeText={setQuery}
           autoCorrect={false}
@@ -100,17 +105,17 @@ const SearchScreen: React.FC = () => {
         />
         {query.length > 0 && (
           <TouchableOpacity onPress={() => setQuery('')} accessibilityLabel="Clear search">
-            <Text style={styles.clearBtn}>✕</Text>
+            <Text style={[styles.clearBtn, { color: colors.placeholder }]}>✕</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {loading && <ActivityIndicator style={styles.loader} color="#4299e1" />}
+      {loading && <ActivityIndicator style={styles.loader} color={colors.primary} />}
 
-      {error && <Text style={styles.error}>{error}</Text>}
+      {error && <Text style={[styles.error, { color: colors.error }]}>{error}</Text>}
 
       {!loading && query.length > 0 && results.length > 0 && (
-        <Text style={styles.resultCount}>
+        <Text style={[styles.resultCount, { color: colors.secondaryText }]}>
           {total} result{total !== 1 ? 's' : ''}
         </Text>
       )}
@@ -120,14 +125,23 @@ const SearchScreen: React.FC = () => {
         keyExtractor={(h) => `${h.index}-${h.id}`}
         contentContainerStyle={styles.list}
         renderItem={({ item }) => (
-          <View style={styles.card}>
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 },
+            ]}
+          >
             <View style={styles.cardHeader}>
-              <Text style={styles.indexLabel}>{INDEX_LABELS[item.index] ?? item.index}</Text>
-              <Text style={styles.score}>{(item.score * 100).toFixed(0)}%</Text>
+              <Text style={[styles.indexLabel, { color: colors.primary }]}>
+                {INDEX_LABELS[item.index] ?? item.index}
+              </Text>
+              <Text style={[styles.score, { color: colors.placeholder }]}>
+                {(item.score * 100).toFixed(0)}%
+              </Text>
             </View>
-            <Text style={styles.cardTitle}>{getTitle(item)}</Text>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>{getTitle(item)}</Text>
             {getHighlight(item) ? (
-              <Text style={styles.highlight} numberOfLines={2}>
+              <Text style={[styles.highlight, { color: colors.secondaryText }]} numberOfLines={2}>
                 {getHighlight(item)}
               </Text>
             ) : null}
@@ -135,7 +149,9 @@ const SearchScreen: React.FC = () => {
         )}
         ListEmptyComponent={
           !loading && query.length > 0 ? (
-            <Text style={styles.empty}>No results for "{query}"</Text>
+            <Text style={[styles.empty, { color: colors.placeholder }]}>
+              No results for "{query}"
+            </Text>
           ) : null
         }
       />
@@ -144,38 +160,35 @@ const SearchScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  title: { fontSize: 22, fontWeight: '700', color: '#1a202c', padding: 16, paddingBottom: 8 },
+  container: { flex: 1 },
+  title: { fontSize: 22, fontWeight: '700', padding: 16, paddingBottom: 8 },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 16,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
     borderRadius: 10,
     paddingHorizontal: 12,
-    backgroundColor: '#f7fafc',
   },
   searchIcon: { fontSize: 16, marginRight: 8 },
-  input: { flex: 1, paddingVertical: 10, fontSize: 15, color: '#1a202c' },
-  clearBtn: { fontSize: 16, color: '#a0aec0', paddingLeft: 8 },
+  input: { flex: 1, paddingVertical: 10, fontSize: 15 },
+  clearBtn: { fontSize: 16, paddingLeft: 8 },
   loader: { marginTop: 16 },
-  error: { color: '#e53e3e', textAlign: 'center', marginTop: 12, paddingHorizontal: 16 },
-  resultCount: { fontSize: 13, color: '#718096', paddingHorizontal: 16, marginBottom: 4 },
+  error: { textAlign: 'center', marginTop: 12, paddingHorizontal: 16 },
+  resultCount: { fontSize: 13, paddingHorizontal: 16, marginBottom: 4 },
   list: { padding: 16 },
   card: {
-    backgroundColor: '#f7fafc',
     borderRadius: 8,
     padding: 12,
     marginBottom: 10,
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  indexLabel: { fontSize: 12, color: '#4299e1', fontWeight: '600' },
-  score: { fontSize: 12, color: '#a0aec0' },
-  cardTitle: { fontSize: 15, fontWeight: '600', color: '#1a202c' },
-  highlight: { fontSize: 13, color: '#718096', marginTop: 4 },
-  empty: { textAlign: 'center', color: '#718096', marginTop: 40 },
+  indexLabel: { fontSize: 12, fontWeight: '600' },
+  score: { fontSize: 12 },
+  cardTitle: { fontSize: 15, fontWeight: '600' },
+  highlight: { fontSize: 13, marginTop: 4 },
+  empty: { textAlign: 'center', marginTop: 40 },
 });
 
 export default SearchScreen;

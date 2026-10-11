@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,6 +9,8 @@ import {
   View,
 } from 'react-native';
 
+import { useTheme } from '../context/ThemeContext';
+
 interface PaymentIntent {
   transactionId: string;
   destination: string;
@@ -18,6 +20,7 @@ interface PaymentIntent {
 }
 
 export default function XLMPaymentScreen() {
+  const { colors } = useTheme();
   const [intent, setIntent] = useState<PaymentIntent | null>(null);
   const [status, setStatus] = useState<'idle' | 'loading' | 'waiting' | 'confirmed' | 'error'>(
     'idle',
@@ -79,68 +82,84 @@ export default function XLMPaymentScreen() {
     `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Pay with XLM</Text>
-      <Text style={styles.subtitle}>Unlock Cocohub Premium</Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Text style={[styles.title, { color: colors.text }]}>Pay with XLM</Text>
+      <Text style={[styles.subtitle, { color: colors.secondaryText }]}>Unlock Cocohub Premium</Text>
 
       {status === 'idle' && (
-        <TouchableOpacity style={styles.button} onPress={createIntent}>
-          <Text style={styles.buttonText}>Generate Payment Address</Text>
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: colors.primary }]}
+          onPress={createIntent}
+        >
+          <Text style={[styles.buttonText, { color: colors.white }]}>Generate Payment Address</Text>
         </TouchableOpacity>
       )}
 
-      {status === 'loading' && <ActivityIndicator size="large" color="#4A90A4" />}
+      {status === 'loading' && <ActivityIndicator size="large" color={colors.primary} />}
 
       {status === 'waiting' && intent && (
-        <View style={styles.paymentCard}>
-          <Text style={styles.label}>Send exactly</Text>
-          <Text style={styles.amount}>{intent.amountXlm} XLM</Text>
+        <View
+          style={[
+            styles.paymentCard,
+            { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 },
+          ]}
+        >
+          <Text style={[styles.label, { color: colors.secondaryText }]}>Send exactly</Text>
+          <Text style={[styles.amount, { color: colors.primary }]}>{intent.amountXlm} XLM</Text>
 
-          <Text style={styles.label}>To address</Text>
+          <Text style={[styles.label, { color: colors.secondaryText }]}>To address</Text>
           <TouchableOpacity onPress={() => copyToClipboard(intent.destination)}>
-            <Text style={styles.address}>{intent.destination}</Text>
-            <Text style={styles.copy}>Tap to copy</Text>
+            <Text style={[styles.address, { color: colors.text }]}>{intent.destination}</Text>
+            <Text style={[styles.copy, { color: colors.placeholder }]}>Tap to copy</Text>
           </TouchableOpacity>
 
-          <Text style={styles.label}>Memo required</Text>
+          <Text style={[styles.label, { color: colors.secondaryText }]}>Memo required</Text>
           <TouchableOpacity onPress={() => copyToClipboard(intent.memo)}>
-            <Text style={styles.memo}>{intent.memo}</Text>
-            <Text style={styles.copy}>Tap to copy</Text>
+            <Text style={[styles.memo, { color: colors.primary }]}>{intent.memo}</Text>
+            <Text style={[styles.copy, { color: colors.placeholder }]}>Tap to copy</Text>
           </TouchableOpacity>
 
-          <Text style={styles.warning}>Include the memo or payment cannot be matched.</Text>
-          <Text style={styles.countdown}>Expires in {formatCountdown(countdown)}</Text>
+          <Text style={[styles.warning, { color: colors.warning }]}>
+            Include the memo or payment cannot be matched.
+          </Text>
+          <Text style={[styles.countdown, { color: colors.secondaryText }]}>
+            Expires in {formatCountdown(countdown)}
+          </Text>
         </View>
       )}
 
       {status === 'confirmed' && (
         <View style={styles.success}>
-          <Text style={styles.successText}>Payment confirmed. Premium activated.</Text>
+          <Text style={[styles.successText, { color: colors.success }]}>
+            Payment confirmed. Premium activated.
+          </Text>
         </View>
       )}
 
       {status === 'error' && (
-        <Text style={styles.error}>Something went wrong. Please try again.</Text>
+        <Text style={[styles.error, { color: colors.error }]}>
+          Something went wrong. Please try again.
+        </Text>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, backgroundColor: '#fff' },
+  container: { flex: 1, padding: 24 },
   title: { fontSize: 24, fontWeight: '700', marginBottom: 4 },
-  subtitle: { fontSize: 16, color: '#666', marginBottom: 32 },
-  button: { backgroundColor: '#4A90A4', padding: 16, borderRadius: 8, alignItems: 'center' },
-  buttonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
-  paymentCard: { backgroundColor: '#F4F8F9', borderRadius: 8, padding: 20 },
-  label: { fontSize: 12, color: '#667', marginTop: 12 },
-  amount: { fontSize: 32, fontWeight: '800', color: '#4A90A4' },
-  address: { fontSize: 13, fontFamily: 'monospace', color: '#222' },
-  memo: { fontSize: 14, fontFamily: 'monospace', fontWeight: '600', color: '#4A90A4' },
-  copy: { fontSize: 11, color: '#777', marginTop: 2 },
-  warning: { fontSize: 12, color: '#B54708', marginTop: 8 },
-  countdown: { fontSize: 13, color: '#667', textAlign: 'center', marginTop: 16 },
+  subtitle: { fontSize: 16, marginBottom: 32 },
+  button: { padding: 16, borderRadius: 8, alignItems: 'center' },
+  buttonText: { fontWeight: '600', fontSize: 16 },
+  paymentCard: { borderRadius: 8, padding: 20 },
+  label: { fontSize: 12, marginTop: 12 },
+  amount: { fontSize: 32, fontWeight: '800' },
+  address: { fontSize: 13, fontFamily: 'monospace' },
+  memo: { fontSize: 14, fontFamily: 'monospace', fontWeight: '600' },
+  copy: { fontSize: 11, marginTop: 2 },
+  warning: { fontSize: 12, marginTop: 8 },
+  countdown: { fontSize: 13, textAlign: 'center', marginTop: 16 },
   success: { alignItems: 'center', marginTop: 32 },
-  successText: { fontSize: 18, color: '#2E7D32', fontWeight: '600' },
-  error: { color: '#B42318', textAlign: 'center', marginTop: 16 },
+  successText: { fontSize: 18, fontWeight: '600' },
+  error: { textAlign: 'center', marginTop: 16 },
 });

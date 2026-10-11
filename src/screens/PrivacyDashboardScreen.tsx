@@ -1,4 +1,4 @@
-﻿import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 
+import { useTheme } from '../context/ThemeContext';
 import { resilientRequest } from '../services/apiClient';
 
 interface ConsentState {
@@ -38,6 +39,7 @@ interface Props {
 }
 
 const PrivacyDashboardScreen: React.FC<Props> = ({ onDeleteAccount }) => {
+  const { colors } = useTheme();
   const [consents, setConsents] = useState<ConsentState>({
     necessary: true,
     functional: false,
@@ -157,34 +159,43 @@ const PrivacyDashboardScreen: React.FC<Props> = ({ onDeleteAccount }) => {
   }, [onDeleteAccount]);
 
   if (loading) {
-    return <ActivityIndicator style={styles.loader} size="large" color="#4299e1" />;
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <ActivityIndicator style={styles.loader} size="large" color={colors.primary} />
+      </View>
+    );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Privacy Dashboard</Text>
-      <Text style={styles.subtitle}>
+    <ScrollView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      contentContainerStyle={styles.content}
+    >
+      <Text style={[styles.title, { color: colors.text }]}>Privacy Dashboard</Text>
+      <Text style={[styles.subtitle, { color: colors.secondaryText }]}>
         Manage how Cocohub uses your data. Changes are logged for compliance.
       </Text>
 
       {dataCategories.length > 0 && (
         <>
-          <Text style={styles.sectionTitle}>Your Data</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Data</Text>
           {dataCategories.map(({ label, count }) => (
-            <View key={label} style={styles.row}>
-              <Text style={styles.rowLabel}>{label}</Text>
-              <Text style={styles.rowCount}>{count !== null ? count : '—'}</Text>
+            <View key={label} style={[styles.row, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.rowLabel, { color: colors.text }]}>{label}</Text>
+              <Text style={[styles.rowCount, { color: colors.secondaryText }]}>
+                {count !== null ? count : '—'}
+              </Text>
             </View>
           ))}
         </>
       )}
 
-      <Text style={styles.sectionTitle}>Data Processing Consents</Text>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>Data Processing Consents</Text>
       {CATEGORIES.map(({ key, label, description }) => (
-        <View key={key} style={styles.row}>
+        <View key={key} style={[styles.row, { borderBottomColor: colors.border }]}>
           <View style={styles.rowInfo}>
-            <Text style={styles.rowLabel}>{label}</Text>
-            <Text style={styles.rowDesc}>{description}</Text>
+            <Text style={[styles.rowLabel, { color: colors.text }]}>{label}</Text>
+            <Text style={[styles.rowDesc, { color: colors.secondaryText }]}>{description}</Text>
           </View>
           <Switch
             value={consents[key]}
@@ -192,67 +203,69 @@ const PrivacyDashboardScreen: React.FC<Props> = ({ onDeleteAccount }) => {
               key !== 'necessary' && setConsents((prev) => ({ ...prev, [key]: v }))
             }
             disabled={key === 'necessary'}
-            trackColor={{ true: '#4299e1', false: '#e2e8f0' }}
+            trackColor={{ true: colors.primary, false: colors.border }}
             accessibilityLabel={`Toggle ${label} consent`}
           />
         </View>
       ))}
 
       <TouchableOpacity
-        style={[styles.btn, styles.btnPrimary]}
+        style={[styles.btn, { backgroundColor: colors.primary }]}
         onPress={() => void saveConsents()}
         disabled={saving}
         accessibilityLabel="Save privacy preferences"
       >
         {saving ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={colors.white} />
         ) : (
-          <Text style={styles.btnText}>Save Preferences</Text>
+          <Text style={[styles.btnText, { color: colors.white }]}>Save Preferences</Text>
         )}
       </TouchableOpacity>
 
-      <Text style={styles.sectionTitle}>Your Data Rights</Text>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Data Rights</Text>
 
       {lastExportDate && (
-        <Text style={styles.lastExport}>
+        <Text style={[styles.lastExport, { color: colors.secondaryText }]}>
           Last exported: {new Date(lastExportDate).toLocaleDateString()}
         </Text>
       )}
 
       <TouchableOpacity
-        style={[styles.btn, styles.btnSecondary]}
+        style={[
+          styles.btn,
+          { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 },
+        ]}
         onPress={() => void handleExport()}
         disabled={exporting}
         accessibilityLabel="Download my data"
       >
         {exporting ? (
-          <ActivityIndicator color="#2d3748" />
+          <ActivityIndicator color={colors.primary} />
         ) : (
-          <Text style={styles.btnTextSecondary}>📥 Download My Data</Text>
+          <Text style={[styles.btnTextSecondary, { color: colors.text }]}>📥 Download My Data</Text>
         )}
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={[styles.btn, styles.btnDanger]}
+        style={[styles.btn, { backgroundColor: colors.error }]}
         onPress={handleErase}
         accessibilityLabel="Delete my account"
       >
-        <Text style={styles.btnText}>🗑 Delete My Account</Text>
+        <Text style={[styles.btnText, { color: colors.white }]}>🗑 Delete My Account</Text>
       </TouchableOpacity>
     </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1 },
   content: { padding: 16 },
   loader: { flex: 1, marginTop: 40 },
-  title: { fontSize: 22, fontWeight: '700', color: '#1a202c', marginBottom: 4 },
-  subtitle: { fontSize: 14, color: '#718096', marginBottom: 20 },
+  title: { fontSize: 22, fontWeight: '700', marginBottom: 4 },
+  subtitle: { fontSize: 14, marginBottom: 20 },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#2d3748',
     marginTop: 24,
     marginBottom: 12,
   },
@@ -261,24 +274,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#edf2f7',
   },
   rowInfo: { flex: 1, marginRight: 12 },
-  rowLabel: { fontSize: 15, fontWeight: '600', color: '#1a202c', flex: 1 },
-  rowCount: { fontSize: 14, color: '#718096' },
-  rowDesc: { fontSize: 13, color: '#718096', marginTop: 2 },
-  lastExport: { fontSize: 13, color: '#718096', marginBottom: 4, marginTop: 4 },
+  rowLabel: { fontSize: 15, fontWeight: '600', flex: 1 },
+  rowCount: { fontSize: 14 },
+  rowDesc: { fontSize: 13, marginTop: 2 },
+  lastExport: { fontSize: 13, marginBottom: 4, marginTop: 4 },
   btn: {
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: 'center',
     marginTop: 12,
   },
-  btnPrimary: { backgroundColor: '#4299e1' },
-  btnSecondary: { backgroundColor: '#edf2f7' },
-  btnDanger: { backgroundColor: '#e53e3e' },
-  btnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
-  btnTextSecondary: { color: '#2d3748', fontWeight: '600', fontSize: 15 },
+  btnText: { fontWeight: '600', fontSize: 15 },
+  btnTextSecondary: { fontWeight: '600', fontSize: 15 },
 });
 
 export default PrivacyDashboardScreen;

@@ -4,21 +4,21 @@ import {
 } from '@react-navigation/native';
 
 export const lightTheme = {
-  background: '#F5F0EB',      // warm coco cream
+  background: '#F5F0EB', // warm coco cream
   surface: '#FFFFFF',
   card: '#FFFFFF',
   cardElevated: '#FFFFFF',
   text: '#1A1A1A',
   secondaryText: '#3D3028',
-  placeholder: '#8A7060',
+  placeholder: '#725B4C',
   border: '#E8DDD4',
-  primary: '#C8854A',         // coco caramel accent
+  primary: '#C8854A', // coco caramel accent
   primaryMuted: '#FAF0E6',
-  accent: '#8B5E3C',          // deeper coco brown
+  accent: '#8B5E3C', // deeper coco brown
   info: '#1565C0',
   infoMuted: '#E3F2FD',
   warning: '#92400E',
-  error: '#D32F2F',
+  error: '#C62828',
   success: '#2E7D32',
   notification: '#2E7D32',
   muted: '#EDE5DC',
@@ -35,15 +35,15 @@ export const lightTheme = {
 };
 
 export const darkTheme = {
-  background: '#1A1A1A',      // deep coco charcoal
+  background: '#1A1A1A', // deep coco charcoal
   surface: '#242424',
   card: '#2A2420',
   cardElevated: '#2F2B28',
   text: '#F5F0EB',
   secondaryText: '#D4C4B4',
-  placeholder: '#8A7060',
+  placeholder: '#B49E8E',
   border: '#333333',
-  primary: '#C8854A',         // coco caramel accent
+  primary: '#C8854A', // coco caramel accent
   primaryMuted: 'rgba(200,133,74,0.15)',
   accent: '#D4956A',
   info: '#90CAF9',
