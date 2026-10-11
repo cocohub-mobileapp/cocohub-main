@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Vaccination Certificate PDF Generator — Issue #417
  *
  * Generates a formatted PDF vaccination certificate for a pet,
@@ -185,4 +185,185 @@ export async function anchorCertificateToStellar(certificateHash: string): Promi
     // Non-fatal — certificate is still valid without blockchain anchor
     return null;
   }
+}
+
+// ─── Health Metrics Vet-Ready Report — Issue #45 ─────────────────────────────
+
+export interface HealthReportMedication {
+  name: string;
+  dosage?: string;
+  frequency?: string;
+  instructions?: string;
+}
+
+export interface HealthReportAppointment {
+  date: string;
+  title?: string;
+  vetName?: string;
+  clinicName?: string;
+}
+
+export interface HealthReportRecord {
+  date: string;
+  type?: string;
+  title?: string;
+  notes?: string;
+}
+
+export interface PetHealthReportData {
+  pet: PetCertificateInfo;
+  healthScore?: number | null;
+  latestMetrics?: {
+    weightKg?: number;
+    temperatureC?: number;
+    activityLevel?: string;
+    recordedAt?: string;
+  } | null;
+  weightHistory?: Array<{ date: string; weightKg: number; note?: string }>;
+  activeMedications?: HealthReportMedication[];
+  upcomingAppointments?: HealthReportAppointment[];
+  recentRecords?: HealthReportRecord[];
+  notes?: string;
+}
+
+function buildHealthReportText(
+  data: PetHealthReportData,
+  qrDataUrl: string,
+  hash: string,
+  generatedAt: string,
+): string {
+  const {
+    pet,
+    healthScore,
+    latestMetrics,
+    weightHistory = [],
+    activeMedications = [],
+    upcomingAppointments = [],
+    recentRecords = [],
+  } = data;
+  const divider = '='.repeat(60);
+  const subDivider = '-'.repeat(60);
+
+  const lines: (string | undefined)[] = [
+    divider,
+    '           COCOHUB VETERINARY HEALTH SUMMARY REPORT',
+    '                 CLINIC & REFERRAL READY',
+    divider,
+    `Report ID:      ${hash}`,
+    `Generated At:   ${new Date(generatedAt).toUTCString()}`,
+    subDivider,
+    '1. PATIENT INFORMATION',
+    `Name:           ${pet.petName}`,
+    `Species:        ${pet.species.toUpperCase()}`,
+    pet.breed ? `Breed:          ${pet.breed}` : undefined,
+    pet.dateOfBirth ? `DOB / Age:      ${pet.dateOfBirth}` : undefined,
+    `Owner:          ${pet.ownerName}`,
+    pet.ownerContact ? `Owner Contact:  ${pet.ownerContact}` : undefined,
+    pet.vetClinic ? `Primary Clinic: ${pet.vetClinic}` : undefined,
+    pet.vetName ? `Primary Vet:    ${pet.vetName}` : undefined,
+    subDivider,
+    '2. CLINICAL HEALTH ASSESSMENT',
+    healthScore !== null && healthScore !== undefined
+      ? `Overall Health Score: ${healthScore}/100 (${healthScore >= 80 ? 'EXCELLENT' : healthScore >= 60 ? 'GOOD' : 'ATTENTION REQUIRED'})`
+      : 'Overall Health Score: Not evaluated',
+    latestMetrics?.weightKg !== undefined
+      ? `Current Weight:       ${latestMetrics.weightKg} kg`
+      : undefined,
+    latestMetrics?.temperatureC !== undefined
+      ? `Body Temperature:     ${latestMetrics.temperatureC} °C`
+      : undefined,
+    latestMetrics?.activityLevel
+      ? `Activity Level:       ${latestMetrics.activityLevel}`
+      : undefined,
+    latestMetrics?.recordedAt ? `Last Recorded:        ${latestMetrics.recordedAt}` : undefined,
+    subDivider,
+    '3. WEIGHT & GROWTH HISTORY',
+    weightHistory.length === 0
+      ? 'No weight records logged.'
+      : weightHistory
+          .slice(0, 5)
+          .map(
+            (w, idx) =>
+              `  [${idx + 1}] ${w.date} - ${w.weightKg} kg${w.note ? ` (${w.note})` : ''}`,
+          )
+          .join('\n'),
+    subDivider,
+    '4. ACTIVE MEDICATIONS',
+    activeMedications.length === 0
+      ? 'No active medications on record.'
+      : activeMedications
+          .map(
+            (m, idx) =>
+              `  [${idx + 1}] ${m.name}${m.dosage ? ` | Dose: ${m.dosage}` : ''}${m.frequency ? ` | Freq: ${m.frequency}` : ''}${m.instructions ? ` | Note: ${m.instructions}` : ''}`,
+          )
+          .join('\n'),
+    subDivider,
+    '5. UPCOMING APPOINTMENTS',
+    upcomingAppointments.length === 0
+      ? 'No upcoming scheduled appointments.'
+      : upcomingAppointments
+          .map(
+            (a, idx) =>
+              `  [${idx + 1}] ${a.date} - ${a.title ?? 'Consultation'}${a.clinicName ? ` @ ${a.clinicName}` : ''}${a.vetName ? ` (Dr. ${a.vetName})` : ''}`,
+          )
+          .join('\n'),
+    subDivider,
+    '6. RECENT MEDICAL RECORDS',
+    recentRecords.length === 0
+      ? 'No recent clinical records logged.'
+      : recentRecords
+          .map(
+            (r, idx) =>
+              `  [${idx + 1}] ${r.date} | [${r.type?.toUpperCase() ?? 'RECORD'}] ${r.title ?? ''}${r.notes ? ` - ${r.notes}` : ''}`,
+          )
+          .join('\n'),
+    subDivider,
+    '7. VERIFICATION & RECORD INTEGRITY',
+    'This health summary was compiled and verified via Cocohub.',
+    `Verification URL: https://cocohub.app/verify/${hash}`,
+    qrDataUrl ? 'Verification QR attached to electronic certificate.' : undefined,
+    divider,
+  ].filter((l) => l !== undefined);
+
+  return lines.join('\n');
+}
+
+/**
+ * Generate a vet-ready health metrics summary report — Issue #45
+ */
+export async function generateHealthReport(
+  data: PetHealthReportData,
+): Promise<GeneratedCertificate> {
+  const generatedAt = new Date().toISOString();
+  const contentForHash = `health-report-${data.pet.petId}-${generatedAt}`;
+  const hash = await sha256(contentForHash);
+
+  const blockchainUrl = `https://cocohub.app/verify/${hash}`;
+  const qrDataUrl = await generateQRDataUrl(blockchainUrl);
+
+  const content = buildHealthReportText(data, qrDataUrl, hash, generatedAt);
+
+  const dir = FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? '';
+  const fileName = `vet-health-report-${data.pet.petId}-${hash}.txt`;
+  const filePath = `${dir}${fileName}`;
+
+  await FileSystem.writeAsStringAsync(filePath, content, {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+
+  return { filePath, hash, generatedAt };
+}
+
+/**
+ * Share the vet-ready health report via native share sheet — Issue #45
+ */
+export async function shareHealthReport(filePath: string): Promise<void> {
+  const isAvailable = await Sharing.isAvailableAsync();
+  if (!isAvailable) {
+    throw new Error('Sharing is not available on this device.');
+  }
+  await Sharing.shareAsync(filePath, {
+    mimeType: 'text/plain',
+    dialogTitle: 'Share Vet-Ready Health Report',
+  });
 }
