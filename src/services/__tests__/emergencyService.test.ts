@@ -96,5 +96,29 @@ describe('EmergencyService', () => {
       const d = service.calculateDistance(40.7128, -74.006, 34.0522, -118.2437);
       expect(d).toBeGreaterThan(3000); // NY to LA is ~3900km
     });
+  describe('lock screen SOS notification (#50)', () => {
+    it('schedules persistent lock screen notification when contacts are configured', async () => {
+      const mockContacts = [{ id: 'c1', name: 'Vet Dr. Lee', phoneNumber: '555-1234', type: 'vet' as const }];
+      await service.syncLockScreenSOSNotification(mockContacts);
+
+      const Notifications = await import('expo-notifications');
+      expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          identifier: 'sos-persistent-lockscreen',
+          content: expect.objectContaining({
+            title: '🚨 Cocohub Emergency SOS Active',
+            categoryIdentifier: 'SOS_LOCKSCREEN_ACTION',
+            sticky: true,
+          }),
+        })
+      );
+    });
+
+    it('dismisses notification when no contacts are configured', async () => {
+      await service.syncLockScreenSOSNotification([]);
+
+      const Notifications = await import('expo-notifications');
+      expect(Notifications.dismissNotificationAsync).toHaveBeenCalledWith('sos-persistent-lockscreen');
+    });
   });
 });

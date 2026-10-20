@@ -1,3 +1,4 @@
+import emergencyService, { SOS_ACTION_IDENTIFIER } from '../services/emergencyService';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer, type LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -549,6 +550,13 @@ export default function AppNavigator() {
   React.useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data;
+      if (response.actionIdentifier === SOS_ACTION_IDENTIFIER || data?.type === 'sos_lockscreen') {
+        void emergencyService.triggerSOS('Lock screen emergency SOS triggered');
+        (navigationRef.current as any)?.navigate?.('Main', {
+          screen: 'EmergencyContactsScreen',
+        });
+        return;
+      }
       handleNotificationDeepLink(data);
     });
 

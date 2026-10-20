@@ -1,3 +1,4 @@
+import * as Notifications from 'expo-notifications';
 ﻿import Geolocation from '@react-native-community/geolocation';
 import { Linking, Platform } from 'react-native';
 
@@ -5,6 +6,11 @@ import apiClient from './apiClient';
 import config from '../config';
 import { getItem, setItem, removeItem as _removeItem } from './localDB';
 import { requestAndroidPermission } from './permissionService';
+
+
+export const SOS_NOTIFICATION_CATEGORY = 'SOS_LOCKSCREEN_ACTION';
+export const SOS_ACTION_IDENTIFIER = 'TRIGGER_SOS_ACTION';
+export const SOS_PERSISTENT_NOTIFICATION_ID = 'sos-persistent-lockscreen';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -89,6 +95,49 @@ class EmergencyService {
     return EmergencyService.instance;
   }
 
+
+  // ── Lock Screen SOS Notification (#50) ───────────────────────────────────────
+
+  async setupSOSNotificationCategory(): Promise<void> {
+    try {
+      await Notifications.setNotificationCategoryAsync(SOS_NOTIFICATION_CATEGORY, [
+        {
+          identifier: SOS_ACTION_IDENTIFIER,
+          buttonTitle: '🚨 TRIGGER SOS',
+          options: {
+            opensAppToForeground: true,
+          },
+        },
+      ]);
+    } catch {
+      // Degrades gracefully if notification categories are not supported
+    }
+  }
+
+  async syncLockScreenSOSNotification(contacts?: EmergencyContact[]): Promise<void> {
+    const list = contacts ?? (await this.getEmergencyContacts());
+
+    if (!list || list.length === 0) {
+      await Notifications.dismissNotificationAsync(SOS_PERSISTENT_NOTIFICATION_ID).catch(() => {});
+      return;
+    }
+
+    await this.setupSOSNotificationCategory();
+
+    await Notifications.scheduleNotificationAsync({
+      identifier: SOS_PERSISTENT_NOTIFICATION_ID,
+      content: {
+        title: '🚨 Cocohub Emergency SOS Active',
+        body: `${list.length} contact${list.length > 1 ? 's' : ''} configured. Tap to trigger SOS from lock screen.`,
+        categoryIdentifier: SOS_NOTIFICATION_CATEGORY,
+        sticky: true,
+        priority: Notifications.AndroidNotificationPriority.MAX,
+        data: { type: 'sos_lockscreen', action: 'trigger' },
+      },
+      trigger: null,
+    }).catch(() => {});
+  }
+
   // ── Contacts CRUD ────────────────────────────────────────────────────────────
 
   async getEmergencyContacts(): Promise<EmergencyContact[]> {
@@ -106,6 +155,7 @@ class EmergencyService {
     };
     contacts.push(newContact);
     await setItem(CONTACTS_KEY, JSON.stringify(contacts));
+    void this.syncLockScreenSOSNotification(contacts);
     return newContact;
   }
 
@@ -125,6 +175,7 @@ class EmergencyService {
     const contacts = await this.getEmergencyContacts();
     const filtered = contacts.filter((c) => c.id !== id);
     await setItem(CONTACTS_KEY, JSON.stringify(filtered));
+    void this.syncLockScreenSOSNotification(filtered);
     // Also remove from favorites if present
     await this.removeFavoriteContact(id);
   }
