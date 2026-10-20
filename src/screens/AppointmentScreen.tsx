@@ -113,6 +113,30 @@ const AppointmentScreen: React.FC = () => {
   const [pendingAppointment, setPendingAppointment] = useState<Appointment | null>(null);
   const [conflictModalVisible, setConflictModalVisible] = useState(false);
   const [isCheckingConflicts, setIsCheckingConflicts] = useState(false);
+  const [preSaveConflict, setPreSaveConflict] = useState<ConflictDetectionResult | null>(null);
+
+  useEffect(() => {
+    if (!form.date || !form.time) {
+      setPreSaveConflict(null);
+      return;
+    }
+    const proposed = new Date(`${form.date}T${form.time}:00`);
+    if (isNaN(proposed.getTime())) return;
+
+    let active = true;
+    void (async () => {
+      try {
+        const petMeds = medications.filter((m) => m.petId === form.petId);
+        const res = await detectConflicts(form.petId, proposed, petMeds);
+        if (active) setPreSaveConflict(res.hasConflicts ? res : null);
+      } catch {
+        if (active) setPreSaveConflict(null);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [form.date, form.time, form.petId, medications]);
 
   const {
     currentStep: bookingStep,
@@ -731,6 +755,14 @@ const AppointmentScreen: React.FC = () => {
                   multiline
                   accessibilityLabel="Notes"
                 />
+              </View>
+            )}
+            {preSaveConflict?.hasConflicts && (
+              <View style={styles.preSaveConflictBanner} testID="pre-save-conflict-warning">
+                <Text style={styles.preSaveConflictTitle}>⚠️ Scheduling Conflict Detected</Text>
+                <Text style={styles.preSaveConflictText}>
+                  {preSaveConflict.conflicts[0]?.description}
+                </Text>
               </View>
             )}
             <View style={styles.stepActions}>

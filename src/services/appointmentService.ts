@@ -21,8 +21,16 @@ export { AppointmentStatus } from '../models/Appointment';
 
 const BASE_URL = '/appointments';
 
-/** Buffer window (ms) around each appointment that counts as a conflict */
-export const CONFLICT_BUFFER_MS = 60 * 60 * 1000; // 1 hour
+/** Default buffer window (minutes) around each appointment (#49) */
+export const DEFAULT_CONFLICT_BUFFER_MINS = 30;
+export const CONFLICT_BUFFER_MS = DEFAULT_CONFLICT_BUFFER_MINS * 60 * 1000; // default 30 mins
+
+export interface ConflictDetectionOptions {
+  bufferMinutes?: number;
+  appointmentDurationMinutes?: number;
+  recurringRule?: 'daily' | 'weekly' | 'monthly' | null;
+  recurringOccurrences?: number;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,23 +71,48 @@ export async function detectConflicts(
   proposedTime: Date,
   medications: Medication[] = [],
   excludeId?: string,
+  options: ConflictDetectionOptions = {},
 ): Promise<ConflictDetectionResult> {
   const conflicts: AppointmentConflict[] = [];
+  const bufferMs = (options.bufferMinutes ?? DEFAULT_CONFLICT_BUFFER_MINS) * 60 * 1000;
+  const durationMs = (options.appointmentDurationMinutes ?? 30) * 60 * 1000;
 
-  const windowStart = new Date(proposedTime.getTime() - CONFLICT_BUFFER_MS).toISOString();
-  const windowEnd = new Date(proposedTime.getTime() + CONFLICT_BUFFER_MS).toISOString();
+  // Project proposed dates for recurring rules
+  const proposedDates: Date[] = [proposedTime];
+  if (options.recurringRule) {
+    const occurrences = options.recurringOccurrences ?? 4;
+    for (let i = 1; i <= occurrences; i++) {
+      const next = new Date(proposedTime);
+      if (options.recurringRule === 'daily') next.setDate(next.getDate() + i);
+      else if (options.recurringRule === 'weekly') next.setDate(next.getDate() + i * 7);
+      else if (options.recurringRule === 'monthly') next.setMonth(next.getMonth() + i);
+      proposedDates.push(next);
+    }
+  }
 
-  const nearby = await getAppointmentsInWindow<Appointment>(petId, windowStart, windowEnd);
-  for (const appt of nearby) {
-    if (excludeId && appt.id === excludeId) continue;
-    const apptTime = new Date(appt.date);
-    const diffMs = Math.abs(apptTime.getTime() - proposedTime.getTime());
-    if (diffMs <= CONFLICT_BUFFER_MS) {
-      conflicts.push({
-        type: 'appointment',
-        description: `"${appt.title ?? 'Appointment'}" is scheduled ${_formatTimeDiff(diffMs)} from the proposed time.`,
-        conflictingAppointment: appt,
-      });
+  for (const targetDate of proposedDates) {
+    const windowStart = new Date(targetDate.getTime() - (bufferMs + durationMs)).toISOString();
+    const windowEnd = new Date(targetDate.getTime() + (bufferMs + durationMs)).toISOString();
+
+    const nearby = await getAppointmentsInWindow<Appointment>(petId, windowStart, windowEnd);
+    for (const appt of nearby) {
+      if (excludeId && appt.id === excludeId) continue;
+      const apptStart = new Date(appt.date).getTime();
+      const apptEnd = apptStart + ((appt.durationMinutes ?? 30) * 60 * 1000);
+      const proposedStart = targetDate.getTime();
+      const proposedEnd = proposedStart + durationMs;
+
+      // Overlap with buffer interval intersection check (#49)
+      const hasOverlap = (proposedStart - bufferMs < apptEnd) && (proposedEnd + bufferMs > apptStart);
+      if (hasOverlap) {
+        const diffMs = Math.abs(apptStart - proposedStart);
+        const recurringTag = targetDate !== proposedTime ? ` (Recurring on ${targetDate.toLocaleDateString()})` : '';
+        conflicts.push({
+          type: 'appointment',
+          description: `"${appt.title ?? 'Appointment'}"${recurringTag} overlaps or is within buffer of proposed time.`,
+          conflictingAppointment: appt,
+        });
+      }
     }
   }
 

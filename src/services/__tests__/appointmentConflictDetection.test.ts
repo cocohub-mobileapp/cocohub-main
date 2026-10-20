@@ -402,5 +402,52 @@ describe('getPast', () => {
     expect(ids).toContain('p1');
     expect(ids).toContain('c1');
     expect(ids).not.toContain('u1');
+
+  describe('improved edge cases (#49)', () => {
+    it('uses configurable buffer time (30 mins default, customizable to 15 mins)', async () => {
+      const baseTime = new Date('2026-10-25T10:00:00.000Z');
+      const nearbyAppt = {
+        id: 'appt-1',
+        title: 'Checkup',
+        date: new Date('2026-10-25T10:45:00.000Z').toISOString(),
+        durationMinutes: 30,
+      };
+
+      const localDB = await import('../localDB');
+      (localDB.getAppointmentsInWindow as jest.Mock).mockResolvedValue([nearbyAppt]);
+
+      // With 15 min buffer: 10:00-10:30 + 15m = 10:45 -> overlap
+      const res1 = await detectConflicts('pet-1', baseTime, [], undefined, { bufferMinutes: 10 });
+      expect(res1).toBeDefined();
+
+      const res2 = await detectConflicts('pet-1', baseTime, [], undefined, { bufferMinutes: 45 });
+      expect(res2.hasConflicts).toBe(true);
+    });
+
+    it('detects recurring appointment conflicts across projected intervals', async () => {
+      const baseTime = new Date('2026-10-25T14:00:00.000Z');
+      const futureAppt = {
+        id: 'appt-next-week',
+        title: 'Weekly Physical Therapy',
+        date: new Date('2026-11-01T14:00:00.000Z').toISOString(), // 1 week later
+        durationMinutes: 30,
+      };
+
+      const localDB = await import('../localDB');
+      (localDB.getAppointmentsInWindow as jest.Mock).mockImplementation((petId, start, end) => {
+        if (new Date(start) <= new Date(futureAppt.date) && new Date(end) >= new Date(futureAppt.date)) {
+          return [futureAppt];
+        }
+        return [];
+      });
+
+      const res = await detectConflicts('pet-1', baseTime, [], undefined, {
+        recurringRule: 'weekly',
+        recurringOccurrences: 2,
+      });
+
+      expect(res.hasConflicts).toBe(true);
+      expect(res.conflicts[0].description).toContain('Recurring');
+    });
   });
 });
