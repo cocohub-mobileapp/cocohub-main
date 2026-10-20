@@ -1,0 +1,171 @@
+export default {
+  "common": {
+    "loading": "Chargement...",
+    "retry": "Réessayer",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "confirm": "Confirmer",
+    "back": "Retour",
+    "next": "Suivant",
+    "done": "Terminé",
+    "error": "Erreur",
+    "success": "Succès",
+    "unknown_error": "Une erreur inattendue est survenue.",
+    "network_error": "Erreur réseau. Vérifiez votre connexion.",
+    "timeout_error": "La demande a expiré. Veuillez réessayer."
+  },
+  "auth": {
+    "login_title": "Bienvenue",
+    "login_subtitle": "Connectez-vous à votre compte",
+    "register_title": "Créer un compte",
+    "email_label": "E-mail",
+    "email_placeholder": "vous@exemple.com",
+    "password_label": "Mot de passe",
+    "password_placeholder": "Au moins 8 caractères",
+    "name_label": "Nom complet",
+    "name_placeholder": "Votre nom",
+    "login_button": "Se connecter",
+    "register_button": "Créer un compte",
+    "logout_button": "Se déconnecter",
+    "no_account": "Vous n'avez pas de compte ?",
+    "have_account": "Vous avez déjà un compte ?",
+    "forgot_password": "Mot de passe oublié ?",
+    "validation": {
+      "email_required": "L'e-mail est requis.",
+      "email_invalid": "Veuillez entrer une adresse e-mail valide.",
+      "password_required": "Le mot de passe est requis.",
+      "password_weak": "Le mot de passe doit comporter au moins 8 caractères, inclure 1 majuscule et 1 chiffre.",
+      "name_required": "Le nom est requis."
+    }
+  },
+  "home": {
+    "title": "Mes animaux",
+    "add_pet": "Ajouter un animal",
+    "no_pets": "Aucun animal pour l'instant. Ajoutez votre premier compagnon !",
+    "greeting": "Bonjour, {{name}}"
+  },
+  "pet": {
+    "profile_title": "Profil de l'animal",
+    "name_label": "Nom",
+    "species_label": "Espèce",
+    "breed_label": "Race",
+    "dob_label": "Date de naissance",
+    "weight_label": "Poids",
+    "edit_button": "Modifier le profil",
+    "delete_button": "Supprimer l'animal",
+    "delete_confirm": "Êtes-vous sûr de vouloir supprimer {{name}} ?",
+    "validation": {
+      "name_required": "Le nom de l'animal est requis.",
+      "dob_invalid": "Veuillez entrer une date de naissance valide."
+    }
+  },
+  "medical": {
+    "title": "Dossiers médicaux",
+    "add_record": "Ajouter un dossier",
+    "no_records": "Aucun dossier médical trouvé.",
+    "record_date": "Date",
+    "record_type": "Type",
+    "record_notes": "Remarques",
+    "vaccination": "Vaccination",
+    "checkup": "Bilan de santé",
+    "surgery": "Chirurgie",
+    "other": "Autre"
+  },
+  "appointments": {
+    "title": "Rendez-vous",
+    "add_appointment": "Prendre rendez-vous",
+    "no_appointments": "Aucun rendez-vous à venir.",
+    "date_label": "Date",
+    "time_label": "Heure",
+    "vet_label": "Vétérinaire",
+    "notes_label": "Remarques",
+    "upcoming": "À venir",
+    "past": "Passés",
+    "cancel_confirm": "Annuler ce rendez-vous ?"
+  },
+  "medication": {
+    "title": "Traitements",
+    "add_medication": "Ajouter un traitement",
+    "no_medications": "Aucun traitement enregistré.",
+    "name_label": "Nom du médicament",
+    "dosage_label": "Posologie",
+    "frequency_label": "Fréquence",
+    "start_date_label": "Date de début",
+    "end_date_label": "Date de fin",
+    "reminder": "Rappel activé"
+  },
+  "qr": {
+    "title": "Scanner QR",
+    "scan_prompt": "Pointez la caméra vers un code QR",
+    "scan_success": "Code QR scanné avec succès",
+    "scan_error": "Impossible de lire le code QR. Réessayez.",
+    "permission_denied": "L'autorisation de la caméra est requise pour scanner les codes QR."
+  },
+  "emergency": {
+    "title": "Urgences",
+    "call_vet": "Appeler les urgences vétérinaires",
+    "nearest_clinic": "Trouver la clinique la plus proche",
+    "first_aid": "Guide de premiers secours",
+    "alert_sent": "Alerte d'urgence envoyée",
+    "no_clinics_found": "Aucune clinique trouvée à proximité. Vérifiez votre connexion Internet.",
+    "location_denied": "L'autorisation de localisation est requise pour trouver les cliniques proches."
+  },
+  "emailVerification": {
+    "title": "Vérifiez votre e-mail",
+    "subtitle": "Nous avons envoyé un code à 6 chiffres à votre e-mail. Entrez-le ci-dessous pour activer votre compte.",
+    "placeholder": "Entrez le code à 6 chiffres",
+    "verifyButton": "Vérifier l'e-mail",
+    "resendButton": "Renvoyer le code",
+    "resendCooldown": "Renvoyer dans {{seconds}}s",
+    "successTitle": "E-mail vérifié !",
+    "successSubtitle": "Votre compte est maintenant pleinement activé.",
+    "skipButton": "Ignorer pour l'instant"
+  },
+  "symptomChecker": {
+    "title": "Assistant IA de symptômes",
+    "inputPlaceholder": "Décrivez ce que vous observez…",
+    "analyseButton": "Analyser les symptômes →",
+    "selectPetFirst": "Veuillez sélectionner quel animal présente ces symptômes.",
+    "describeFirst": "Veuillez décrire ce que vous observez.",
+    "probableConditions": "Affections possibles",
+    "recommendedActions": "Actions recommandées",
+    "disclaimer": "Il s'agit uniquement d'un tri assisté par IA et non d'un diagnostic médical. Consultez toujours un vétérinaire agréé.",
+    "unavailable": "L'assistant IA est temporairement hors ligne. Veuillez contacter votre vétérinaire directement."
+  },
+  "species": {
+    "dog": "Chien",
+    "cat": "Chat",
+    "bird": "Oiseau",
+    "rabbit": "Lapin",
+    "hamster": "Hamster",
+    "guinea_pig": "Cochon d'Inde",
+    "fish": "Poisson",
+    "reptile": "Reptile",
+    "horse": "Cheval",
+    "ferret": "Furet",
+    "turtle": "Tortue",
+    "other": "Autre"
+  },
+  "birthday": {
+    "notification_title": "🎂 Joyeux anniversaire, {{name}} !",
+    "notification_body": "Aujourd'hui est le jour spécial de {{name}}. Donnez-lui un peu plus d'amour ! 🐾",
+    "milestone_title": "🩺 Étape de santé",
+    "turns_one": "{{name}} fête son 1er anniversaire ! C'est le moment idéal pour planifier un bilan de santé.",
+    "senior": "{{name}} entre dans sa phase senior à 7 ans. Envisagez un bilan gériatrique avec votre vétérinaire.",
+    "ten_years": "{{name}} a 10 ans ! Des visites semestrielles chez le vétérinaire sont recommandées pour les animaux de cet âge."
+  },
+  "error_boundary": {
+    "title": "Une erreur est survenue",
+    "subtitle": "Une erreur inattendue s'est produite sur l'écran {{screen}}. Notre équipe a été informée.",
+    "report_retry": "Signaler et réessayer"
+  },
+  "accessibility": {
+    "close_button": "Fermer",
+    "menu_button": "Ouvrir le menu",
+    "back_button": "Retour",
+    "loading_indicator": "Chargement",
+    "error_screen": "Écran d'erreur",
+    "pet_image": "Photo de {{name}}"
+  }
+};
