@@ -29,6 +29,7 @@ import insuranceRouter from './routes/insurance';
 import medicalRecordsRouter from './routes/medicalRecords';
 import medicationsRouter from './routes/medications';
 import paymentsRouter from './routes/payments';
+import predictionsRouter from './routes/predictions';
 import petsRouter from './routes/pets';
 import photosRouter from './routes/photos';
 import privacyRouter from './routes/privacy';
