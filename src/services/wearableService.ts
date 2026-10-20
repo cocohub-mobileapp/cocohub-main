@@ -120,7 +120,98 @@ export async function getActivitySummary(petId: string): Promise<ActivitySummary
   }
 }
 
+
+// ==============================
+// FITBARK & WHISTLE INTEGRATION (#29)
+// ==============================
+
+export interface FitBarkActivity {
+  petId: string;
+  date: string;
+  barkPoints: number;
+  activeMinutes: number;
+  restMinutes: number;
+  playMinutes: number;
+}
+
+export interface WhistleTelemetry {
+  petId: string;
+  latitude: number;
+  longitude: number;
+  batteryPercent: number;
+  distanceMeters: number;
+  lastUpdated: string;
+}
+
+export interface ConnectedDevice {
+  providerId: 'fitbark' | 'whistle';
+  deviceName: string;
+  connected: boolean;
+  lastSync?: string;
+}
+
+/**
+ * Connect & pull daily activity from FitBark OAuth API (#29)
+ */
+export async function fetchFitBarkDailyActivity(
+  petId: string,
+  apiKey = process.env.FITBARK_API_KEY,
+  date?: string,
+): Promise<{ success: boolean; data?: FitBarkActivity; error?: string }> {
+  if (!apiKey) {
+    return { success: false, error: 'FitBark API key not configured' };
+  }
+  try {
+    const targetDate = date ?? new Date().toISOString().slice(0, 10);
+    const res = await apiClient.get<{ data: FitBarkActivity }>('/activity/fitbark/' + petId, {
+      params: { date: targetDate },
+      headers: { Authorization: 'Bearer ' + apiKey },
+    });
+    return { success: true, data: unwrap(res.data) };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to fetch FitBark activity' };
+  }
+}
+
+/**
+ * Connect & pull telemetry from Whistle REST API (#29)
+ */
+export async function fetchWhistleGpsAndActivity(
+  petId: string,
+  apiToken = process.env.WHISTLE_API_TOKEN,
+): Promise<{ success: boolean; data?: WhistleTelemetry; error?: string }> {
+  if (!apiToken) {
+    return { success: false, error: 'Whistle API credentials not configured' };
+  }
+  try {
+    const res = await apiClient.get<{ data: WhistleTelemetry }>('/activity/whistle/' + petId, {
+      headers: { Authorization: 'Bearer ' + apiToken },
+    });
+    return { success: true, data: unwrap(res.data) };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to fetch Whistle telemetry' };
+  }
+}
+
+/**
+ * Retrieve connected wearable devices for settings UI (#29)
+ */
+export async function getConnectedDevices(petId: string): Promise<ConnectedDevice[]> {
+  try {
+    const res = await apiClient.get<{ data: ConnectedDevice[] }>('/activity/devices/' + petId);
+    return unwrap(res.data) ?? [];
+  } catch {
+    return [
+      { providerId: 'fitbark', deviceName: 'FitBark Activity Monitor', connected: false },
+      { providerId: 'whistle', deviceName: 'Whistle Health & GPS Collar', connected: false },
+    ];
+  }
+}
+
 const wearableService = {
+  fetchFitBarkDailyActivity,
+  fetchWhistleGpsAndActivity,
+  getConnectedDevices,
   getWearableStatus,
   syncWearable,
   connectWearable,

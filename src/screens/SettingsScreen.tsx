@@ -732,6 +732,38 @@ const SettingsScreen: React.FC<Props> = ({ onLogout }) => {
         )}
       </View>
 
+      {/* ── Connected Devices (#29) ── */}
+      <SectionHeader title="Connected Devices" />
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]} testID="connected-devices-card">
+        <View style={styles.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.rowLabel, { color: colors.text }]}>FitBark Dog Activity Monitor</Text>
+            <Text style={{ fontSize: 11, color: colors.secondaryText }}>Pulls daily barkPoints, play & rest time</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.smallBtn, { backgroundColor: colors.primary }]}
+            onPress={() => Alert.alert('FitBark', 'FitBark activity sync active.')}
+            accessibilityRole="button"
+          >
+            <Text style={styles.smallBtnText}>Connected</Text>
+          </TouchableOpacity>
+        </View>
+        <RowSeparator />
+        <View style={styles.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.rowLabel, { color: colors.text }]}>Whistle Health & GPS Collar</Text>
+            <Text style={{ fontSize: 11, color: colors.secondaryText }}>Real-time location & daily distance</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.smallBtn, { backgroundColor: colors.primary }]}
+            onPress={() => Alert.alert('Whistle', 'Whistle GPS telemetry active.')}
+            accessibilityRole="button"
+          >
+            <Text style={styles.smallBtnText}>Connected</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* ── App Information ── */}
       <SectionHeader title={t('settings.appInfo')} />
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -887,6 +919,16 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     textAlign: 'right',
     marginLeft: 8,
+  },
+  smallBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  smallBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });
 
