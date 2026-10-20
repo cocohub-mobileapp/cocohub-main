@@ -100,7 +100,9 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
     })();
   };
 
-  const toggleTorch = () => setTorchEnabled(!torchEnabled);
+  const toggleTorch = useCallback(() => {
+    setTorchEnabled((prev) => !prev);
+  }, []);
 
   const handlePermissionDenied = () => {
     Alert.alert(
@@ -139,7 +141,9 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
         <CameraView
           style={styles.camera}
           facing="back"
+          mode="picture"
           enableTorch={torchEnabled}
+          flash={torchEnabled ? 'on' : 'off'}
           onBarcodeScanned={
             scanned
               ? undefined
@@ -171,8 +175,10 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
             onPress={toggleTorch}
             accessibilityLabel="Toggle flashlight"
             accessibilityRole="button"
+            accessibilityState={{ selected: torchEnabled }}
+            testID="torch-toggle-button"
           >
-            <Text style={styles.controlButtonText}>💡</Text>
+            <Text style={styles.controlButtonText}>{torchEnabled ? '🔦' : '💡'}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.controlButton}
