@@ -9,7 +9,12 @@ import QRCode from 'qrcode';
 import {
   generateVaccinationCertificate,
   shareCertificate,
+  generateVetHealthReport,
+  shareHealthReport,
+  generateClaimSummaryPdf,
+  shareClaimSummary,
   type PetCertificateInfo,
+  type VetHealthReportData,
 } from '../../services/pdfService';
 import type { VaccinationReminder } from '../../services/vaccinationService';
 
@@ -160,6 +165,84 @@ describe('pdfService — Vaccination Certificate PDF Generator (Issue #417)', ()
       mockIsAvailable.mockResolvedValue(false);
       await expect(shareCertificate('/mock/cert.txt')).rejects.toThrow(
         'Sharing is not available on this device.',
+      );
+    });
+  describe('generateVetHealthReport (#45)', () => {
+    const mockReportData: VetHealthReportData = {
+      pet: {
+        id: 'pet-999',
+        name: 'Milo',
+        species: 'Feline',
+        breed: 'Siamese',
+        weight: 4.5,
+        weightUnit: 'kg',
+      },
+      owner: {
+        name: 'Alice',
+        contact: 'alice@example.com',
+      },
+      healthScore: 92,
+      weightHistory: [
+        { date: '2026-09-01', weight: 4.3 },
+        { date: '2026-10-01', weight: 4.5 },
+      ],
+      activeMedications: [{ name: 'Amoxicillin', dosage: '50mg', frequency: 'Twice daily' }],
+      upcomingAppointments: [{ date: '2026-11-15', vetName: 'Dr. Johnson', reason: 'Annual Checkup' }],
+      recentRecords: [{ date: '2026-08-10', title: 'Ear cleaning', diagnosis: 'Minor wax buildup' }],
+    };
+
+    it('generates clinical vet report document with all sections', async () => {
+      const rep = await generateVetHealthReport(mockReportData);
+      expect(rep.filePath).toContain('vet-health-report-pet-999');
+      expect(rep.hash).toBeDefined();
+
+      const content: string = mockWriteFile.mock.calls[mockWriteFile.mock.calls.length - 1][1];
+      expect(content).toContain('COCOHUB CLINICAL VET HEALTH REPORT');
+      expect(content).toContain('Milo (ID: pet-999)');
+      expect(content).toContain('Amoxicillin (50mg - Twice daily)');
+      expect(content).toContain('Annual Checkup (Dr. Johnson)');
+      expect(content).toContain('Ear cleaning');
+      expect(content).toContain('Score:        92 / 100');
+    });
+
+    it('shares vet report via native sharing sheet', async () => {
+      await shareHealthReport('/mock/vet-report.pdf');
+      expect(mockShare).toHaveBeenCalledWith(
+        '/mock/vet-report.pdf',
+        expect.objectContaining({ mimeType: 'application/pdf' }),
+      );
+    });
+  describe('generateClaimSummaryPdf (#42)', () => {
+    it('generates a formatted claim summary document and shares via native sheet', async () => {
+      const claimData = {
+        claimId: 'claim-xyz-101',
+        policyNumber: 'HP-998877',
+        provider: 'Trupanion',
+        petName: 'Bella',
+        amount: 850.5,
+        description: 'Cruciate ligament surgery',
+        status: 'under_review',
+        submittedAt: '2026-10-18T12:00:00Z',
+        attachmentUrls: ['https://s3.example.com/invoice.pdf'],
+      };
+
+      const rep = await generateClaimSummaryPdf(claimData);
+      expect(rep.filePath).toContain('insurance-claim-claim-xyz-101');
+      expect(rep.hash).toBeDefined();
+
+      const mockWrite = (await import('expo-file-system')).writeAsStringAsync as jest.Mock;
+      const content: string = mockWrite.mock.calls[mockWrite.mock.calls.length - 1][1];
+      expect(content).toContain('COCOHUB PET INSURANCE CLAIM SUMMARY');
+      expect(content).toContain('Claim ID:     claim-xyz-101');
+      expect(content).toContain('Trupanion');
+      expect(content).toContain('$850.50 USD');
+      expect(content).toContain('Cruciate ligament surgery');
+
+      await shareClaimSummary('/mock/claim.pdf');
+      const mockSharing = (await import('expo-sharing')).shareAsync as jest.Mock;
+      expect(mockSharing).toHaveBeenCalledWith(
+        '/mock/claim.pdf',
+        expect.objectContaining({ mimeType: 'application/pdf' }),
       );
     });
   });

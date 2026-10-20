@@ -1,3 +1,4 @@
+import { generateClaimSummaryPdf, shareClaimSummary } from '../services/pdfService';
 ﻿import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -500,6 +501,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   appealBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  exportPdfBtn: {
+    backgroundColor: '#EDF2F7',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E0',
+  },
+  exportPdfBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
 });
 
 export default InsuranceScreen;
