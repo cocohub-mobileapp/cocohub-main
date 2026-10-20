@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import {
   ActivityIndicator,
   Alert,
@@ -22,6 +23,7 @@ interface Props {
 }
 
 const RegisterScreen: React.FC<Props> = ({ onSuccess, onLogin }) => {
+  const { colors } = useTheme();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -83,11 +85,11 @@ const RegisterScreen: React.FC<Props> = ({ onSuccess, onLogin }) => {
     >
       <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
         <Text style={styles.logo}>🐾</Text>
-        <Text style={styles.title}>Create Account</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
         <Text style={styles.subtitle}>Join Cocohub</Text>
 
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
           placeholder="Full Name"
           placeholderTextColor="#aaa"
           value={name}
@@ -96,7 +98,7 @@ const RegisterScreen: React.FC<Props> = ({ onSuccess, onLogin }) => {
         />
 
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
           placeholder="Email"
           placeholderTextColor="#aaa"
           autoCapitalize="none"
@@ -107,7 +109,7 @@ const RegisterScreen: React.FC<Props> = ({ onSuccess, onLogin }) => {
         />
 
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
           placeholder="Password (min 8 chars, A-Z, a-z, 0-9)"
           placeholderTextColor="#aaa"
           secureTextEntry
@@ -117,7 +119,7 @@ const RegisterScreen: React.FC<Props> = ({ onSuccess, onLogin }) => {
         />
 
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
           placeholder="Confirm Password"
           placeholderTextColor="#aaa"
           secureTextEntry
@@ -127,7 +129,7 @@ const RegisterScreen: React.FC<Props> = ({ onSuccess, onLogin }) => {
         />
 
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
           placeholder="Referral Code (optional)"
           placeholderTextColor="#aaa"
           autoCapitalize="characters"
@@ -161,7 +163,7 @@ const RegisterScreen: React.FC<Props> = ({ onSuccess, onLogin }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  container: { flex: 1, backgroundColor: 'transparent' },
   inner: { flexGrow: 1, justifyContent: 'center', padding: 24 },
   logo: { fontSize: 56, textAlign: 'center', marginBottom: 12 },
   title: { fontSize: 26, fontWeight: '700', textAlign: 'center', color: '#1a1a1a' },

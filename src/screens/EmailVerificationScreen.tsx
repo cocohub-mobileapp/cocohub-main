@@ -81,7 +81,7 @@ const EmailVerificationScreen: React.FC<Props> = ({ onVerified, onSkip }) => {
           <>
             <Text style={styles.icon}>✅</Text>
             <Text style={styles.title}>Email Verified!</Text>
-            <Text style={styles.subtitle}>Your account is now fully activated.</Text>
+            <Text style={[styles.subtitle, { color: colors.secondaryText }]}>Your account is now fully activated.</Text>
             <TouchableOpacity style={styles.btn} onPress={onVerified} accessibilityRole="button">
               <Text style={styles.btnText}>Continue</Text>
             </TouchableOpacity>
@@ -89,14 +89,14 @@ const EmailVerificationScreen: React.FC<Props> = ({ onVerified, onSkip }) => {
         ) : (
           <>
             <Text style={styles.icon}>📧</Text>
-            <Text style={styles.title}>Verify Your Email</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Verify Your Email</Text>
             <Text style={styles.subtitle}>
               We sent a 6-digit verification code to your email. Enter it below to activate your
               account.
             </Text>
 
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
               placeholder="Enter 6-digit code"
               placeholderTextColor="#aaa"
               autoCapitalize="none"

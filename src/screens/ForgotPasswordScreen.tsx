@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import {
   ActivityIndicator,
   Alert,
@@ -83,9 +84,9 @@ const ForgotPasswordScreen: React.FC<Props> = ({ onBack }) => {
         {step === 'request' && (
           <>
             <Text style={styles.title}>Forgot Password</Text>
-            <Text style={styles.subtitle}>Enter your email and we'll send a reset link.</Text>
+            <Text style={[styles.subtitle, { color: colors.secondaryText }]}>Enter your email and we'll send a reset link.</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
               placeholder="Email"
               placeholderTextColor="#aaa"
               autoCapitalize="none"
@@ -109,10 +110,10 @@ const ForgotPasswordScreen: React.FC<Props> = ({ onBack }) => {
 
         {step === 'reset' && (
           <>
-            <Text style={styles.title}>Reset Password</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Reset Password</Text>
             <Text style={styles.subtitle}>Check your email for the reset token.</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
               placeholder="Reset Token"
               placeholderTextColor="#aaa"
               autoCapitalize="none"
@@ -120,7 +121,7 @@ const ForgotPasswordScreen: React.FC<Props> = ({ onBack }) => {
               onChangeText={setToken}
             />
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
               placeholder="New Password"
               placeholderTextColor="#aaa"
               secureTextEntry
@@ -128,7 +129,7 @@ const ForgotPasswordScreen: React.FC<Props> = ({ onBack }) => {
               onChangeText={setNewPassword}
             />
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
               placeholder="Confirm New Password"
               placeholderTextColor="#aaa"
               secureTextEntry
