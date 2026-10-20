@@ -436,7 +436,12 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
         <TouchableOpacity onPress={onBack} accessibilityRole="button" accessibilityLabel="Back">
           <Text style={styles.backText}>‹ Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Stellar Trustlines</Text>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>Stellar Trustlines</Text>
+          <View style={styles.testnetBadge}>
+            <Text style={styles.testnetBadgeText}>TESTNET</Text>
+          </View>
+        </View>
         <TouchableOpacity onPress={() => setView('add')} accessibilityRole="button">
           <Text style={styles.addHeaderBtn}>+ Add</Text>
         </TouchableOpacity>
@@ -491,6 +496,54 @@ const TrustlineScreen: React.FC<Props> = ({ onBack }) => {
           </View>
 
           {/* Trustlines list */}
+          {/* Earned Tokens from Backend (#43) */}
+          <View style={styles.earnedCard}>
+            <View style={styles.earnedHeader}>
+              <Text style={styles.earnedTitle}>⭐ Earned Rewards Balance</Text>
+              <Text style={styles.earnedSubtitle}>Backend Synced</Text>
+            </View>
+            <View style={styles.earnedGrid}>
+              <View style={styles.earnedItem}>
+                <Text style={styles.earnedAmount}>150.00</Text>
+                <Text style={styles.earnedAsset}>PAWP (Loyalty)</Text>
+              </View>
+              <View style={styles.earnedItem}>
+                <Text style={styles.earnedAmount}>25.50</Text>
+                <Text style={styles.earnedAsset}>PETC (Utility)</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Supported Cocohub Assets (PETC, VETH, PAWP) Status (#43) */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Cocohub Assets (PETC / VETH / PAWP)</Text>
+          </View>
+          <View style={styles.ecosystemGrid}>
+            {COCOHUB_ASSETS.map((asset) => {
+              const activeTl = state.trustlines.find((t) => t.assetCode === asset.assetCode);
+              return (
+                <View key={asset.assetCode} style={styles.ecosystemCard}>
+                  <View style={styles.ecosystemHeader}>
+                    <Text style={styles.ecosystemIcon}>{asset.iconEmoji}</Text>
+                    <View style={styles.ecosystemInfo}>
+                      <Text style={styles.ecosystemCode}>{asset.assetCode}</Text>
+                      <Text style={styles.ecosystemName}>{asset.name}</Text>
+                    </View>
+                    <View style={[styles.statusPill, activeTl ? styles.statusPillActive : styles.statusPillInactive]}>
+                      <Text style={styles.statusPillText}>{activeTl ? 'ACTIVE' : 'NO TRUSTLINE'}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.ecosystemBalanceRow}>
+                    <Text style={styles.ecosystemBalanceLabel}>On-chain Balance:</Text>
+                    <Text style={styles.ecosystemBalanceVal}>
+                      {activeTl ? parseFloat(activeTl.balance).toFixed(2) : '0.00'} {asset.assetCode}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Active Trustlines</Text>
             <TouchableOpacity onPress={() => setView('history')}>
@@ -812,6 +865,134 @@ const styles = StyleSheet.create({
   },
   cancelBtn: { paddingVertical: 12, alignItems: 'center' },
   cancelBtnText: { color: '#6B7280', fontSize: 14 },
+  headerTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  testnetBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  testnetBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  earnedCard: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  earnedHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  earnedTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#166534',
+  },
+  earnedSubtitle: {
+    fontSize: 11,
+    color: '#15803D',
+    fontWeight: '500',
+  },
+  earnedGrid: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  earnedItem: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+  },
+  earnedAmount: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#166534',
+  },
+  earnedAsset: {
+    fontSize: 11,
+    color: '#4B5563',
+    marginTop: 2,
+  },
+  ecosystemGrid: {
+    gap: 10,
+    marginBottom: 16,
+  },
+  ecosystemCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  ecosystemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ecosystemIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  ecosystemInfo: {
+    flex: 1,
+  },
+  ecosystemCode: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  ecosystemName: {
+    fontSize: 11,
+    color: '#6B7280',
+  },
+  statusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  statusPillActive: {
+    backgroundColor: '#D1FAE5',
+  },
+  statusPillInactive: {
+    backgroundColor: '#F3F4F6',
+  },
+  statusPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  ecosystemBalanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  ecosystemBalanceLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  ecosystemBalanceVal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#111827',
+  },
 });
 
 export default TrustlineScreen;
