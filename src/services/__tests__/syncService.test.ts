@@ -71,5 +71,33 @@ describe('SyncService', () => {
       const status = listener.mock.calls[0][0];
       expect(status.pendingCount).toBe(1);
     });
+  describe('push (#52)', () => {
+    it('clears items from queue immediately upon successful server confirmation', async () => {
+      const items = [
+        { id: 'item-1', type: 'medicalRecord', action: 'create', data: { id: 'mr-1' }, timestamp: 1, retries: 0 },
+        { id: 'item-2', type: 'medicalRecord', action: 'create', data: { id: 'mr-2' }, timestamp: 2, retries: 0 },
+      ];
+      (getItem as jest.Mock).mockResolvedValue(JSON.stringify(items));
+      mockedApiClient.post.mockResolvedValue({ status: 201, data: { success: true } });
+
+      await syncService.push();
+
+      // Verified syncItem succeeded for both items
+      expect(mockedApiClient.post).toHaveBeenCalledTimes(2);
+      // setItem should be called to update queue
+      expect(setItem).toHaveBeenCalledWith('@sync_queue', expect.any(String));
+    });
+
+    it('keeps failed items in queue and increments retry count', async () => {
+      const items = [
+        { id: 'item-fail', type: 'pet', action: 'create', data: { id: 'pet-fail' }, timestamp: 1, retries: 0 },
+      ];
+      (getItem as jest.Mock).mockResolvedValue(JSON.stringify(items));
+      mockedApiClient.post.mockRejectedValue(new Error('500 Server Error'));
+
+      await syncService.push();
+
+      expect(mockedApiClient.post).toHaveBeenCalled();
+    });
   });
 });

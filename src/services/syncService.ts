@@ -135,6 +135,26 @@ export class SyncService {
 
   // ── Push local changes ───────────────────────────────────────────────────────
 
+  /**
+   * Atomically remove an item from the offline sync queue (#52)
+   */
+  async removeFromQueue(itemId: string): Promise<void> {
+    const queue = await this.getQueue();
+    const updated = queue.filter((i) => i.id !== itemId);
+    await setItem(SYNC_QUEUE_KEY, JSON.stringify(updated));
+    await this.patchStatus({ pendingCount: updated.length });
+  }
+
+  /**
+   * Clear entire queue (useful for testing or full reset)
+   */
+  async clearQueue(): Promise<void> {
+    await setItem(SYNC_QUEUE_KEY, JSON.stringify([]));
+    await this.patchStatus({ pendingCount: 0 });
+  }
+
+  // ── Push local changes ───────────────────────────────────────────────────────
+
   async push(): Promise<void> {
     const online = await networkMonitor.isOnline();
     if (!online) return;
@@ -150,18 +170,25 @@ export class SyncService {
     for (const item of queue) {
       try {
         await this.syncItem(item);
+        // Immediately remove successfully confirmed item from storage (#52)
+        await this.removeFromQueue(item.id);
       } catch {
         item.retries += 1;
-        if (item.retries < MAX_RETRIES) failed.push(item);
+        if (item.retries < MAX_RETRIES) {
+          failed.push(item);
+        }
       }
     }
 
-    await setItem(SYNC_QUEUE_KEY, JSON.stringify(failed));
+    // Refresh queue from storage and reconcile remaining
+    const currentQueue = await this.getQueue();
+    const remaining = currentQueue.filter((q) => failed.some((f) => f.id === q.id));
+    await setItem(SYNC_QUEUE_KEY, JSON.stringify(remaining));
 
     await this.patchStatus({
       isSyncing: false,
       lastSync: Date.now(),
-      pendingCount: failed.length,
+      pendingCount: remaining.length,
       failedCount: failed.filter((i) => i.retries >= MAX_RETRIES).length,
     });
   }
