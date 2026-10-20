@@ -297,12 +297,23 @@ export const openApp = async (notification: Notifications.Notification): Promise
 export const extractDeepLinkParams = (
   data: Record<string, unknown>,
 ): { route: string; params: Record<string, any> } | null => {
-  const type = data.type as NotificationGroup | undefined;
+  const type = (data.type as string | undefined)?.toLowerCase();
+  const category = (data.category as string | undefined)?.toLowerCase();
+
+  // Birthday notification -> PetDetailScreen (#46)
+  if (type === 'birthday' || category === 'birthday') {
+    return {
+      route: 'PetDetail',
+      params: { petId: data.petId, isBirthday: true },
+    };
+  }
 
   if (type === 'medication' && data.medicationId) {
+    const params: Record<string, any> = { medicationId: data.medicationId };
+    if (data.petId) params.petId = data.petId;
     return {
       route: 'Medications',
-      params: { medicationId: data.medicationId },
+      params,
     };
   }
 

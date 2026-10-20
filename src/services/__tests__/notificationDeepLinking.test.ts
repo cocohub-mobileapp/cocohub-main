@@ -402,5 +402,36 @@ describe('Notification Deep Linking', () => {
         });
       });
     });
+    describe('Birthday & Pet-Specific Notifications (#46)', () => {
+      it('extracts birthday notification to PetDetail with petId', () => {
+        const data = {
+          type: 'birthday',
+          petId: 'pet-bday-1',
+          petName: 'Rocky',
+        };
+
+        const result = extractDeepLinkParams(data);
+
+        expect(result).toEqual({
+          route: 'PetDetail',
+          params: { petId: 'pet-bday-1', isBirthday: true },
+        });
+      });
+
+      it('extracts medication notification with both medicationId and petId', () => {
+        const data = {
+          type: 'medication',
+          medicationId: 'med-55',
+          petId: 'pet-99',
+        };
+
+        const result = extractDeepLinkParams(data);
+
+        expect(result).toEqual({
+          route: 'Medications',
+          params: { medicationId: 'med-55', petId: 'pet-99' },
+        });
+      });
+    });
   });
 });

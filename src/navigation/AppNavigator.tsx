@@ -477,27 +477,27 @@ export const handleNotificationDeepLink = (data: Record<string, unknown>): void 
   const deepLink = extractDeepLinkParams(data);
   if (!deepLink) return;
 
-  // Get the current state to know if we're in the Main tab
   const nav = navigationRef.current;
 
-  // Navigate to the appropriate tab/screen
-  const state = (nav as any)?.getRootState?.();
-  const isMainScreen = state?.routes?.[0]?.name === 'Main';
-
-  if (isMainScreen) {
-    // We're in Main, navigate within tabs
-    const mainState = state?.routes?.[0]?.state;
-    (nav as any)?.navigate?.('Main', {
-      screen: deepLink.route,
-      params: deepLink.params,
-    });
-  } else {
-    // App might be in cold start, navigate to Main first
-    (nav as any)?.navigate?.('Main', {
-      screen: deepLink.route,
-      params: deepLink.params,
-    });
+  // Map to explicit destination screens per acceptance criteria (#46)
+  let screenTarget = deepLink.route;
+  if (deepLink.route === 'Appointments' && deepLink.params?.appointmentId) {
+    screenTarget = 'AppointmentDetailScreen';
+  } else if (deepLink.route === 'Emergency') {
+    screenTarget = 'EmergencyContactsScreen';
+  } else if (deepLink.route === 'Vaccinations') {
+    screenTarget = 'VaccinationScreen';
+  } else if (deepLink.route === 'Medications') {
+    screenTarget = 'MedicationScreen';
+  } else if (deepLink.route === 'PetDetail') {
+    screenTarget = 'PetDetailScreen';
   }
+
+  // Navigate reliably
+  (nav as any)?.navigate?.('Main', {
+    screen: screenTarget,
+    params: deepLink.params,
+  });
 };
 
 // ─── Root Navigator ───────────────────────────────────────────────────────────
@@ -545,8 +545,21 @@ export default function AppNavigator() {
     }
   }, []);
 
-  // Listen for notification responses (taps) with deep linking
+  // Listen for notification responses (taps) with deep linking & cold-start (#46)
   React.useEffect(() => {
+    // Cold-start check: app launched by tapping a notification
+    void (async () => {
+      try {
+        const coldStartResponse = await Notifications.getLastNotificationResponseAsync();
+        if (coldStartResponse) {
+          const data = coldStartResponse.notification.request.content.data;
+          handleNotificationDeepLink(data);
+        }
+      } catch (err) {
+        console.warn('Cold-start notification check error:', err);
+      }
+    })();
+
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data;
       handleNotificationDeepLink(data);
