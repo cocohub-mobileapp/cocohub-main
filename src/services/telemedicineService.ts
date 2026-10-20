@@ -98,3 +98,39 @@ export async function rescheduleTelemedicineAppointment(
     throw new Error(error instanceof Error ? error.message : String(error));
   }
 }
+
+// ── Consultation Lifecycle (#30) ─────────────────────────────────────────────
+
+export async function acceptTelemedicineConsultation(
+  appointmentId: string,
+): Promise<{ success: boolean; appointment: any }> {
+  const response = await apiClient.post(`${TELEMEDICINE_ENDPOINT}/${appointmentId}/respond`, {
+    action: 'accept',
+  });
+  return response.data;
+}
+
+export async function declineTelemedicineConsultation(
+  appointmentId: string,
+  reason?: string,
+): Promise<{ success: boolean; appointment: any }> {
+  const response = await apiClient.post(`${TELEMEDICINE_ENDPOINT}/${appointmentId}/respond`, {
+    action: 'decline',
+    reason,
+  });
+  return response.data;
+}
+
+export async function completeTelemedicineConsultation(
+  appointmentId: string,
+  petId: string,
+  notes: string,
+  prescriptionRecommendation?: string,
+): Promise<{ success: boolean; recordId: string }> {
+  const response = await apiClient.post(`${TELEMEDICINE_ENDPOINT}/${appointmentId}/complete`, {
+    petId,
+    notes,
+    prescriptionRecommendation,
+  });
+  return response.data;
+}

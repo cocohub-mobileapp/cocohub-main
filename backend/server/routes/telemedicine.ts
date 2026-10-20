@@ -239,4 +239,52 @@ router.get('/pending-questionnaires', (_req: AuthenticatedRequest, res) => {
   return res.json(ok({ pendingQuestionnaires: dueSoon }));
 });
 
+
+router.post('/:id/respond', (req: AuthenticatedRequest, res) => {
+  const appointment = store.appointments.get(req.params.id);
+  if (!appointment) return sendError(res, 404, 'NOT_FOUND', 'Appointment not found');
+
+  const { action, reason } = req.body as { action?: 'accept' | 'decline'; reason?: string };
+  if (!action || !['accept', 'decline'].includes(action)) {
+    return sendError(res, 400, 'VALIDATION_ERROR', "action must be 'accept' or 'decline'");
+  }
+
+  if (action === 'accept') {
+    appointment.status = AppointmentStatus.CONFIRMED;
+  } else {
+    appointment.status = AppointmentStatus.CANCELLED;
+    appointment.notes = (appointment.notes ?? '') + (reason ? ` [Declined: ${reason}]` : ' [Declined by vet]');
+  }
+  appointment.updatedAt = new Date().toISOString();
+  store.appointments.set(appointment.id, appointment);
+
+  return res.json(appointmentResponse(appointment));
+});
+
+router.post('/:id/complete', (req: AuthenticatedRequest, res) => {
+  const appointment = store.appointments.get(req.params.id);
+  if (!appointment) return sendError(res, 404, 'NOT_FOUND', 'Appointment not found');
+
+  const { petId, notes, prescriptionRecommendation } = req.body as {
+    petId?: string;
+    notes?: string;
+    prescriptionRecommendation?: string;
+  };
+
+  appointment.status = AppointmentStatus.COMPLETED;
+  appointment.updatedAt = new Date().toISOString();
+  store.appointments.set(appointment.id, appointment);
+
+  const recordId = store.newId();
+  return res.json(
+    ok({
+      recordId,
+      appointmentId: appointment.id,
+      savedToRecord: true,
+      notes: notes ?? 'Consultation concluded normally.',
+      prescriptionRecommendation,
+    }),
+  );
+});
+
 export default router;
