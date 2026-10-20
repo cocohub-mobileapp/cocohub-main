@@ -398,6 +398,7 @@ const MedicationScreen: React.FC = () => {
               <TouchableOpacity
                 onPress={() => handleDelete(item.id)}
                 style={[styles.actionBtn, styles.deleteBtn]}
+                testID="delete-medication-button"
               >
                 <Text style={[styles.actionBtnText, styles.deleteBtnText]}>Delete</Text>
               </TouchableOpacity>
@@ -449,6 +450,7 @@ const MedicationScreen: React.FC = () => {
             <TouchableOpacity
               style={styles.logBtn}
               onPress={() => void handleLogDose(item.id, false)}
+              testID="log-dose-button"
             >
               <Text style={styles.logBtnText}>✓ Log Dose</Text>
             </TouchableOpacity>
@@ -719,7 +721,7 @@ const MedicationScreen: React.FC = () => {
                 <Text style={styles.saveBtnText}>Next</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={styles.saveBtn} onPress={() => void handleSave()}>
+              <TouchableOpacity style={styles.saveBtn} onPress={() => void handleSave()} testID="med-form-save-button">
                 <Text style={styles.saveBtnText}>Save</Text>
               </TouchableOpacity>
             )}
@@ -861,7 +863,7 @@ const MedicationScreen: React.FC = () => {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Medications</Text>
-        <TouchableOpacity style={styles.addBtn} onPress={openAdd}>
+        <TouchableOpacity style={styles.addBtn} onPress={openAdd} testID="add-medication-button">
           <Text style={styles.addBtnText}>+ Add</Text>
         </TouchableOpacity>
       </View>
