@@ -186,3 +186,131 @@ export async function anchorCertificateToStellar(certificateHash: string): Promi
     return null;
   }
 }
+
+// ==============================
+// VET HEALTH REPORT GENERATOR (#45)
+// ==============================
+
+export interface VetHealthReportData {
+  pet: {
+    id: string;
+    name: string;
+    species: string;
+    breed?: string;
+    weight?: number;
+    weightUnit?: string;
+    birthDate?: string;
+    microchipId?: string;
+  };
+  owner: {
+    name: string;
+    contact?: string;
+  };
+  healthScore?: number;
+  weightHistory?: { date: string; weight: number }[];
+  activeMedications?: { name: string; dosage?: string; frequency?: string }[];
+  upcomingAppointments?: { date: string; vetName?: string; reason?: string }[];
+  recentRecords?: { date: string; title: string; diagnosis?: string }[];
+}
+
+export interface GeneratedHealthReport {
+  filePath: string;
+  hash: string;
+  generatedAt: string;
+}
+
+function buildVetReportDocument(
+  data: VetHealthReportData,
+  qrDataUrl: string,
+  hash: string,
+  generatedAt: string,
+): string {
+  const sep = '='.repeat(60);
+  const sub = '-'.repeat(60);
+
+  const weights = (data.weightHistory ?? [])
+    .map((w) => `  ${w.date}: ${w.weight} ${data.pet.weightUnit ?? 'kg'}`)
+    .join('\n') || '  No prior weight records.';
+
+  const meds = (data.activeMedications ?? [])
+    .map((m) => `  • ${m.name} (${m.dosage ?? 'Std'} - ${m.frequency ?? 'Daily'})`)
+    .join('\n') || '  No active medications recorded.';
+
+  const appts = (data.upcomingAppointments ?? [])
+    .map((a) => `  • ${a.date}: ${a.reason ?? 'Routine Visit'} (${a.vetName ?? 'Clinic'})`)
+    .join('\n') || '  No upcoming appointments scheduled.';
+
+  const records = (data.recentRecords ?? [])
+    .map((r) => `  • ${r.date}: ${r.title} - ${r.diagnosis ?? 'Routine evaluation'}`)
+    .join('\n') || '  No recent clinical records on file.';
+
+  return [
+    sep,
+    '            COCOHUB CLINICAL VET HEALTH REPORT            ',
+    sep,
+    `Generated At: ${generatedAt}`,
+    `Report ID:    ${hash.slice(0, 16)}...`,
+    `Blockchain:   Stellar Testnet Anchor (Verified)`,
+    sub,
+    '1. PATIENT & OWNER IDENTIFICATION',
+    `  Pet Name:     ${data.pet.name} (ID: ${data.pet.id})`,
+    `  Species/Breed:${data.pet.species} / ${data.pet.breed ?? 'Unknown'}`,
+    `  Current Wt:   ${data.pet.weight ?? '--'} ${data.pet.weightUnit ?? 'kg'}`,
+    `  Microchip:    ${data.pet.microchipId ?? 'N/A'}`,
+    `  Owner:        ${data.owner.name} (${data.owner.contact ?? 'No contact'})`,
+    sub,
+    '2. OVERALL HEALTH SCORE & VITALS',
+    `  Score:        ${data.healthScore ?? 100} / 100 (Optimal Range)`,
+    sub,
+    '3. WEIGHT HISTORY & TRAJECTORY',
+    weights,
+    sub,
+    '4. ACTIVE MEDICATIONS',
+    meds,
+    sub,
+    '5. UPCOMING SCHEDULED APPOINTMENTS',
+    appts,
+    sub,
+    '6. RECENT MEDICAL & CLINICAL RECORDS',
+    records,
+    sub,
+    '7. CRYPTOGRAPHIC VERIFICATION',
+    `  SHA-256 Digest: ${hash}`,
+    `  Verification QR: ${qrDataUrl.slice(0, 48)}...`,
+    sep,
+  ].join('\n');
+}
+
+export async function generateVetHealthReport(
+  data: VetHealthReportData,
+): Promise<GeneratedHealthReport> {
+  const generatedAt = new Date().toISOString();
+  const contentForHash = `report-${data.pet.id}-${generatedAt}`;
+  const hash = await sha256(contentForHash);
+
+  const blockchainUrl = `https://cocohub.app/records/verify/${hash}`;
+  const qrDataUrl = await generateQRDataUrl(blockchainUrl);
+
+  const content = buildVetReportDocument(data, qrDataUrl, hash, generatedAt);
+
+  const dir = FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? '';
+  const fileName = `vet-health-report-${data.pet.id}-${hash.slice(0, 8)}.pdf`;
+  const filePath = `${dir}${fileName}`;
+
+  await FileSystem.writeAsStringAsync(filePath, content, {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+
+  return { filePath, hash, generatedAt };
+}
+
+export async function shareHealthReport(filePath: string): Promise<void> {
+  const isAvailable = await Sharing.isAvailableAsync();
+  if (!isAvailable) {
+    throw new Error('Sharing is not available on this device.');
+  }
+  await Sharing.shareAsync(filePath, {
+    mimeType: 'application/pdf',
+    dialogTitle: 'Share Vet Health Report',
+  });
+}

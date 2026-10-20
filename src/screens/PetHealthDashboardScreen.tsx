@@ -1,3 +1,4 @@
+import { generateVetHealthReport, shareHealthReport } from '../services/pdfService';
 ﻿import React, { useCallback, useEffect, useState } from 'react';
 import {
   RefreshControl,
@@ -554,6 +555,27 @@ const styles = StyleSheet.create({
   statusBadge: { alignSelf: 'flex-start', marginTop: 4, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   statusConfirmed: { backgroundColor: '#e8f5e9' },
   statusBadgeText: { fontSize: 11, fontWeight: '600' },
+  exportReportContainer: {
+    marginHorizontal: 16,
+    marginVertical: 12,
+  },
+  exportReportBtn: {
+    backgroundColor: '#059669',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  exportReportBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
+  },
 });
 
 export default PetHealthDashboardScreen;

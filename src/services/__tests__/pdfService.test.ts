@@ -9,7 +9,10 @@ import QRCode from 'qrcode';
 import {
   generateVaccinationCertificate,
   shareCertificate,
+  generateVetHealthReport,
+  shareHealthReport,
   type PetCertificateInfo,
+  type VetHealthReportData,
 } from '../../services/pdfService';
 import type { VaccinationReminder } from '../../services/vaccinationService';
 
@@ -160,6 +163,51 @@ describe('pdfService — Vaccination Certificate PDF Generator (Issue #417)', ()
       mockIsAvailable.mockResolvedValue(false);
       await expect(shareCertificate('/mock/cert.txt')).rejects.toThrow(
         'Sharing is not available on this device.',
+      );
+    });
+  describe('generateVetHealthReport (#45)', () => {
+    const mockReportData: VetHealthReportData = {
+      pet: {
+        id: 'pet-999',
+        name: 'Milo',
+        species: 'Feline',
+        breed: 'Siamese',
+        weight: 4.5,
+        weightUnit: 'kg',
+      },
+      owner: {
+        name: 'Alice',
+        contact: 'alice@example.com',
+      },
+      healthScore: 92,
+      weightHistory: [
+        { date: '2026-09-01', weight: 4.3 },
+        { date: '2026-10-01', weight: 4.5 },
+      ],
+      activeMedications: [{ name: 'Amoxicillin', dosage: '50mg', frequency: 'Twice daily' }],
+      upcomingAppointments: [{ date: '2026-11-15', vetName: 'Dr. Johnson', reason: 'Annual Checkup' }],
+      recentRecords: [{ date: '2026-08-10', title: 'Ear cleaning', diagnosis: 'Minor wax buildup' }],
+    };
+
+    it('generates clinical vet report document with all sections', async () => {
+      const rep = await generateVetHealthReport(mockReportData);
+      expect(rep.filePath).toContain('vet-health-report-pet-999');
+      expect(rep.hash).toBeDefined();
+
+      const content: string = mockWriteFile.mock.calls[mockWriteFile.mock.calls.length - 1][1];
+      expect(content).toContain('COCOHUB CLINICAL VET HEALTH REPORT');
+      expect(content).toContain('Milo (ID: pet-999)');
+      expect(content).toContain('Amoxicillin (50mg - Twice daily)');
+      expect(content).toContain('Annual Checkup (Dr. Johnson)');
+      expect(content).toContain('Ear cleaning');
+      expect(content).toContain('Score:        92 / 100');
+    });
+
+    it('shares vet report via native sharing sheet', async () => {
+      await shareHealthReport('/mock/vet-report.pdf');
+      expect(mockShare).toHaveBeenCalledWith(
+        '/mock/vet-report.pdf',
+        expect.objectContaining({ mimeType: 'application/pdf' }),
       );
     });
   });
