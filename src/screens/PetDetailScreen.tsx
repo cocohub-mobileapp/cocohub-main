@@ -128,7 +128,7 @@ const PetDetailScreen: React.FC<Props> = ({
   ];
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="pet-detail-screen">
       <View style={styles.header}>
         <TouchableOpacity
           onPress={onBack}
@@ -214,6 +214,7 @@ const PetDetailScreen: React.FC<Props> = ({
             onPress={() => onShare(petId, pet.name)}
             accessibilityRole="button"
             accessibilityLabel="Share pet profile"
+              testID="share-pet-profile-button"
             accessibilityHint={`Share ${pet.name}'s profile via link, social media, or QR code`}
           >
             <Text style={styles.shareBtnText}>Share Profile</Text>

@@ -251,6 +251,7 @@ const PetShareScreen: React.FC<Props> = ({ petId, petName, onBack }) => {
           disabled={loading !== null}
           accessibilityRole="button"
           accessibilityLabel="Generate QR code"
+          testID="generate-qr-button"
           accessibilityHint="Generate a QR code for this pet profile"
         >
           <Text style={styles.optionIcon}>📷</Text>
@@ -274,6 +275,7 @@ const PetShareScreen: React.FC<Props> = ({ petId, petName, onBack }) => {
               style={styles.qrImage}
               accessible
               accessibilityLabel="QR code"
+              testID="qr-code-image"
             />
             <Text style={styles.qrPayload} selectable numberOfLines={6}>
               {qrPayload}
@@ -284,6 +286,7 @@ const PetShareScreen: React.FC<Props> = ({ petId, petName, onBack }) => {
               disabled={loading !== null}
               accessibilityRole="button"
               accessibilityLabel="Share QR code"
+              testID="share-qr-button"
             >
               {isLoading('qr-share') ? (
                 <ActivityIndicator size="small" color="#4CAF50" />

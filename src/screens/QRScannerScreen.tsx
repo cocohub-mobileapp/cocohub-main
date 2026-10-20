@@ -135,7 +135,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
     }
 
     return (
-      <View style={styles.cameraContainer}>
+      <View style={styles.cameraContainer} testID="qr-scanner-screen">
         <CameraView
           style={styles.camera}
           facing="back"
@@ -178,6 +178,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
             style={styles.controlButton}
             onPress={onManualEntry}
             accessibilityLabel="Manual entry"
+            testID="manual-entry-button"
             accessibilityRole="button"
           >
             <Text style={styles.controlButtonText}>📝</Text>
@@ -208,6 +209,7 @@ const QRScannerScreen: React.FC<QRScannerScreenProps> = ({
           style={styles.closeButton}
           onPress={onClose}
           accessibilityLabel="Close scanner"
+            testID="qr-scanner-close-button"
           accessibilityRole="button"
         >
           <Text style={styles.closeButtonText}>✕</Text>
