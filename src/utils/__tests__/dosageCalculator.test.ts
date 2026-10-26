@@ -521,3 +521,173 @@ describe('DRUG_DATABASE integrity', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 });
+
+// ─── calculateDoseInMg: NaN and numeric overflow ─────────────────────────────
+
+describe('calculateDoseInMg NaN/overflow', () => {
+  it('propagates NaN for NaN weight', () => {
+    expect(calculateDoseInMg(NaN, 15)).toBeNaN();
+  });
+
+  it('propagates NaN for NaN dose per kg', () => {
+    expect(calculateDoseInMg(10, NaN)).toBeNaN();
+  });
+
+  it('overflows to Infinity for astronomically large inputs', () => {
+    // 1e308 * 10 exceeds Number.MAX_VALUE → Infinity
+    expect(calculateDoseInMg(1e308, 10)).toBe(Infinity);
+  });
+
+  it('returns Infinity for infinite weight with finite dose', () => {
+    expect(calculateDoseInMg(Infinity, 0.1)).toBe(Infinity);
+  });
+});
+
+// ─── conversions: negative amounts and rejected negative parameters ──────────
+
+describe('conversion negative parameter handling', () => {
+  it('passes negative amounts through for mg', () => {
+    expect(convertFromMg(-150, 'mg')).toBe(-150);
+  });
+
+  it('produces fractional tablets for negative mg', () => {
+    expect(convertFromMg(-125, 'tablets', undefined, 250)).toBe(-0.5);
+  });
+
+  it('converts negative tablet amounts back to negative mg', () => {
+    expect(convertToMg(-5, 'tablets', undefined, 250)).toBe(-1250);
+  });
+
+  it('rejects negative concentration in convertFromMg', () => {
+    expect(() => convertFromMg(150, 'ml', -10)).toThrow('Concentration');
+  });
+
+  it('rejects negative concentration in convertToMg', () => {
+    expect(() => convertToMg(5, 'ml', -10)).toThrow('Concentration');
+  });
+
+  it('rejects negative tablet strength in convertFromMg', () => {
+    expect(() => convertFromMg(150, 'tablets', undefined, -250)).toThrow('Tablet strength');
+  });
+
+  it('converts Infinity mg to Infinity tablets', () => {
+    expect(convertFromMg(Infinity, 'tablets', undefined, 250)).toBe(Infinity);
+  });
+
+  it('passes NaN amount through for mg', () => {
+    expect(convertFromMg(NaN, 'mg')).toBeNaN();
+  });
+});
+
+// ─── rounding: 3-decimal precision behaviour ─────────────────────────────────
+
+describe('computeDosage rounding behaviour', () => {
+  it('rounds repeating decimals up to 3 decimal places', () => {
+    // 0.1 kg * 0.333 mg/kg = 0.0333 mg → rounded to 0.033
+    const result = computeDosage({ weightKg: 0.1, dosePerKg: 0.333, targetUnit: 'mg' });
+    expect(result.doseInMg).toBe(0.033);
+    expect(result.dose).toBe(0.033);
+  });
+
+  it('rounds a 4th-decimal 6 up (0.0116 → 0.012)', () => {
+    // 2 kg * 0.0058 mg/kg = 0.0116 mg → rounds to 0.012
+    const result = computeDosage({ weightKg: 2, dosePerKg: 0.0058, targetUnit: 'mg' });
+    expect(result.doseInMg).toBe(0.012);
+  });
+
+  it('rounds sub-0.0005 mg doses all the way down to zero', () => {
+    // 5 kg * 1e-7 mg/kg = 0.0000005 mg → 3-decimal rounding yields 0
+    const result = computeDosage({ weightKg: 5, dosePerKg: 1e-7, targetUnit: 'mg' });
+    expect(result.dose).toBe(0);
+    expect(result.doseInMg).toBe(0);
+  });
+
+  it('rounds ml range bounds to 3 decimals', () => {
+    // dog meloxicam range 0.1–0.2 mg/kg at 1.5 mg/ml, 10 kg:
+    // min 1 mg → 0.6667 ml → 0.667 ; max 2 mg → 1.3333 ml → 1.333
+    const result = computeDosage(
+      { weightKg: 10, dosePerKg: 0.1, targetUnit: 'ml', concentration: 1.5 },
+      { minPerKg: 0.1, maxPerKg: 0.2, typicalPerKg: 0.1 },
+    );
+    expect(result.rangeMin).toBe(0.667);
+    expect(result.rangeMax).toBe(1.333);
+  });
+});
+
+// ─── assessDoseSafety: exact 2x boundary and warning copy ────────────────────
+
+describe('assessDoseSafety exact 2x-max boundary', () => {
+  const range = { minPerKg: 10, maxPerKg: 22, typicalPerKg: 15 };
+
+  it('treats a dose of exactly 2x max as high, not critical', () => {
+    expect(assessDoseSafety(44, range).level).toBe('high'); // 22 * 2 = 44, not > 44
+  });
+
+  it('treats anything above 2x max as critical', () => {
+    expect(assessDoseSafety(45, range).level).toBe('critical');
+  });
+
+  it('emits exact high-dose warning copy at the boundary', () => {
+    expect(assessDoseSafety(23, range).warnings).toEqual([
+      'Dose of 23.00 mg/kg exceeds the maximum safe dose of 22 mg/kg.',
+    ]);
+  });
+
+  it('emits exact critical warning copy with formatted threshold', () => {
+    expect(assessDoseSafety(45, range).warnings).toEqual([
+      'Dose of 45.00 mg/kg is critically high (>44.00 mg/kg). Severe toxicity risk.',
+    ]);
+  });
+
+  it('emits exact low-dose warning copy', () => {
+    expect(assessDoseSafety(9, range).warnings).toEqual([
+      'Dose of 9.00 mg/kg is below the minimum effective dose of 10 mg/kg. Treatment may be sub-therapeutic.',
+    ]);
+  });
+});
+
+// ─── computeDosage: infinite inputs and zero-sign edge ───────────────────────
+
+describe('computeDosage infinite-input pipeline', () => {
+  const range = { minPerKg: 10, maxPerKg: 22, typicalPerKg: 15 };
+
+  it('produces an Infinity dose for infinite weight while safety stays per-kg', () => {
+    const result = computeDosage({ weightKg: Infinity, dosePerKg: 15, targetUnit: 'mg' }, range);
+    expect(result.dose).toBe(Infinity);
+    expect(result.doseInMg).toBe(Infinity);
+    // safety assessment is per-kg, so 15 mg/kg remains "safe" regardless of weight
+    expect(result.safetyLevel).toBe('safe');
+  });
+
+  it('flags critical for infinite dose per kg', () => {
+    const result = computeDosage({ weightKg: 70, dosePerKg: Infinity, targetUnit: 'mg' }, range);
+    expect(result.safetyLevel).toBe('critical');
+    expect(result.doseInMg).toBe(Infinity);
+    expect(result.warnings[0]).toMatch(/critically high/i);
+  });
+
+  it('treats negative zero weight as invalid', () => {
+    const result = computeDosage({ weightKg: -0, dosePerKg: 15, targetUnit: 'mg' });
+    expect(result.safetyLevel).toBe('critical');
+    expect(result.dose).toBe(0);
+    expect(result.warnings[0]).toBe('Weight must be greater than zero.');
+  });
+});
+
+// ─── lookupDrug: species without dosage data ─────────────────────────────────
+
+describe('lookupDrug species without dosage data', () => {
+  it('returns null range and empty lists for fish on amoxicillin', () => {
+    const result = lookupDrug('amoxicillin', 'fish');
+    expect(result).not.toBeNull();
+    expect(result!.range).toBeNull();
+    expect(result!.warnings).toEqual([]);
+    expect(result!.contraindications).toEqual([]);
+  });
+
+  it('returns null for a valid drug with an unknown species profile', () => {
+    const result = lookupDrug('enrofloxacin', 'hamster');
+    expect(result).not.toBeNull();
+    expect(result!.range).toBeNull();
+  });
+});
