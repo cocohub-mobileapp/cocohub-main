@@ -5,6 +5,7 @@ const LOCALE_MAP: Record<string, string> = {
   en: 'en-US',
   es: 'es-ES',
   ar: 'ar-SA',
+  ja: 'ja-JP',
 };
 
 function locale(): string {

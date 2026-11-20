@@ -1,0 +1,171 @@
+{
+  "common": {
+    "loading": "読み込み中...",
+    "retry": "再試行",
+    "cancel": "キャンセル",
+    "save": "保存",
+    "delete": "削除",
+    "confirm": "確認",
+    "back": "戻る",
+    "next": "次へ",
+    "done": "完了",
+    "error": "エラー",
+    "success": "成功",
+    "unknown_error": "予期しないエラーが発生しました。",
+    "network_error": "ネットワークエラーです。接続を確認してください。",
+    "timeout_error": "リクエストがタイムアウトしました。もう一度お試しください。"
+  },
+  "auth": {
+    "login_title": "おかえりなさい",
+    "login_subtitle": "アカウントにサインイン",
+    "register_title": "アカウント作成",
+    "email_label": "メールアドレス",
+    "email_placeholder": "you@example.com",
+    "password_label": "パスワード",
+    "password_placeholder": "8文字以上",
+    "name_label": "氏名",
+    "name_placeholder": "お名前",
+    "login_button": "サインイン",
+    "register_button": "アカウント作成",
+    "logout_button": "サインアウト",
+    "no_account": "アカウントをお持ちでないですか？",
+    "have_account": "すでにアカウントをお持ちですか？",
+    "forgot_password": "パスワードをお忘れですか？",
+    "validation": {
+      "email_required": "メールアドレスは必須です。",
+      "email_invalid": "有効なメールアドレスを入力してください。",
+      "password_required": "パスワードは必須です。",
+      "password_weak": "パスワードは8文字以上で、大文字を1文字以上、数字を1文字以上含めてください。",
+      "name_required": "氏名は必須です。"
+    }
+  },
+  "home": {
+    "title": "マイペット",
+    "add_pet": "ペットを追加",
+    "no_pets": "まだペットがいません。最初のペットを追加しましょう！",
+    "greeting": "こんにちは、{{name}}さん"
+  },
+  "pet": {
+    "profile_title": "ペットプロフィール",
+    "name_label": "名前",
+    "species_label": "種類",
+    "breed_label": "品種",
+    "dob_label": "生年月日",
+    "weight_label": "体重",
+    "edit_button": "プロフィールを編集",
+    "delete_button": "ペットを削除",
+    "delete_confirm": "{{name}}を削除してもよろしいですか？",
+    "validation": {
+      "name_required": "ペットの名前は必須です。",
+      "dob_invalid": "有効な生年月日を入力してください。"
+    }
+  },
+  "medical": {
+    "title": "診療記録",
+    "add_record": "記録を追加",
+    "no_records": "診療記録がありません。",
+    "record_date": "日付",
+    "record_type": "種類",
+    "record_notes": "メモ",
+    "vaccination": "ワクチン接種",
+    "checkup": "健康診断",
+    "surgery": "手術",
+    "other": "その他"
+  },
+  "appointments": {
+    "title": "予約",
+    "add_appointment": "予約を取る",
+    "no_appointments": "予定されている予約はありません。",
+    "date_label": "日付",
+    "time_label": "時刻",
+    "vet_label": "獣医師",
+    "notes_label": "メモ",
+    "upcoming": "今後の予定",
+    "past": "過去",
+    "cancel_confirm": "この予約をキャンセルしますか？"
+  },
+  "medication": {
+    "title": "投薬",
+    "add_medication": "薬を追加",
+    "no_medications": "記録された薬はありません。",
+    "name_label": "薬名",
+    "dosage_label": "用量",
+    "frequency_label": "頻度",
+    "start_date_label": "開始日",
+    "end_date_label": "終了日",
+    "reminder": "リマインダー設定済み"
+  },
+  "qr": {
+    "title": "QRスキャナー",
+    "scan_prompt": "カメラをQRコードに向けてください",
+    "scan_success": "QRコードを読み取りました",
+    "scan_error": "QRコードを読み取れませんでした。もう一度お試しください。",
+    "permission_denied": "QRコードを読み取るにはカメラの許可が必要です。"
+  },
+  "emergency": {
+    "title": "緊急時",
+    "call_vet": "緊急獣医に電話",
+    "nearest_clinic": "最寄りの動物病院を探す",
+    "first_aid": "応急処置ガイド",
+    "alert_sent": "緊急アラートを送信しました",
+    "no_clinics_found": "近くに動物病院が見つかりません。インターネット接続を確認してください。",
+    "location_denied": "近くの動物病院を探すには位置情報の許可が必要です。"
+  },
+  "emailVerification": {
+    "title": "メールアドレスの確認",
+    "subtitle": "6桁のコードをメールで送信しました。以下に入力してアカウントを有効化してください。",
+    "placeholder": "6桁のコードを入力",
+    "verifyButton": "メールを確認",
+    "resendButton": "コードを再送",
+    "resendCooldown": "再送まで{{seconds}}秒",
+    "successTitle": "メール確認完了！",
+    "successSubtitle": "アカウントが有効化されました。",
+    "skipButton": "後で"
+  },
+  "symptomChecker": {
+    "title": "AI症状チェッカー",
+    "inputPlaceholder": "気になる症状を入力してください…",
+    "analyseButton": "症状を分析 →",
+    "selectPetFirst": "症状のあるペットを選択してください。",
+    "describeFirst": "気になる症状を入力してください。",
+    "probableConditions": "考えられる病気",
+    "recommendedActions": "推奨される対応",
+    "disclaimer": "これはAIによるトリアージであり、医学的診断ではありません。必ず獣医師に相談してください。",
+    "unavailable": "AI症状チェッカーは一時的に利用できません。獣医師に直接ご連絡ください。"
+  },
+  "species": {
+    "dog": "犬",
+    "cat": "猫",
+    "bird": "鳥",
+    "rabbit": "うさぎ",
+    "hamster": "ハムスター",
+    "guinea_pig": "モルモット",
+    "fish": "魚",
+    "reptile": "爬虫類",
+    "horse": "馬",
+    "ferret": "フェレット",
+    "turtle": "カメ",
+    "other": "その他"
+  },
+  "birthday": {
+    "notification_title": "🎂 {{name}}さん、お誕生日おめでとう！",
+    "notification_body": "今日は{{name}}さんの特別な日です。いつもより愛情を込めてあげましょう！🐾",
+    "milestone_title": "🩺 健康の節目",
+    "turns_one": "{{name}}が1歳になりました！一般健康診断の予約に良い時期です。",
+    "senior": "{{name}}は7歳でシニア期に入ります。獣医師とシニア健康診断をご検討ください。",
+    "ten_years": "{{name}}は10歳です。この年齢のペットには年2回の通院をおすすめします。"
+  },
+  "error_boundary": {
+    "title": "問題が発生しました",
+    "subtitle": "{{screen}}画面で予期しないエラーが発生しました。担当者に通知済みです。",
+    "report_retry": "報告して再試行"
+  },
+  "accessibility": {
+    "close_button": "閉じる",
+    "menu_button": "メニューを開く",
+    "back_button": "戻る",
+    "loading_indicator": "読み込み中",
+    "error_screen": "エラー画面",
+    "pet_image": "{{name}}の写真"
+  }
+}
