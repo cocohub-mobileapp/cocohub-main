@@ -5,6 +5,7 @@ const LOCALE_MAP: Record<string, string> = {
   en: 'en-US',
   es: 'es-ES',
   ar: 'ar-SA',
+  ja: 'ja-JP',
 };
 
 /** Locales that use imperial units (lb / °F) */
@@ -78,6 +79,7 @@ const CURRENCY_MAP: Record<string, string> = {
   'en-US': 'USD',
   'es-ES': 'EUR',
   'ar-SA': 'SAR',
+  'ja-JP': 'JPY',
 };
 
 /**
